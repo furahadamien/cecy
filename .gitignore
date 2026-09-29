@@ -1,0 +1,38 @@
+# macOS
+.DS_Store
+.AppleDouble
+._*
+
+# Xcode build output
+build/
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM
+*.dSYM.zip
+*.xcarchive
+*.xcresult
+
+# Xcode user-specific settings and source-control metadata
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+
+# Swift Package Manager build output
+.build/
+
+# Local environment configuration (keep example files trackable)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Private signing credentials and provisioning profiles
+*.p12
+*.p8
+*.mobileprovision
+*.provisionprofile
+
+# Keep source files, assets, project/workspace configuration, shared schemes,
+# Package.resolved, and project documentation under version control.
