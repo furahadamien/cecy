@@ -18,7 +18,7 @@ This document tracks the phased implementation plan derived from the product bri
 | Phase | Focus | Status |
 | --- | --- | --- |
 | 0 | Foundations and product rules | Complete — September 29, 2026 |
-| 1 | Smallest useful vertical slice | Not started |
+| 1 | Smallest useful vertical slice | Implemented; automated checks passed; manual acceptance pending |
 | 2 | Everyday period tracking | Not started |
 | 3 | Symptoms and local insights | Not started |
 | 4 | Prediction quality | Not started |
@@ -52,7 +52,7 @@ This document tracks the phased implementation plan derived from the product bri
 
 **Decisions and acceptance specification:** [Phase 0 foundations](PHASE_0_FOUNDATIONS.md).
 
-Completed scope: repository audit, documented rules, iOS/iPadOS 17 baseline for app/test targets, and removal of unused cloud/push declarations. The canvas remains sample-only; no tracking logic or SwiftData container has been implemented.
+Completed scope: repository audit, documented rules, iOS/iPadOS 17 baseline for app/test targets, and removal of unused cloud/push declarations. At the end of Phase 0 the canvas was sample-only, with no tracking logic or SwiftData container; Phase 1 now replaces the production flow.
 
 ### Tasks
 
@@ -77,66 +77,72 @@ Completed scope: repository audit, documented rules, iOS/iPadOS 17 baseline for 
 
 **Goal:** Enter previous periods and immediately see useful, locally calculated information.
 
+**Implementation:** Local V1 SwiftData storage, atomic onboarding, pure Swift baseline calculations, Today, Calendar, interval history, and minimal Settings are connected. The original canvas is DEBUG-only. Legacy Core Data source/model are excluded from the app target; existing device stores are untouched.
+
+**Scope:** Internal prototype. Draft correction is supported; saved-record editing/deletion UI remains Phase 2. No symptoms or optional services were added.
+
+**Remaining manual verification:** iOS 17 runtime, physical-device offline use, VoiceOver reading order, contrast, right-to-left layouts, iPad/split-screen/orientation behavior, and lifecycle refresh while forms are open. Storage protection and backup verification remain release gates.
+
 ### Lightweight architecture
 
 Introduce only the boundaries needed for this slice; avoid empty services and speculative abstractions.
 
-- [ ] App: composition, startup, and navigation.
-- [ ] Features: onboarding, Today, Calendar, and minimal Settings.
-- [ ] Domain: plain Swift period values, cycle calculations, and prediction results.
-- [ ] Data: SwiftData models and a period repository.
-- [ ] Shared: minimal reusable formatting and UI components.
-- [ ] Keep SwiftData objects inside the data layer where practical; pass plain Swift values into calculations.
+- [x] App: composition, startup, and navigation.
+- [x] Features: onboarding, Today, Calendar, and minimal Settings.
+- [x] Domain: plain Swift period values, cycle calculations, and prediction results.
+- [x] Data: SwiftData models and a period repository.
+- [x] Shared: minimal reusable formatting and UI components.
+- [x] Keep SwiftData objects inside the data layer where practical; pass plain Swift values into calculations.
 
 ### Local storage
 
-- [ ] Persist period starts, optional ends, identifiers, and creation/update timestamps.
-- [ ] Derive cycles from consecutive period starts instead of persisting duplicate cycle records.
-- [ ] Explicitly disable cloud synchronization.
-- [ ] Handle save and startup failures recoverably rather than using template-style fatal errors.
-- [ ] Establish schema-versioning practices before real user data accumulates.
+- [x] Persist period starts, optional ends, identifiers, and creation/update timestamps.
+- [x] Derive cycles from consecutive period starts instead of persisting duplicate cycle records.
+- [x] Explicitly disable cloud synchronization.
+- [x] Handle save and startup failures recoverably rather than using template-style fatal errors.
+- [x] Establish schema-versioning practices before real user data accumulates.
 
 ### Minimal onboarding
 
-- [ ] Briefly explain local storage and prediction limitations.
-- [ ] Allow entry of several historical period starts and correction before completion.
-- [ ] Allow users without historical records to continue.
-- [ ] Avoid account creation and notification/HealthKit permission requests.
+- [x] Briefly explain local storage and prediction limitations.
+- [x] Allow entry of several historical period starts and correction before completion.
+- [x] Allow users without historical records to continue.
+- [x] Avoid account creation and notification/HealthKit permission requests.
 
 ### Deterministic calculations
 
-- [ ] Calculate historical cycle lengths.
-- [ ] Calculate current cycle day from the latest recorded start.
-- [ ] Calculate the basic statistics needed for prediction.
-- [ ] Implement one documented statistical approach for a next-period range.
-- [ ] Provide a plain-language explanation and appropriately qualified confidence.
-- [ ] Distinguish insufficient history, an available estimate, and a window that has passed without another recorded period.
-- [ ] Never invent cycle starts or silently reset the cycle day.
+- [x] Calculate historical cycle lengths.
+- [x] Calculate current cycle day from the latest recorded start.
+- [x] Calculate the basic statistics needed for prediction.
+- [x] Implement one documented statistical approach for a next-period range.
+- [x] Provide a plain-language explanation and appropriately qualified confidence.
+- [x] Distinguish insufficient history, an available estimate, and a window that has passed without another recorded period.
+- [x] Never invent cycle starts or silently reset the cycle day.
 
 Do not combine weighting, outlier exclusion, and complex confidence scoring unless justified.
 
 ### Today and Calendar
 
-- [ ] Today: current cycle day when known.
-- [ ] Today: prediction range when supported, with confidence or an insufficient-history message.
-- [ ] Today: quick period-start logging.
-- [ ] Calendar: recorded starts and confirmed bleeding days.
-- [ ] Calendar: distinctly presented predicted window.
-- [ ] Calendar: basic date selection and record viewing.
-- [ ] Do not imply that days following a start-only record are confirmed bleeding days.
+- [x] Today: current cycle day when known.
+- [x] Today: prediction range when supported, with confidence or an insufficient-history message.
+- [x] Today: quick period-start logging.
+- [x] Calendar: recorded starts and confirmed bleeding days.
+- [x] Calendar: distinctly presented predicted window.
+- [x] Calendar: basic date selection and record viewing.
+- [x] Do not imply that days following a start-only record are confirmed bleeding days.
 
 ### Validation
 
-- [ ] Test zero, one, and multiple recorded periods.
-- [ ] Test unsorted and duplicate inputs.
-- [ ] Test leap years, month boundaries, daylight saving, and time-zone behavior.
-- [ ] Test prediction changes after historical corrections.
-- [ ] Test persistence across relaunches.
-- [ ] Test the complete flow without network access.
+- [x] Test zero, one, and multiple recorded periods.
+- [x] Test unsorted and duplicate inputs.
+- [x] Test leap years, month boundaries, daylight saving, and time-zone behavior.
+- [x] Test prediction changes after historical corrections.
+- [x] Test persistence across relaunches.
+- [ ] Test the complete flow with connectivity disabled on a physical device. The implemented slice has no feature networking or cloud dependency; the automated simulator run did not disable host connectivity.
 
 ### Completion criteria
 
-- [ ] A user can launch, onboard, save previous periods, view cycle calculations and a prediction range, and see records on Calendar—all offline.
+- [ ] Final acceptance: verify the implemented launch → onboarding → local save → Today → Calendar flow with connectivity disabled, and finish the manual accessibility/device checks below.
 
 **Gate:** Do not start AI, subscriptions, HealthKit, or cloud work before this slice works correctly.
 
@@ -378,7 +384,7 @@ Record important choices and their rationale as implementation proceeds.
 
 - iOS 17 runtime validation remains required before release; installed simulators are 26.2 and 27.0.
 - No menstrual schema was found in the repository. Old device stores were not inspected and must remain untouched. Reassess if prior distributed health-data builds are discovered.
-- Date handling and prediction rules are documented, not implemented. Phase 1 adds tests; Phase 4 evaluates prediction accuracy and coverage.
+- Date handling and baseline prediction rules are implemented and unit-tested. Phase 4 still needs to evaluate prediction accuracy and coverage; confidence is provisional.
 - Full accessibility, physical-device signing, storage protection, and backup verification remain release requirements.
 - Free/premium boundaries: deferred until product validation.
 
@@ -394,4 +400,16 @@ Record important choices and their rationale as implementation proceeds.
 
 ## Next authorized implementation scope
 
-Phase 0 is complete. When Phase 1 is explicitly authorized, use [PHASE_0_FOUNDATIONS.md](PHASE_0_FOUNDATIONS.md) to implement tested date/domain calculations, local SwiftData storage, minimal onboarding, Today, and Calendar. Do not scaffold the entire future product or introduce optional integrations.
+Phase 1 is authorized and implemented as an internal prototype. Finish recorded validation gates and review the app before authorizing Phase 2. Saved-record correction/deletion, symptoms, and all optional integrations remain outside this implementation.
+
+### Phase 1 verification record
+
+- Debug build-for-testing passed on the iPhone 17 Pro simulator destination (iOS 26.2).
+- Initial run: all 20 domain/repository/session tests passed (including a parameterized storage round trip with and without history).
+- Initial UI run: onboarding, history/prediction/duplicate protection, and skip/log/relaunch passed. The large-text assertion required scrolling to the expanded detail; the corrected full rerun passed all four UI tests.
+- Tests use synthetic observations, fixed clocks, and isolated stores. Unit-test host composition never opens production storage. No Simulator application window was launched.
+- Final full Debug test run: **passed**, 20 Swift Testing tests across 2 suites plus 4 XCTest UI tests on iPhone 17 Pro / iOS 26.2. A final unit-only rerun after test concurrency-warning cleanup also passed all 20 tests.
+- Release generic iOS Simulator build: **passed** for arm64 and x86_64 with iOS 17 deployment target. Only the expected App Intents metadata warning remains; no AppIntents dependency is needed.
+- Build/test results: `/tmp/cecy-phase1-verified.xcresult`, `/tmp/cecy-phase1-unit-final.xcresult`; Release log: `/tmp/cecy-phase1-release.log`. These are local temporary artifacts, not repository files.
+- `git diff --check`: passed. No optional capabilities or dependencies were added.
+- Automated checks do not establish minimum-OS runtime compatibility, physical-device storage protection, a full accessibility audit, or disconnected-network behavior. Those remain unchecked above.
