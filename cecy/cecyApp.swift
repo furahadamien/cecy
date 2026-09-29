@@ -9,9 +9,11 @@ import SwiftUI
 
 @main
 struct cecyApp: App {
+    @State private var session = TrackerSession.live()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            TrackerRootView(session: session)
         }
     }
 }

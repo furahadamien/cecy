@@ -7,6 +7,8 @@
 
 import SwiftUI
 
+#if DEBUG
+// Original visual reference only. The application launches TrackerRootView.
 struct ContentView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var selectedTab: CanvasTab = .today
@@ -438,3 +440,4 @@ private func sectionHeading(_ title: String) -> some View {
     ContentView()
         .environment(\.dynamicTypeSize, .accessibility3)
 }
+#endif
