@@ -64,7 +64,7 @@ final class PhaseFiveUITests: XCTestCase {
     @MainActor func testSettingsRemainAccessibleAtLargestTextSize() {
         let app = launch(largeText: true)
         app.tabBars.buttons["Settings"].tap()
-        for identifier in ["privacySettings", "reminderSettings", "predictionSettings", "aboutCecy", "deleteAllData"] {
+        for identifier in ["profileSettings", "accountSettings", "privacySettings", "reminderSettings", "predictionSettings", "aboutCecy", "deleteAllData"] {
             let row = app.buttons[identifier]
             reveal(row, in: app)
             XCTAssertGreaterThanOrEqual(row.frame.height, 44)
@@ -154,8 +154,7 @@ final class PhaseFiveUITests: XCTestCase {
         reveal(confirmation, in: app); confirmation.tap(); confirmation.typeText("DELETE")
         let commit = app.buttons["confirmReset"]
         reveal(commit, in: app); commit.tap()
-        XCTAssertTrue(app.buttons["finishHistory"].waitForExistence(timeout: 10))
-        app.buttons["finishHistory"].tap()
+        OnboardingUITestSupport.complete(in: app)
         app.tabBars.buttons["Settings"].tap()
         reveal(reminders, in: app); reminders.tap()
         XCTAssertEqual(app.switches["dailyReminder"].value as? String, "0")

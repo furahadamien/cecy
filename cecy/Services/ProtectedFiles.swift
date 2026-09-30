@@ -38,7 +38,7 @@ nonisolated enum ProtectedFiles {
     let url: URL
     init(url: URL) { self.url = url }
     func load() throws -> PrivacyPreferences {
-        try ProtectedFiles.directory(url.deletingLastPathComponent())
+        try ProtectedFiles.directory(url.deletingLastPathComponent(), excludeFromBackup: true)
         let data: Data
         do { data = try Data(contentsOf: url) }
         catch let error as CocoaError where error.code == .fileReadNoSuchFile { return PrivacyPreferences() }
@@ -49,7 +49,7 @@ nonisolated enum ProtectedFiles {
     }
     func save(_ value: PrivacyPreferences) throws {
         try value.validate()
-        try ProtectedFiles.directory(url.deletingLastPathComponent())
+        try ProtectedFiles.directory(url.deletingLastPathComponent(), excludeFromBackup: true)
         try ProtectedFiles.write(JSONEncoder().encode(value), to: url)
     }
 }

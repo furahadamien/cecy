@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import AuthenticationServices
 
 struct TrackerRootView: View {
     @Environment(\.scenePhase) private var scenePhase
@@ -41,7 +42,7 @@ struct TrackerRootView: View {
             case .loaded:
                 if let today = session.today, let overview = session.overview {
                     if session.snapshot.onboardingCompletedAt == nil {
-                        NavigationStack { HistoryEntryView(session: session, today: today) }
+                        NavigationStack { OnboardingFlowView(session: session, today: today) }
                     } else {
                         TrackerTabs(session: session, today: today, overview: overview)
                     }
@@ -54,13 +55,21 @@ struct TrackerRootView: View {
         .task {
             session.privacy.start()
             if session.privacy.canAccess && session.phase == .loading { session.load() }
+            if session.privacy.canAccess { await session.account.checkCredentialState() }
         }
         .onChange(of: session.privacy.canAccess) { _, accessible in
-            if accessible { session.load() }
+            if accessible { session.account.reload(); session.load() }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { session.refresh() }
-            if phase == .background { session.privacy.wentToBackground() }
+            if phase == .background {
+                session.cancelSetup()
+                session.account.cancelPendingAuthorization()
+                session.privacy.wentToBackground()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: ASAuthorizationAppleIDProvider.credentialRevokedNotification)) { _ in
+            session.account.markRevoked()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
             session.refresh()

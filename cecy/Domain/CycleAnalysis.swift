@@ -138,6 +138,7 @@ nonisolated struct TrackerSnapshot: Equatable, Sendable {
     var periods: [Period] = []
     var onboardingCompletedAt: Date?
     var symptoms: [SymptomEntry] = []
+    var profile: LocalProfile?
 }
 
 @MainActor
@@ -149,4 +150,7 @@ protocol PeriodRepository {
     func deleteAll() throws -> TrackerSnapshot
     func saveSymptom(_ entry: SymptomEntry, editing: Bool, today: LocalDay, now: Date) throws -> TrackerSnapshot
     func deleteSymptom(id: UUID) throws -> TrackerSnapshot
+    func saveProfile(_ profile: LocalProfile, today: LocalDay) throws -> TrackerSnapshot
+    func prepareOnboarding(_ draft: OnboardingDraft, today: LocalDay) throws -> TrackerSnapshot
+    func completeOnboarding(profileID: UUID, today: LocalDay, now: Date) throws -> TrackerSnapshot
 }
