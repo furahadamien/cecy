@@ -3,13 +3,22 @@ import UIKit
 
 /// A separate, non-key window covers app-owned sheets as well as the root hierarchy.
 struct PrivacyShield: UIViewRepresentable {
+    @Environment(\.colorScheme) private var colorScheme
     let isActive: Bool
     func makeUIView(context: Context) -> ShieldHost { ShieldHost() }
-    func updateUIView(_ uiView: ShieldHost, context: Context) { uiView.setActive(isActive) }
+    func updateUIView(_ uiView: ShieldHost, context: Context) {
+        uiView.setAppearance(colorScheme == .dark ? .dark : .light)
+        uiView.setActive(isActive)
+    }
 
     final class ShieldHost: UIView {
         private var cover: UIWindow?
         private var active = false
+        private var appearance: UIUserInterfaceStyle = .unspecified
+        func setAppearance(_ value: UIUserInterfaceStyle) {
+            appearance = value
+            cover?.overrideUserInterfaceStyle = value
+        }
         func setActive(_ value: Bool) {
             active = value
             cover?.isHidden = value && UIApplication.shared.applicationState == .active
@@ -31,6 +40,7 @@ struct PrivacyShield: UIViewRepresentable {
             guard cover?.windowScene !== scene else { return }
             cover?.isHidden = true
             let overlay = UIWindow(windowScene: scene)
+            overlay.overrideUserInterfaceStyle = appearance
             overlay.windowLevel = .alert + 1
             let controller = UIViewController()
             controller.view.backgroundColor = .systemBackground

@@ -19,6 +19,36 @@ struct OnboardingFlowView: View {
             }
         }
         var optional: Bool { [.measurements, .symptoms, .context, .goals, .notifications].contains(self) }
+        var subtitle: String {
+            switch self {
+            case .welcome: "A little understanding, day by day."
+            case .about: "Let’s make Cecy feel like yours."
+            case .measurements: "Optional details. Always yours to change."
+            case .cycle: "Tell us what’s usual for you."
+            case .history: "Start with the most recent. Estimates are okay."
+            case .symptoms: "What do you usually experience? Choose any that apply."
+            case .context: "Does any of this apply right now?"
+            case .goals: "What would you like Cecy to help with?"
+            case .notifications: "A gentle nudge, only when you want it."
+            case .review: "Take a quick look. You can change anything later."
+            case .apple: "One last step to save your details on this device."
+            }
+        }
+        var symbol: String {
+            switch self {
+            case .welcome: "leaf"
+            case .about: "person.crop.circle"
+            case .measurements: "slider.horizontal.3"
+            case .cycle: "drop"
+            case .history: "calendar"
+            case .symptoms: "heart.text.square"
+            case .context: "square.text.square"
+            case .goals: "scope"
+            case .notifications: "bell"
+            case .review: "checkmark.circle"
+            case .apple: "person.badge.key"
+            }
+        }
     }
 
     let session: TrackerSession
@@ -49,6 +79,8 @@ struct OnboardingFlowView: View {
         Group {
             if let stage = session.setupStage {
                 VStack(spacing: 20) {
+                    Image(systemName: "leaf.circle.fill").font(.system(size: 64)).foregroundStyle(.tint)
+                        .accessibilityHidden(true)
                     Text("Setting up Cecy").font(.largeTitle.weight(.semibold))
                     ProgressView(stage.rawValue).accessibilityIdentifier("setupStatus")
                     Text("Step 12 of 12").font(.subheadline).foregroundStyle(.secondary)
@@ -56,29 +88,28 @@ struct OnboardingFlowView: View {
                 }
                 .padding().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                SettingsForm(title: step.title) {
-                    Section {
-                        ProgressView(value: Double(step.rawValue + 1), total: 12)
-                            .accessibilityLabel("Onboarding progress")
-                            .accessibilityValue("Step \(step.rawValue + 1) of 12")
-                        Text("Step \(step.rawValue + 1) of 12\(step.optional ? " · Optional" : "")")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
+                OnboardingPage(title: step.title, subtitle: step.subtitle, symbol: step.symbol,
+                               step: step.rawValue + 1, optional: step.optional) {
                     fields
-                    if let error { Section { InlineError(message: error).accessibilityFocused($errorFocused) } }
                 }
                 .id(step)
                 .scrollDismissesKeyboard(.interactively)
                 .safeAreaInset(edge: .bottom) {
                     VStack(spacing: 8) {
+                        if let error {
+                            InlineError(message: error).font(.callout)
+                                .fixedSize(horizontal: false, vertical: true).accessibilityFocused($errorFocused)
+                        }
                         if step != .apple {
                             HStack(spacing: 16) {
                                 if step.optional {
                                     Button("Skip") { skip(); advance() }.frame(minWidth: 44, minHeight: 44)
                                         .accessibilityIdentifier("onboardingSkip")
                                 }
-                                Button(editingReview ? "Back to review" : "Continue") { advance() }
-                                    .frame(maxWidth: .infinity, minHeight: 44)
+                                Button { advance() } label: {
+                                    Text(editingReview ? "Back to review" : (step == .welcome ? "Get started" : (step == .review ? "Continue to Apple sign-in" : "Continue")))
+                                        .frame(maxWidth: .infinity, minHeight: 44)
+                                }
                                     .buttonStyle(.borderedProminent).accessibilityIdentifier("onboardingContinue")
                             }
                         }
@@ -117,8 +148,10 @@ struct OnboardingFlowView: View {
         switch step {
         case .welcome:
             Section {
-                Text("Track periods, symptoms, and patterns over time.")
-                Text("Your health data stays on your device.").font(.headline)
+                Label("See your next estimated period window", systemImage: "calendar")
+                Label("Keep track of symptoms and how you feel", systemImage: "heart.text.square")
+                Label("Understand patterns in your own records", systemImage: "chart.xyaxis.line")
+            } footer: {
                 Text("No cloud backup yet. Deleting Cecy or losing this device can mean losing your records.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
@@ -130,12 +163,12 @@ struct OnboardingFlowView: View {
             }
         case .cycle:
             Section { ProfileCycleFields(profile: $draft.profile) } footer: {
-                Text("How long does bleeding usually last? This won’t fill in missing end dates.")
+                Text("Your usual bleeding length—not the time between periods. Missing end dates stay blank.")
             }
         case .history:
             Section {
-                Text("Estimates are okay. End dates are optional.")
-                Text("\(draft.periods.count) periods added").accessibilityIdentifier("onboardingPeriodCount")
+                Label("\(draft.periods.count) of 4 required starts added", systemImage: draft.periods.count >= 4 ? "checkmark.circle.fill" : "calendar.badge.plus")
+                    .font(.headline).accessibilityIdentifier("onboardingPeriodCount")
                 ForEach(draft.periods.sorted { $0.start > $1.start }) { period in
                     VStack(alignment: .leading, spacing: 8) {
                         Text(DayText.full(period.start)).font(.headline)
@@ -143,8 +176,10 @@ struct OnboardingFlowView: View {
                             .font(.subheadline).foregroundStyle(.secondary)
                         HStack {
                             Button("Edit") { editingPeriod = period }.buttonStyle(.borderless)
+                                .accessibilityLabel("Edit period starting \(DayText.full(period.start))")
                             Spacer()
                             Button("Remove", role: .destructive) { draft.periods.removeAll { $0.id == period.id } }.buttonStyle(.borderless)
+                                .accessibilityLabel("Remove period starting \(DayText.full(period.start))")
                         }.frame(minHeight: 44)
                     }
                 }
@@ -152,34 +187,41 @@ struct OnboardingFlowView: View {
                     Label(draft.periods.count < 4 ? "Add a period" : "Add another period", systemImage: "plus").frame(minHeight: 44)
                 }.accessibilityIdentifier("addOnboardingPeriod")
             } footer: {
-                Text("Four starts give three cycle intervals. Start with the most recent, then work backward. Your dates stay in this draft until setup.")
+                Text("End dates are optional. These dates are saved only after Apple sign-in and setup.")
             }
         case .symptoms:
             Section {
-                Text("What do you usually experience?").font(.headline)
                 ProfileSymptomFields(profile: $draft.profile)
             } footer: {
-                Text("Choose any that apply. These are preferences, not recorded symptoms.")
+                Text("Preferences only. This won’t add symptoms to your calendar.")
             }
         case .context:
             Section {
-                Text("Does any of this apply right now?").font(.headline)
                 ProfileContextFields(profile: $draft.profile)
             } footer: {
                 Text("Optional context—not a diagnosis or prediction input.")
             }
         case .goals:
             Section {
-                Text("What do you want Cecy to help with?").font(.headline)
                 ProfileGoalFields(profile: $draft.profile)
             } footer: { Text("Choose as many as you like.") }
         case .notifications:
             Section {
-                Toggle("Daily check-in", isOn: $draft.dailyReminder).accessibilityIdentifier("onboardingDailyReminder")
-                Toggle("Before period window", isOn: $draft.windowReminder).accessibilityIdentifier("onboardingWindowReminder")
+                Toggle(isOn: $draft.dailyReminder) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Daily check-in")
+                        Text("A moment to log periods or symptoms.").font(.caption).foregroundStyle(.secondary)
+                    }
+                }.accessibilityIdentifier("onboardingDailyReminder")
+                Toggle(isOn: $draft.windowReminder) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Before period window")
+                        Text("One day before an eligible estimate.").font(.caption).foregroundStyle(.secondary)
+                    }
+                }.accessibilityIdentifier("onboardingWindowReminder")
                 DatePicker("Local time", selection: reminderTime, displayedComponents: .hourAndMinute)
             } footer: {
-                Text("A daily reminder to log periods or symptoms, and a reminder one day before an eligible prediction window. iOS permission is requested during setup only if you enable a reminder. You can decline.")
+                Text("Discreet notifications, without health details. If you enable one, iOS will ask permission during setup. You can decline.")
             }
         case .review:
             review
@@ -210,9 +252,11 @@ struct OnboardingFlowView: View {
             Text("Reminder choices can be changed later in Settings.").font(.footnote).foregroundStyle(.secondary)
         }
         Section("Edit answers") {
+            DisclosureGroup("Review or change an answer") {
             ForEach([Step.about, .measurements, .cycle, .history, .symptoms, .context, .goals, .notifications], id: \.rawValue) { target in
                 Button(target.title) { editingReview = true; step = target; error = nil }
                     .frame(minHeight: 44)
+            }
             }
         }
     }

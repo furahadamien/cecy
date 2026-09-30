@@ -64,7 +64,7 @@ final class cecyUITests: XCTestCase {
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["onboardingContinue"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.tabBars.buttons["Today"].exists)
-        XCTAssertTrue(app.navigationBars["Understand your cycle."].exists)
+        XCTAssertEqual(app.staticTexts["onboardingHeading"].label, "Understand your cycle.")
     }
 
     @MainActor

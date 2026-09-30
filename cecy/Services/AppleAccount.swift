@@ -6,6 +6,8 @@ import Security
 nonisolated struct AppleIdentity: Codable, Equatable, Sendable {
     let userID: String
     let profileID: UUID
+    // Optional for backward-compatible decoding of existing Keychain records.
+    var signedOut: Bool?
 }
 
 @MainActor protocol AppleIdentityStoring {
@@ -65,10 +67,12 @@ nonisolated enum AccountError: Error, LocalizedError {
 }
 
 @MainActor @Observable final class AppleAccount {
-    enum State { case notLinked, unchecked, authorized, revoked, unavailable }
+    enum State { case notLinked, unchecked, authorized, revoked, unavailable, signedOut }
     private(set) var identity: AppleIdentity?
     private(set) var state: State = .notLinked
     private(set) var isSigningIn = false
+    private(set) var identityLoaded = false
+    var requiresSignIn: Bool { !identityLoaded || identity?.signedOut == true }
     var message: String?
     @ObservationIgnored private let store: any AppleIdentityStoring
     @ObservationIgnored private let checksAppleCredentials: Bool
@@ -82,11 +86,13 @@ nonisolated enum AccountError: Error, LocalizedError {
     }
 
     func reload() {
+        cancelPendingAuthorization()
         do {
             identity = try store.load()
-            state = identity == nil ? .notLinked : .unchecked
+            identityLoaded = true
+            state = identity?.signedOut == true ? .signedOut : (identity == nil ? .notLinked : .unchecked)
             message = nil
-        } catch { state = .unavailable; message = AccountError.storage.localizedDescription }
+        } catch { identityLoaded = false; state = .unavailable; message = AccountError.storage.localizedDescription }
     }
 
     func beginAuthorization() -> UUID {
@@ -126,11 +132,12 @@ nonisolated enum AccountError: Error, LocalizedError {
         guard !userID.isEmpty else { throw AccountError.unavailable }
         // Re-read rather than overwriting an unreadable Keychain item.
         let saved = try store.load()
-        if protectsExistingProfile, let saved,
+        if let saved, protectsExistingProfile || saved.signedOut == true,
            saved.profileID != profileID || saved.userID != userID { throw ProfileError.identity }
         let identity = AppleIdentity(userID: userID, profileID: profileID)
         try store.save(identity)
         self.identity = identity
+        identityLoaded = true
         state = .authorized
         revision += 1
         message = nil
@@ -138,12 +145,13 @@ nonisolated enum AccountError: Error, LocalizedError {
 
     func markRevoked() {
         cancelPendingAuthorization()
+        guard identity?.signedOut != true else { return }
         state = .revoked
         message = "Apple authorization was revoked. Your local health records are still here. Sign in again to reconnect."
     }
 
     func checkCredentialState() async {
-        guard checksAppleCredentials, let identity, !isSigningIn else { return }
+        guard checksAppleCredentials, !requiresSignIn, let identity, !isSigningIn else { return }
         let token = revision
         do {
             let value: ASAuthorizationAppleIDProvider.CredentialState = try await withCheckedThrowingContinuation { continuation in
@@ -166,10 +174,23 @@ nonisolated enum AccountError: Error, LocalizedError {
         }
     }
 
+    func signOut() throws {
+        guard var saved = try store.load() else { throw AccountError.unavailable }
+        saved.signedOut = true
+        // Save first: a failed Keychain write must not falsely report a durable logout.
+        try store.save(saved)
+        cancelPendingAuthorization()
+        identity = saved
+        identityLoaded = true
+        state = .signedOut
+        message = nil
+    }
+
     func removeLocalIdentity() throws {
         try store.clear()
         cancelPendingAuthorization()
         identity = nil
+        identityLoaded = true
         state = .notLinked
         message = nil
     }

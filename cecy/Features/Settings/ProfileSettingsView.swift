@@ -74,6 +74,8 @@ struct ProfileSettingsView: View {
 
 struct AccountSettingsView: View {
     let session: TrackerSession
+    @State private var confirmLogout = false
+    @State private var logoutError: String?
 
     private var status: String {
         switch session.account.state {
@@ -82,6 +84,7 @@ struct AccountSettingsView: View {
         case .authorized: "Connected"
         case .revoked: "Sign in again"
         case .unavailable: "Check unavailable"
+        case .signedOut: "Logged out"
         }
     }
 
@@ -92,11 +95,25 @@ struct AccountSettingsView: View {
                 Text("Your Apple identity is stored securely on this device. Cecy has no cloud account database or health-data sync yet.")
             }
             if let profile = session.snapshot.profile {
-                AppleSignInSection(session: session, profileID: profile.id) {}
+                if session.account.state != .authorized && session.account.state != .unchecked {
+                    AppleSignInSection(session: session, profileID: profile.id, purpose: .connect) {}
+                }
             } else {
                 Section {
                     Text("Save your local profile before linking an Apple Account. Your existing records won’t change.")
                     NavigationLink("Add profile") { ProfileSettingsView(session: session) }
+                }
+            }
+            if session.account.identity != nil {
+                Section {
+                    Button(role: .destructive) { confirmLogout = true } label: {
+                        Label("Log out", systemImage: "rectangle.portrait.and.arrow.right").frame(minHeight: 44)
+                    }
+                    .disabled(session.isSaving || session.account.isSigningIn || session.privacy.isAuthenticating || session.privacy.isChangingReminders)
+                    .accessibilityIdentifier("logOut")
+                    if let logoutError { InlineError(message: logoutError) }
+                } footer: {
+                    Text("Keeps your local records. Sign in with the same Apple Account to reopen them.")
                 }
             }
             Section("Change or remove your account") {
@@ -107,5 +124,42 @@ struct AccountSettingsView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .task { await session.account.checkCredentialState() }
+        .alert("Log out of Cecy?", isPresented: $confirmLogout) {
+            Button("Cancel", role: .cancel) {}
+            Button("Log out", role: .destructive) { logoutError = session.logOut() }
+                .accessibilityIdentifier("confirmLogout")
+        } message: {
+            Text("Your details stay on this device, hidden until you sign back in with the same Apple Account. Reminders and app lock stay unchanged. This does not revoke Apple’s authorization.")
+        }
+    }
+}
+
+struct SignedOutAccountView: View {
+    let session: TrackerSession
+    @State private var showReset = false
+
+    var body: some View {
+        SettingsForm(title: "Welcome back") {
+            Section {
+                Label("You’re logged out", systemImage: "lock.shield")
+                    .font(.headline).accessibilityIdentifier("signedOutScreen")
+                Text("Reconnect with the same Apple Account to open any profile saved on this device. Logging out does not delete it.")
+            }
+            if session.account.identityLoaded, let identity = session.account.identity {
+                AppleSignInSection(session: session, profileID: identity.profileID, purpose: .reconnect) { session.load() }
+            } else {
+                Section {
+                    Text(session.account.message ?? "Your Apple identity couldn’t be read securely.")
+                    Button("Try again") { session.account.reload(); session.load() }
+                }
+            }
+            Section {
+                Text("Logging out doesn’t delete records, disable your reminders or turn off app lock. The account binding stays in this device’s Keychain to prevent another Apple Account opening your records.")
+                    .font(.footnote).foregroundStyle(.secondary)
+                Button("Delete local data and start over", role: .destructive) { showReset = true }
+                    .accessibilityIdentifier("signedOutReset")
+            }
+        }
+        .sheet(isPresented: $showReset) { DeleteAllDataView(session: session) }
     }
 }
