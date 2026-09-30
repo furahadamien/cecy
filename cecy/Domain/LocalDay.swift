@@ -81,6 +81,7 @@ nonisolated struct LocalDay: Hashable, Comparable, Sendable, Identifiable {
 
 nonisolated enum TrackingError: Error, LocalizedError, Equatable, Sendable {
     case invalidDay, futureDate, reversedEnd, duplicateStart, overlap, invalidData, missingRecord, noteTooLong
+    case invalidRating, duplicateSymptom
 
     var errorDescription: String? {
         switch self {
@@ -92,6 +93,8 @@ nonisolated enum TrackingError: Error, LocalizedError, Equatable, Sendable {
         case .invalidData: "Some recorded data needs attention. It has not been changed."
         case .missingRecord: "This record could not be found. Reload your records and try again."
         case .noteTooLong: "Keep the note to 2,000 characters or fewer. Your text has not been shortened."
+        case .invalidRating: "Choose a rating from the available options."
+        case .duplicateSymptom: "This observation is already recorded for that day. Edit it in Calendar or Observations in Insights."
         }
     }
 }

@@ -8,6 +8,12 @@ struct CycleHistoryView: View {
     var body: some View {
         TrackerPage(title: "Insights", subtitle: "Your cycle history, from recorded starts.") {
             NavigationLink {
+                ObservationsView(session: session)
+            } label: {
+                Label("Observations and patterns", systemImage: "square.text.square").frame(minHeight: 44)
+            }
+            .accessibilityIdentifier("manageObservations")
+            NavigationLink {
                 RecordedPeriodsView(session: session)
             } label: {
                 Label("Manage recorded periods", systemImage: "list.bullet.rectangle").frame(minHeight: 44)

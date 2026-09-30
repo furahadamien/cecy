@@ -44,9 +44,10 @@ nonisolated enum TrackerSchemaV2: VersionedSchema {
 }
 
 nonisolated enum TrackerMigrationPlan: SchemaMigrationPlan {
-    static var schemas: [any VersionedSchema.Type] { [TrackerSchemaV1.self, TrackerSchemaV2.self] }
+    static var schemas: [any VersionedSchema.Type] { [TrackerSchemaV1.self, TrackerSchemaV2.self, TrackerSchemaV3.self] }
     static var stages: [MigrationStage] {
-        [.lightweight(fromVersion: TrackerSchemaV1.self, toVersion: TrackerSchemaV2.self)]
+        [.lightweight(fromVersion: TrackerSchemaV1.self, toVersion: TrackerSchemaV2.self),
+         .lightweight(fromVersion: TrackerSchemaV2.self, toVersion: TrackerSchemaV3.self)]
     }
 }
 
