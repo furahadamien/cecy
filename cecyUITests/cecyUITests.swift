@@ -86,7 +86,7 @@ final class cecyUITests: XCTestCase {
         app.tabBars.buttons["Calendar"].tap()
         let second = app.buttons["calendarDay_20260902"]
         XCTAssertTrue(second.label.contains("Recorded period start"))
-        XCTAssertTrue(app.buttons["calendarDay_20260903"].label.contains("No recorded entry"))
+        XCTAssertTrue(app.buttons["calendarDay_20260903"].label.contains("No recorded period"))
         XCTAssertTrue(app.buttons["calendarDay_20260929"].label.contains("estimate"))
         app.buttons["nextMonth"].tap()
         XCTAssertTrue(app.buttons["calendarDay_20261004"].label.contains("estimate"))

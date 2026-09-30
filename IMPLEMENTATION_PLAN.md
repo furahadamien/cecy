@@ -20,7 +20,7 @@ This document tracks the phased implementation plan derived from the product bri
 | 0 | Foundations and product rules | Complete — September 29, 2026 |
 | 1 | Smallest useful vertical slice | Implemented; automated checks passed; manual acceptance pending |
 | 2 | Everyday period tracking | Implemented; automated checks passed; manual acceptance pending |
-| 3 | Symptoms and local insights | Not started |
+| 3 | Symptoms and local insights | Implemented; automated checks passed; manual acceptance pending |
 | 4 | Prediction quality | Not started |
 | 5 | Privacy controls, export, and reminders | Not started |
 | 6 | Optional HealthKit integration | Deferred |
@@ -179,30 +179,32 @@ Do not combine weighting, outlier exclusion, and complex confidence scoring unle
 
 **Goal:** Surface personal patterns without overwhelming the user.
 
+**Design:** [PHASE_3_DESIGN.md](PHASE_3_DESIGN.md). Implemented and automatically verified on `phase-3`; manual release checks remain pending. No prediction algorithm changes or optional integrations.
+
 ### Tasks
 
-- [ ] Add extensible symptom types, optional severity, and optional notes.
-- [ ] Support the planned symptom categories: cramps, headache, bloating, fatigue, mood changes, acne, back pain, nausea, breast tenderness, sleep quality, energy, and cravings.
-- [ ] Build fast logging sheets accessible from Today and Calendar.
-- [ ] Support symptom editing and deletion.
-- [ ] Define repeated same-day log behavior.
-- [ ] Implement a separate deterministic pattern engine for symptom timing relative to recorded period starts.
-- [ ] Detect recurring symptom observations, recent cycle-length changes, variability changes, and period-duration changes.
-- [ ] Represent insights as structured domain values with supporting counts, date ranges, and confidence.
-- [ ] Limit Today to a small number of relevant observations.
+- [x] Add extensible symptom types, optional severity, and optional notes.
+- [x] Support the planned symptom categories: cramps, headache, bloating, fatigue, mood changes, acne, back pain, nausea, breast tenderness, sleep quality, energy, and cravings.
+- [x] Build fast logging sheets accessible from Today and Calendar.
+- [x] Support symptom editing and deletion.
+- [x] Define repeated same-day log behavior.
+- [x] Implement a separate deterministic pattern engine for symptom timing relative to recorded period starts.
+- [x] Detect recurring symptom observations, recent cycle-length changes, variability changes, and period-duration changes.
+- [x] Represent insights as structured domain values with supporting counts, date ranges, and confidence.
+- [x] Limit Today to a small number of relevant observations.
 
 ### Evidence and safety rules
 
-- [ ] Do not interpret missing symptom logs as symptom absence.
-- [ ] Require sufficient observations before describing a pattern.
-- [ ] Distinguish prediction confidence from insight confidence.
-- [ ] Do not present temporal association as causation.
-- [ ] Defer phase-based observations where phase estimation is insufficiently supported.
+- [x] Do not interpret missing symptom logs as symptom absence.
+- [x] Require sufficient observations before describing a pattern.
+- [x] Distinguish prediction confidence from insight confidence.
+- [x] Do not present temporal association as causation.
+- [x] Defer phase-based observations where phase estimation is insufficiently supported.
 
 ### Completion criteria
 
-- [ ] Insights are reproducible in unit tests.
-- [ ] Insights explain their supporting evidence and remain descriptive, not diagnostic.
+- [x] Insights are reproducible in unit tests.
+- [x] Insights explain their supporting evidence and remain descriptive, not diagnostic.
 
 ## Phase 4 — Strengthen prediction quality
 
@@ -406,7 +408,7 @@ Record important choices and their rationale as implementation proceeds.
 
 ## Next authorized implementation scope
 
-Phase 2 implementation and automated verification are complete on `phase-2`. Review the changes and outstanding manual acceptance gates before authorizing Phase 3. Symptoms, patterns, and optional integrations remain outside this implementation. Manual iOS 17, device/offline, and accessibility checks remain pending.
+Phase 3 implementation, review, and automated verification are complete on `phase-3`. Phase 4 remains unstarted and requires separate authorization. Manual iOS 17, device/offline, and accessibility checks remain pending. No optional integrations have been introduced.
 
 ### Phase 1 verification record
 
@@ -433,3 +435,16 @@ Phase 2 implementation and automated verification are complete on `phase-2`. Rev
 - No additional editor or Simulator application windows were opened. All fixtures use isolated synthetic records. Production data was not reset during testing.
 - Reset removes current logical records and onboarding state; only confirmed production reset also removes the allowlisted old template store/sidecars. It does not purge backups or guarantee secure overwriting of storage pages.
 - No commit or push was performed as part of implementation. Phase 3 and optional integrations remain unstarted.
+
+### Phase 3 verification record
+
+- Design: [PHASE_3_DESIGN.md](PHASE_3_DESIGN.md). One observation per type/day; optional symptom severity versus separate energy/sleep ratings; no missing-log absence inference.
+- Additive V3 schema preserves frozen V1/V2 models. Reset includes observations, ratings, and notes. No CloudKit, network client, AI, subscription, or new dependency was added.
+- **42 Swift Testing tests passed across 6 suites** on iPhone 17 Pro / iOS 26.2. Includes V1/V2-to-V3 file-backed migration, CRUD/identity, validation, rollback/retry/reset, pattern thresholds, fully elapsed windows, leap/DST/date-line boundaries, and correction recomputation.
+- All **7 existing Phase 1/2 UI regression tests passed** in `/tmp/cecy-phase3-ui.xcresult`. The initial run also passed evidence navigation but failed two symptom interaction checks. The Calendar accessibility grouping and Today test scrolling were corrected; the focused rerun passed **all 3 Phase 3 UI flows plus the large-text Calendar regression**, with no failures. Across the two runs, all 10 UI flows passed.
+- Debug test compilation and Release generic simulator build passed. Final Release rebuild includes the fully elapsed-window rule and accessibility improvements.
+- Final focused run: `/tmp/cecy-phase3-verify.xcresult` reports **46 tests passed, zero failures** (42 Swift Testing tests and 4 UI tests; parameterized cases produce additional executions). Initial unit run: `/tmp/cecy-phase3-unit.xcresult`; final Release log: `/tmp/cecy-phase3-release-final.log` reports BUILD SUCCEEDED. Temporary local artifacts, not repository files.
+- No extra editor or Simulator application windows were opened. Tests use isolated synthetic records; production data was not reset. No commit or push performed.
+- iOS 17 runtime, physical-device/offline behavior, signing/data protection, dark mode/iPad layout, and manual VoiceOver/Dynamic Type audits remain release gates.
+
+- Final review: new observation timestamps default to creation time and are assigned by the repository; the existing Phase 2 file-backed V1 fixture now exercises the V1 → V2 → V3 migration chain. Current-store reset is transactional; legacy file cleanup is separate and cannot be rolled back. No confirmed blocking findings. `git diff --check` passed.

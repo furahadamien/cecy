@@ -46,11 +46,14 @@ struct TodayView: View {
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.borderedProminent).accessibilityIdentifier("logPeriod")
+                SymptomLogButton(session: session, day: today)
                 Button("Add previous periods", action: onHistory)
                     .frame(maxWidth: .infinity, minHeight: 44).buttonStyle(.bordered)
             }
             Text("A count from recorded dates—not an estimate of cycle phase. Missing records can affect the result.")
                 .font(.footnote).foregroundStyle(.secondary)
+            if let insight = session.insights.first { InsightCard(insight: insight) }
+            if let message = session.insightMessage { InlineError(message: message) }
             if let latest = session.snapshot.periods.last {
                 TrackerCard {
                     Text("Latest recorded period").font(.headline)

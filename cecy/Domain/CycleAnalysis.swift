@@ -137,6 +137,7 @@ nonisolated enum CycleCalculator {
 nonisolated struct TrackerSnapshot: Equatable, Sendable {
     var periods: [Period] = []
     var onboardingCompletedAt: Date?
+    var symptoms: [SymptomEntry] = []
 }
 
 @MainActor
@@ -146,4 +147,6 @@ protocol PeriodRepository {
     func update(_ period: Period, today: LocalDay, now: Date) throws -> TrackerSnapshot
     func delete(id: UUID) throws -> TrackerSnapshot
     func deleteAll() throws -> TrackerSnapshot
+    func saveSymptom(_ entry: SymptomEntry, editing: Bool, today: LocalDay, now: Date) throws -> TrackerSnapshot
+    func deleteSymptom(id: UUID) throws -> TrackerSnapshot
 }

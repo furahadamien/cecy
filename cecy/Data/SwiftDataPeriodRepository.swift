@@ -55,7 +55,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
 
     static func local(url: URL, clearLegacyData: @escaping () throws -> Void = {}) throws -> SwiftDataPeriodRepository {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let schema = Schema(versionedSchema: TrackerSchemaV2.self)
+        let schema = Schema(versionedSchema: TrackerSchemaV3.self)
         let configuration = ModelConfiguration("CecyLocal", schema: schema, url: url, cloudKitDatabase: .none)
         return try SwiftDataPeriodRepository(container: ModelContainer(for: schema, migrationPlan: TrackerMigrationPlan.self,
                                                                        configurations: [configuration]), clearLegacyData: clearLegacyData)
@@ -71,7 +71,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
     }
 
     static func inMemory() throws -> SwiftDataPeriodRepository {
-        let schema = Schema(versionedSchema: TrackerSchemaV2.self)
+        let schema = Schema(versionedSchema: TrackerSchemaV3.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         return try SwiftDataPeriodRepository(container: ModelContainer(for: schema, migrationPlan: TrackerMigrationPlan.self,
                                                                        configurations: [configuration]))
@@ -86,7 +86,10 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         }
         let periods = try records.map { try $0.value() }.sorted { $0.start < $1.start }
         try PeriodValidation.validate(periods)
-        return TrackerSnapshot(periods: periods, onboardingCompletedAt: states.first?.onboardingCompletedAt)
+        let symptoms = try context.fetch(FetchDescriptor<TrackerSchemaV3.SymptomRecord>()).map { try $0.value() }
+        try SymptomValidation.validate(symptoms)
+        return TrackerSnapshot(periods: periods, onboardingCompletedAt: states.first?.onboardingCompletedAt,
+                               symptoms: SymptomValidation.sorted(symptoms))
     }
 
     func add(_ periods: [Period], completingOnboarding: Bool, today: LocalDay, now: Date) throws -> TrackerSnapshot {
@@ -157,14 +160,68 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         }
     }
 
+    func saveSymptom(_ entry: SymptomEntry, editing: Bool, today: LocalDay, now: Date) throws -> TrackerSnapshot {
+        var candidate = try load()
+        var value = entry
+        if editing {
+            guard let original = candidate.symptoms.first(where: { $0.id == entry.id }) else { throw TrackingError.missingRecord }
+            value = SymptomEntry(id: original.id, day: entry.day, kind: entry.kind, value: entry.value,
+                                 notes: entry.notes, createdAt: original.createdAt, updatedAt: now)
+            candidate.symptoms.removeAll { $0.id == entry.id }
+        } else {
+            value = SymptomEntry(id: entry.id, day: entry.day, kind: entry.kind, value: entry.value,
+                                 notes: entry.notes, createdAt: now)
+        }
+        // Validate before normalizing so oversized whitespace notes are never silently accepted.
+        try SymptomValidation.validate(candidate.symptoms + [value], asOf: today)
+        if value.notes?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true { value.notes = nil }
+        candidate.symptoms.append(value)
+        candidate.symptoms = SymptomValidation.sorted(candidate.symptoms)
+        do {
+            if editing {
+                guard let record = try context.fetch(FetchDescriptor<TrackerSchemaV3.SymptomRecord>()).first(where: { $0.id == value.id }) else {
+                    throw TrackingError.missingRecord
+                }
+                record.dayKey = value.day.key
+                record.kindRaw = value.kind.rawValue
+                record.rating = value.value
+                record.notes = value.notes
+                record.updatedAt = value.updatedAt
+            } else { context.insert(TrackerSchemaV3.SymptomRecord(value)) }
+            try saveContext(context)
+            return candidate
+        } catch {
+            context.rollback()
+            throw error
+        }
+    }
+
+    func deleteSymptom(id: UUID) throws -> TrackerSnapshot {
+        var candidate = try load()
+        guard let record = try context.fetch(FetchDescriptor<TrackerSchemaV3.SymptomRecord>()).first(where: { $0.id == id }) else {
+            throw TrackingError.missingRecord
+        }
+        do {
+            context.delete(record)
+            try saveContext(context)
+            candidate.symptoms.removeAll { $0.id == id }
+            return candidate
+        } catch {
+            context.rollback()
+            throw error
+        }
+    }
+
     func deleteAll() throws -> TrackerSnapshot {
         do {
             // Fetch before deleting anything. Reset also works for malformed domain records.
             let records = try context.fetch(FetchDescriptor<TrackerSchemaV2.PeriodRecord>())
             let states = try context.fetch(FetchDescriptor<TrackerSchemaV2.AppStateRecord>())
+            let symptoms = try context.fetch(FetchDescriptor<TrackerSchemaV3.SymptomRecord>())
             try clearLegacyData()
             records.forEach { context.delete($0) }
             states.forEach { context.delete($0) }
+            symptoms.forEach { context.delete($0) }
             try saveContext(context)
             return TrackerSnapshot()
         } catch {

@@ -9,6 +9,8 @@ final class TrackerSession {
     private(set) var today: LocalDay?
     private(set) var overview: CycleOverview?
     private(set) var statistics: CycleStatistics?
+    private(set) var insights: [CycleInsight] = []
+    private(set) var insightMessage: String?
     private(set) var isSaving = false
     private(set) var failureMessage: String?
     var confirmation: String?
@@ -68,6 +70,13 @@ final class TrackerSession {
         self.today = today
         overview = CycleCalculator.overview(periods: snapshot.periods, today: today)
         statistics = try? CycleStatistics.calculate(periods: snapshot.periods, today: today)
+        do {
+            insights = try CycleInsightEngine.generate(periods: snapshot.periods, symptoms: snapshot.symptoms, today: today)
+            insightMessage = nil
+        } catch {
+            insights = []
+            insightMessage = "Observations cannot be compared in the current date context. Check your device date and recorded dates; no records have been removed."
+        }
         failureMessage = nil
         phase = .loaded
     }
@@ -81,6 +90,19 @@ final class TrackerSession {
     func delete(id: UUID) -> String? {
         mutate(confirmation: "Period deleted.", failure: "This period wasn’t deleted. Try again.") { repository, _, _ in
             try repository.delete(id: id)
+        }
+    }
+
+    func saveSymptom(_ entry: SymptomEntry, editing: Bool = false) -> String? {
+        mutate(confirmation: editing ? "Observation updated." : "Observation recorded.",
+               failure: "Your observation hasn’t been saved. Your draft is still here; try again.") {
+            try $0.saveSymptom(entry, editing: editing, today: $1, now: $2)
+        }
+    }
+
+    func deleteSymptom(id: UUID) -> String? {
+        mutate(confirmation: "Observation deleted.", failure: "This observation wasn’t deleted. Try again.") { repository, _, _ in
+            try repository.deleteSymptom(id: id)
         }
     }
 
@@ -121,10 +143,19 @@ final class TrackerSession {
             let fixed = ISO8601DateFormatter().date(from: "2026-09-29T12:00:00Z")!
             return TrackerSession(repository: {
                 let repository = try SwiftDataPeriodRepository.local(url: url)
-                if ProcessInfo.processInfo.environment["CECY_UI_FIXTURE"] == "history",
+                let fixture = ProcessInfo.processInfo.environment["CECY_UI_FIXTURE"]
+                if fixture == "history" || fixture == "patterns",
                    try repository.load().onboardingCompletedAt == nil {
-                    let periods = try [20260607, 20260705, 20260804, 20260902].map { Period(start: try LocalDay(key: $0)) }
+                    let keys = fixture == "patterns" ? [20260410, 20260509, 20260607, 20260705, 20260804, 20260902]
+                        : [20260607, 20260705, 20260804, 20260902]
+                    let periods = try keys.map { Period(start: try LocalDay(key: $0)) }
                     _ = try repository.add(periods, completingOnboarding: true, today: LocalDay(key: 20260929), now: fixed)
+                    if fixture == "patterns" {
+                        for period in periods {
+                            let entry = try SymptomEntry(day: period.start.adding(days: -1), kind: .headache)
+                            _ = try repository.saveSymptom(entry, editing: false, today: LocalDay(key: 20260929), now: fixed)
+                        }
+                    }
                 }
                 return repository
             }, clock: { fixed }, timeZone: { TimeZone(secondsFromGMT: 0)! })

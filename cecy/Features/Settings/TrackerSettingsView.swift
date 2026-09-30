@@ -9,6 +9,7 @@ struct TrackerSettingsView: View {
             TrackerCard {
                 Text("Your records").font(.headline)
                 Text("Edit or delete individual periods from Calendar or Manage recorded periods in Insights.")
+                Text("Manage symptoms, ratings, and private notes from Calendar or Observations and patterns in Insights. Pattern calculations stay on your device.")
                 Button("Delete all data", role: .destructive) { showReset = true }
                     .frame(minHeight: 44).accessibilityIdentifier("deleteAllData")
             }
@@ -43,7 +44,7 @@ private struct DeleteAllDataView: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("This removes all local period dates, flow, notes, and onboarding completion, plus any old template database files. You will return to onboarding.")
+                    Text("This removes all local period dates, flow, symptoms, ratings, private notes, and onboarding completion, plus any old template database files. You will return to onboarding.")
                     Text("This cannot be undone. It does not erase device backups or copies outside the app, and is not a secure-erasure guarantee.")
                 }
                 Section("Type DELETE to confirm") {
