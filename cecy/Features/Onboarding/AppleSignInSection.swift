@@ -2,16 +2,29 @@ import AuthenticationServices
 import SwiftUI
 
 struct AppleSignInSection: View {
+    enum Purpose {
+        case saveDetails, connect, reconnect
+        var title: String {
+            switch self {
+            case .saveDetails: "Sign in to save your details."
+            case .connect: "Connect your Apple Account."
+            case .reconnect: "Sign in to see your saved details."
+            }
+        }
+    }
     @Environment(\.colorScheme) private var colorScheme
     let session: TrackerSession
     let profileID: UUID
+    var purpose: Purpose = .saveDetails
     let onSuccess: () -> Void
     @State private var requestToken: UUID?
 
     var body: some View {
         Section {
-            Text("Sign in with Apple to create your Cecy account.")
-            Text("Your health data stays on your device.").font(.headline)
+            Text(purpose.title).font(.headline)
+                .accessibilityIdentifier("appleSignInPurpose")
+            Text(purpose == .saveDetails ? "We’ll save your profile and period history on this device." : "Your health records stay on this device.")
+                .foregroundStyle(.secondary)
             #if DEBUG
             if session.account.usesTestAuthorization {
                 Button("Continue with Apple (test)") {
@@ -23,8 +36,9 @@ struct AppleSignInSection: View {
             #endif
             if let message = session.account.message { InlineError(message: message) }
         } footer: {
-            Text("Apple sign-in identifies you; it does not back up your health records or restore them on another device. An internet connection is needed to sign in.")
+            Text("No cloud backup or cross-device restore. Internet is needed for Apple sign-in.")
         }
+        .disabled(!session.privacy.canAccess || session.account.isSigningIn || session.isSaving)
     }
 
     private var appleButton: some View {

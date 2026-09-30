@@ -60,59 +60,73 @@ private struct BirthdaySheet: View {
 }
 
 struct ProfileMeasurementFields: View {
-    @Environment(\.locale) private var locale
     @Binding var profile: LocalProfile
-    @State private var heightText: String
-    @State private var weightText: String
-
-    init(profile: Binding<LocalProfile>) {
-        _profile = profile
-        let value = profile.wrappedValue
-        _heightText = State(initialValue: value.heightCentimeters.map(value.measurementSystem.heightForDisplay).map(Self.format) ?? "")
-        _weightText = State(initialValue: value.weightKilograms.map(value.measurementSystem.weightForDisplay).map(Self.format) ?? "")
-    }
 
     var body: some View {
-        Group {
-        LabeledContent(profile.measurementSystem == .metric ? "Height (cm)" : "Height (inches)") {
-            TextField("Optional", text: Binding(get: { heightText }, set: {
-                heightText = $0
-                profile.heightCentimeters = parsed($0).map(profile.measurementSystem.heightInCentimeters)
-            }))
-                .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
-                .accessibilityLabel(profile.measurementSystem == .metric ? "Height in centimeters" : "Height in inches")
-                .accessibilityIdentifier("profileHeight")
-        }
-        LabeledContent(profile.measurementSystem == .metric ? "Weight (kg)" : "Weight (lb)") {
-            TextField("Optional", text: Binding(get: { weightText }, set: {
-                weightText = $0
-                profile.weightKilograms = parsed($0).map(profile.measurementSystem.weightInKilograms)
-            }))
-                .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
-                .accessibilityLabel(profile.measurementSystem == .metric ? "Weight in kilograms" : "Weight in pounds")
-                .accessibilityIdentifier("profileWeight")
-        }
-        if profile.heightCentimeters != nil || profile.weightKilograms != nil {
-            Button("Clear measurements") {
-                profile.heightCentimeters = nil; profile.weightKilograms = nil
-                heightText = ""; weightText = ""
+        MeasurementSliderField(kind: .height, units: profile.measurementSystem, value: $profile.heightCentimeters)
+        MeasurementSliderField(kind: .weight, units: profile.measurementSystem, value: $profile.weightKilograms)
+    }
+}
+
+private struct MeasurementSliderField: View {
+    let kind: MeasurementSliderKind
+    let units: MeasurementSystem
+    @Binding var value: Double?
+    @State private var expanded = false
+
+    private var range: ClosedRange<Double> { kind.range(system: units, current: value, expanded: expanded) }
+    private var displayed: Double { kind.display(value ?? kind.suggestedCanonicalValue, system: units) }
+    private var valueText: String {
+        value == nil ? "Not added" : "\(displayed.formatted(.number.precision(.fractionLength(0...1)))) \(kind.unit(units))"
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(kind.title).font(.headline)
+            Text(valueText).font(.system(.title2, design: .rounded, weight: .semibold)).monospacedDigit()
+                .accessibilityIdentifier("\(kind.identifier)Value")
+            Slider(value: Binding(get: { displayed }, set: {
+                value = min(kind.validCanonicalRange.upperBound, max(kind.validCanonicalRange.lowerBound, kind.canonical($0, system: units)))
+            }), in: range, step: kind.step(units)) {
+                Text("\(kind.title) in \(kind.unit(units))")
+            } onEditingChanged: { editing in
+                if editing && value == nil { value = kind.suggestedCanonicalValue }
             }
+            .accessibilityValue(valueText)
+            .accessibilityHint("Adjust to add or change this optional measurement.")
+            .accessibilityIdentifier(kind.identifier)
+            HStack {
+                Text("\(range.lowerBound.formatted(.number.precision(.fractionLength(0...1)))) \(kind.unit(units))")
+                Spacer()
+                Text("\(range.upperBound.formatted(.number.precision(.fractionLength(0...1)))) \(kind.unit(units))")
+            }.font(.caption).foregroundStyle(.secondary).accessibilityHidden(true)
+            HStack {
+                adjustmentButton("minus", direction: -1)
+                Text(value == nil ? "Slide to add" : "Fine tune").font(.caption).foregroundStyle(.secondary)
+                adjustmentButton("plus", direction: 1)
+                Spacer(minLength: 8)
+                if value != nil {
+                    Button("Clear") { value = nil }.frame(minWidth: 44, minHeight: 44)
+                        .accessibilityLabel("Clear \(kind.title.lowercased())")
+                        .accessibilityIdentifier("\(kind.identifier)Clear")
+                }
+            }
+            Button(expanded ? "Use compact range" : "Need a wider range?") { expanded.toggle() }
+                .font(.footnote).frame(minHeight: 44)
+                .accessibilityIdentifier("\(kind.identifier)Range")
         }
-        }
-        .onChange(of: profile.measurementSystem) { _, units in
-            if let value = profile.heightCentimeters, value.isFinite { heightText = Self.format(units.heightForDisplay(value)) }
-            if let value = profile.weightKilograms, value.isFinite { weightText = Self.format(units.weightForDisplay(value)) }
-        }
+        .padding(.vertical, 8)
+        .buttonStyle(.borderless)
     }
 
-    private static func format(_ value: Double) -> String {
-        value.formatted(.number.precision(.fractionLength(0...2)))
-    }
-    private func parsed(_ text: String) -> Double? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        // Invalid input stays a validation error, never silently becomes an omitted measurement.
-        return (try? Double(trimmed, format: .number.locale(locale), lenient: false)) ?? .nan
+    private func adjustmentButton(_ symbol: String, direction: Double) -> some View {
+        Button {
+            value = kind.adjusted(value, system: units, direction: direction)
+        } label: {
+            Image(systemName: symbol).frame(minWidth: 44, minHeight: 44)
+                .background(.quaternary, in: Circle())
+        }
+        .accessibilityLabel("\(direction < 0 ? "Decrease" : "Increase") \(kind.title.lowercased())")
+        .accessibilityIdentifier("\(kind.identifier)\(direction < 0 ? "Decrease" : "Increase")")
     }
 }
 
@@ -163,6 +177,7 @@ struct ProfileGoalFields: View {
 }
 
 private struct ProfileChoiceRow: View {
+    @Environment(\.colorScheme) private var colorScheme
     let title: String
     let selected: Bool
     let action: () -> Void
@@ -172,8 +187,13 @@ private struct ProfileChoiceRow: View {
                 Text(title).foregroundStyle(.primary).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 12)
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle").accessibilityHidden(true)
-            }.frame(minHeight: 44)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .frame(minHeight: 44)
+            .background(selected ? TrackerPalette(scheme: colorScheme).sage : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 14))
         }
+        .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? [.isSelected] : [])
         .accessibilityValue(selected ? "Selected" : "Not selected")
     }

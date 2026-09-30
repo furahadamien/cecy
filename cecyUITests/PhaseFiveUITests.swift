@@ -30,6 +30,25 @@ final class PhaseFiveUITests: XCTestCase {
         reveal(link, in: app); link.tap()
     }
 
+    @MainActor func testAppearanceTogglePersistsAndCanFollowDevice() {
+        let app = launch()
+        app.tabBars.buttons["Settings"].tap()
+        let dark = app.switches["darkMode"]
+        reveal(dark, in: app)
+        let target = dark.value as? String == "1" ? "0" : "1"
+        dark.switches.firstMatch.exists ? dark.switches.firstMatch.tap() : dark.tap()
+        XCTAssertEqual(dark.value as? String, target)
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Settings"].waitForExistence(timeout: 10))
+        app.tabBars.buttons["Settings"].tap()
+        reveal(dark, in: app)
+        XCTAssertEqual(dark.value as? String, target)
+        let automatic = app.buttons["systemAppearance"]
+        reveal(automatic, in: app); automatic.tap()
+        XCTAssertFalse(automatic.isEnabled)
+        XCTAssertEqual(app.staticTexts["appearanceStatus"].label, "Following your device’s appearance.")
+    }
+
     @MainActor func testSettingsSummaryAndDetailNavigation() {
         let app = launch()
         app.tabBars.buttons["Settings"].tap()

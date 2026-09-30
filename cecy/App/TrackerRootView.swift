@@ -25,6 +25,8 @@ struct TrackerRootView: View {
                 }
             } else if session.privacy.isLocked {
                 LockedTrackerView(privacy: session.privacy)
+            } else if session.account.requiresSignIn {
+                NavigationStack { SignedOutAccountView(session: session) }
             } else {
             switch session.phase {
             case .loading:
@@ -51,6 +53,7 @@ struct TrackerRootView: View {
             }
         }
         .tint(TrackerPalette(scheme: colorScheme).accent)
+        .preferredColorScheme(session.privacy.preferences.appearance.map { $0 == .dark ? ColorScheme.dark : .light })
         .background(PrivacyShield(isActive: scenePhase == .active))
         .task {
             session.privacy.start()

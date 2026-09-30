@@ -86,6 +86,17 @@ struct PreparedExport: Identifiable {
 
     func lockNow() { wentToBackground() }
 
+    func setAppearance(_ appearance: AppAppearance?) -> String? {
+        guard canAccess else { return "Unlock Cecy to change its appearance." }
+        var candidate = preferences
+        candidate.appearance = appearance
+        do {
+            try storage.save(candidate)
+            preferences = candidate
+            return nil
+        } catch { return "Appearance couldn’t be saved. Your previous setting is unchanged." }
+    }
+
     func trackingChanged(prediction: CyclePrediction?, now: Date, timeZone: TimeZone) {
         self.prediction = prediction
         self.now = now

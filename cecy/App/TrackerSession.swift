@@ -44,7 +44,7 @@ final class TrackerSession {
     }
 
     func load() {
-        guard privacy.canAccess else { return }
+        guard privacy.canAccess, !account.requiresSignIn else { return }
         phase = .loading
         do {
             if repository == nil { repository = try makeRepository() }
@@ -65,6 +65,27 @@ final class TrackerSession {
 
     func cancelSetup() { setupRevision += 1 }
 
+    func logOut() -> String? {
+        guard privacy.canAccess, !isSaving, !privacy.isAuthenticating, !privacy.isChangingReminders,
+              !account.isSigningIn else { return "Finish the current action before logging out." }
+        do { try account.signOut() }
+        catch { return "Logout couldn’t be saved securely. You are still signed in. Try again." }
+        cancelSetup()
+        privacy.cleanupExport()
+        snapshot = TrackerSnapshot()
+        today = nil
+        overview = nil
+        statistics = nil
+        predictionReplay = nil
+        insights = []
+        insightMessage = nil
+        confirmation = nil
+        failureMessage = nil
+        repository = nil
+        phase = .loading
+        return nil
+    }
+
     func saveProfile(_ profile: LocalProfile) -> String? {
         mutate(confirmation: "Profile updated.", failure: "Your profile hasn’t been saved. Try again.") { repository, today, _ in
             try repository.saveProfile(profile, today: today)
@@ -74,7 +95,7 @@ final class TrackerSession {
     /// Keychain, SwiftData and notification services cannot share one transaction.
     /// Stage local records atomically, retry idempotently, and publish completion last.
     func finishSetup(_ draft: OnboardingDraft) async -> String? {
-        guard privacy.canAccess, phase == .loaded, !isSaving, let repository else { return ProfileError.notReady.localizedDescription }
+        guard privacy.canAccess, !account.requiresSignIn, phase == .loaded, !isSaving, let repository else { return ProfileError.notReady.localizedDescription }
         isSaving = true
         let token = setupRevision
         defer { isSaving = false; setupStage = nil }
@@ -131,7 +152,7 @@ final class TrackerSession {
 
     /// A nil result means the transaction committed. Errors never include storage details.
     func save(_ periods: [Period], completingOnboarding: Bool = false) -> String? {
-        guard privacy.canAccess, phase == .loaded, !isSaving, let repository else { return "Your records aren’t ready. Unlock Cecy or try loading them again." }
+        guard privacy.canAccess, !account.requiresSignIn, phase == .loaded, !isSaving, let repository else { return "Your records aren’t ready. Unlock Cecy or try loading them again." }
         isSaving = true
         defer { isSaving = false }
         do {
@@ -193,12 +214,32 @@ final class TrackerSession {
 
     func deleteAllAndWait() async -> String? {
         guard privacy.canAccess, !isSaving else { return "Unlock Cecy and try again." }
+        if account.requiresSignIn { return await resetWhileSignedOut() }
         do {
             try privacy.prepareForReset()
             await privacy.reminders.flush()
             return deleteAll()
         } catch {
             return "Deletion did not finish. Records remain unchanged; reminders may already be disabled. Try again."
+        }
+    }
+
+    /// Only used by the explicit, typed DELETE confirmation on the signed-out screen.
+    private func resetWhileSignedOut() async -> String? {
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            try privacy.prepareForReset()
+            await privacy.reminders.flush()
+            guard privacy.canAccess else { throw ProfileError.notReady }
+            let repository = try makeRepository()
+            _ = try repository.deleteAll()
+            try account.removeLocalIdentity()
+            self.repository = repository
+            publish(TrackerSnapshot(), today: try LocalDay(date: clock(), timeZone: zone()))
+            return nil
+        } catch {
+            return "Reset did not finish. Local records may already be deleted, but the Apple link may remain. Retry to finish cleanup."
         }
     }
 
@@ -213,7 +254,7 @@ final class TrackerSession {
 
     private func mutate(confirmation: String?, failure: String,
                         operation: (any PeriodRepository, LocalDay, Date) throws -> TrackerSnapshot) -> String? {
-        guard privacy.canAccess, phase == .loaded, !isSaving, let repository else { return "Your records aren’t ready. Unlock Cecy or try loading them again." }
+        guard privacy.canAccess, !account.requiresSignIn, phase == .loaded, !isSaving, let repository else { return "Your records aren’t ready. Unlock Cecy or try loading them again." }
         isSaving = true
         defer { isSaving = false }
         do {

@@ -1,8 +1,10 @@
 import SwiftUI
 
 struct TrackerSettingsView: View {
+    @Environment(\.colorScheme) private var colorScheme
     let session: TrackerSession
     @State private var showReset = false
+    @State private var appearanceError: String?
 
     private var reminderSummary: String {
         let preferences = session.privacy.preferences
@@ -40,6 +42,24 @@ struct TrackerSettingsView: View {
                 Text("Your preferences")
             } footer: {
                 Text("Your health data stays on your device.")
+            }
+            Section {
+                Toggle(isOn: Binding(get: {
+                    session.privacy.preferences.appearance.map { $0 == .dark } ?? (colorScheme == .dark)
+                }, set: {
+                    appearanceError = session.privacy.setAppearance($0 ? .dark : .light)
+                })) {
+                    Label("Dark mode", systemImage: "moon")
+                }.accessibilityIdentifier("darkMode")
+                Button("Use device appearance") { appearanceError = session.privacy.setAppearance(nil) }
+                    .disabled(session.privacy.preferences.appearance == nil)
+                    .accessibilityIdentifier("systemAppearance")
+                if let appearanceError { InlineError(message: appearanceError) }
+            } header: {
+                Text("Appearance")
+            } footer: {
+                Text(session.privacy.preferences.appearance == nil ? "Following your device’s appearance." : "Your choice applies throughout Cecy.")
+                    .accessibilityIdentifier("appearanceStatus")
             }
             Section("About") {
                 NavigationLink { PredictionSettingsInfoView() } label: {
@@ -158,7 +178,7 @@ private struct AboutCecyView: View {
     }
 }
 
-private struct DeleteAllDataView: View {
+struct DeleteAllDataView: View {
     @Environment(\.dismiss) private var dismiss
     let session: TrackerSession
     @State private var confirmation = ""

@@ -16,6 +16,7 @@ import XCTest
     }
 
     static func birthday(in app: XCUIApplication) {
+        reveal(app.buttons["profileBirthday"], in: app)
         app.buttons["profileBirthday"].tap()
         let wheels = app.pickerWheels
         XCTAssertTrue(wheels.firstMatch.waitForExistence(timeout: 5))
@@ -107,6 +108,56 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertFalse(app.tabBars.buttons["Today"].exists)
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["onboardingContinue"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.navigationBars["Understand your cycle."].exists)
+        XCTAssertEqual(app.staticTexts["onboardingHeading"].label, "Understand your cycle.")
+    }
+
+    @MainActor func testMeasurementSlidersAreOptionalAndClearable() {
+        let app = launch()
+        OnboardingUITestSupport.next(in: app)
+        let name = app.textFields["profileName"]
+        name.tap(); name.typeText("Synthetic Alex")
+        OnboardingUITestSupport.birthday(in: app)
+        OnboardingUITestSupport.next(in: app)
+        let height = app.sliders["profileHeight"]
+        OnboardingUITestSupport.reveal(height, in: app)
+        XCTAssertEqual(app.staticTexts["profileHeightValue"].label, "Not added")
+        height.adjust(toNormalizedSliderPosition: 0.6)
+        XCTAssertNotEqual(app.staticTexts["profileHeightValue"].label, "Not added")
+        app.buttons["profileHeightClear"].tap()
+        XCTAssertEqual(app.staticTexts["profileHeightValue"].label, "Not added")
+        let weight = app.sliders["profileWeight"]
+        OnboardingUITestSupport.reveal(weight, in: app)
+        XCTAssertEqual(app.staticTexts["profileWeightValue"].label, "Not added")
+        weight.adjust(toNormalizedSliderPosition: 0.4)
+        OnboardingUITestSupport.reveal(app.buttons["profileWeightClear"], in: app)
+        app.buttons["profileWeightClear"].tap()
+        XCTAssertEqual(app.staticTexts["profileWeightValue"].label, "Not added")
+        app.buttons["onboardingSkip"].tap()
+        XCTAssertEqual(app.staticTexts["onboardingHeading"].label, "Cycle basics")
+    }
+
+    @MainActor func testLogoutCancelRelaunchAndSameAccountReconnect() {
+        let app = launch()
+        OnboardingUITestSupport.complete(in: app)
+        app.tabBars.buttons["Settings"].tap()
+        app.buttons["accountSettings"].tap()
+        let logout = app.buttons["logOut"]
+        OnboardingUITestSupport.reveal(logout, in: app); logout.tap()
+        app.alerts.buttons["Cancel"].tap()
+        XCTAssertFalse(app.staticTexts["signedOutScreen"].exists)
+        logout.tap()
+        app.alerts.buttons["confirmLogout"].tap()
+        XCTAssertTrue(app.staticTexts["signedOutScreen"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["logPeriod"].exists)
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["signedOutScreen"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.tabBars.buttons["Today"].exists)
+        let reconnect = app.buttons["continueWithApple"]
+        OnboardingUITestSupport.reveal(reconnect, in: app); reconnect.tap()
+        XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["cycleDay"].label, "Day 28")
+        app.tabBars.buttons["Settings"].tap()
+        app.buttons["profileSettings"].tap()
+        XCTAssertEqual(app.textFields["profileName"].value as? String, "Synthetic Alex")
     }
 }

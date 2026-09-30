@@ -1,5 +1,9 @@
 import Foundation
 
+nonisolated enum AppAppearance: String, Codable, Sendable {
+    case light, dark
+}
+
 nonisolated struct PrivacyPreferences: Codable, Equatable, Sendable {
     var version = 1
     var lockEnabled = false
@@ -7,6 +11,8 @@ nonisolated struct PrivacyPreferences: Codable, Equatable, Sendable {
     var windowReminder = false
     var reminderHour = 20
     var reminderMinute = 0
+    // Missing in earlier preference files means follow the device, not a reset of privacy choices.
+    var appearance: AppAppearance?
 
     func validate() throws {
         guard version == 1, (0...23).contains(reminderHour), (0...59).contains(reminderMinute) else { throw TrackingError.invalidData }
