@@ -1,16 +1,26 @@
 import Foundation
 
+nonisolated enum PeriodFlow: String, CaseIterable, Sendable {
+    case light, moderate, heavy
+    var title: String { rawValue.capitalized }
+}
+
 nonisolated struct Period: Identifiable, Equatable, Sendable {
     let id: UUID
     var start: LocalDay
     var end: LocalDay?
+    var flow: PeriodFlow?
+    var notes: String?
     let createdAt: Date
     var updatedAt: Date
 
-    init(id: UUID = UUID(), start: LocalDay, end: LocalDay? = nil, createdAt: Date = Date(), updatedAt: Date? = nil) {
+    init(id: UUID = UUID(), start: LocalDay, end: LocalDay? = nil, flow: PeriodFlow? = nil,
+         notes: String? = nil, createdAt: Date = Date(), updatedAt: Date? = nil) {
         self.id = id
         self.start = start
         self.end = end
+        self.flow = flow
+        self.notes = notes
         self.createdAt = createdAt
         self.updatedAt = updatedAt ?? createdAt
     }
@@ -20,11 +30,13 @@ nonisolated struct Period: Identifiable, Equatable, Sendable {
 }
 
 nonisolated enum PeriodValidation {
+    static let maximumNoteLength = 2_000
     /// No as-of date on loading: travel must never delete a previously saved civil day.
     static func validate(_ periods: [Period], asOf today: LocalDay? = nil) throws {
         guard Set(periods.map(\.id)).count == periods.count else { throw TrackingError.invalidData }
         let sorted = periods.sorted { $0.start < $1.start }
         for (index, period) in sorted.enumerated() {
+            guard (period.notes?.count ?? 0) <= maximumNoteLength else { throw TrackingError.noteTooLong }
             guard period.createdAt.timeIntervalSinceReferenceDate.isFinite,
                   period.updatedAt.timeIntervalSinceReferenceDate.isFinite else { throw TrackingError.invalidData }
             if let end = period.end, end < period.start { throw TrackingError.reversedEnd }
@@ -133,4 +145,5 @@ protocol PeriodRepository {
     func add(_ periods: [Period], completingOnboarding: Bool, today: LocalDay, now: Date) throws -> TrackerSnapshot
     func update(_ period: Period, today: LocalDay, now: Date) throws -> TrackerSnapshot
     func delete(id: UUID) throws -> TrackerSnapshot
+    func deleteAll() throws -> TrackerSnapshot
 }

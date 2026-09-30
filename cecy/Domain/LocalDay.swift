@@ -80,7 +80,7 @@ nonisolated struct LocalDay: Hashable, Comparable, Sendable, Identifiable {
 }
 
 nonisolated enum TrackingError: Error, LocalizedError, Equatable, Sendable {
-    case invalidDay, futureDate, reversedEnd, duplicateStart, overlap, invalidData, missingRecord
+    case invalidDay, futureDate, reversedEnd, duplicateStart, overlap, invalidData, missingRecord, noteTooLong
 
     var errorDescription: String? {
         switch self {
@@ -91,6 +91,7 @@ nonisolated enum TrackingError: Error, LocalizedError, Equatable, Sendable {
         case .overlap: "These dates overlap another recorded period. Review the recorded dates."
         case .invalidData: "Some recorded data needs attention. It has not been changed."
         case .missingRecord: "This record could not be found. Reload your records and try again."
+        case .noteTooLong: "Keep the note to 2,000 characters or fewer. Your text has not been shortened."
         }
     }
 }

@@ -51,6 +51,16 @@ struct TodayView: View {
             }
             Text("A count from recorded dates—not an estimate of cycle phase. Missing records can affect the result.")
                 .font(.footnote).foregroundStyle(.secondary)
+            if let latest = session.snapshot.periods.last {
+                TrackerCard {
+                    Text("Latest recorded period").font(.headline)
+                    Text(DayText.full(latest.start))
+                    Text(latest.end.map { "Ended \(DayText.full($0))" }
+                         ?? "End not recorded. If this period is ongoing, you can add its end later.")
+                    PeriodExtraDetails(period: latest)
+                    PeriodRecordActions(session: session, period: latest).id(latest.id)
+                }
+            }
         }
         .sheet(isPresented: $showExplanation) {
             if let estimate = overview.estimate { PredictionExplanation(estimate: estimate) }

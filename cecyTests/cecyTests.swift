@@ -117,19 +117,19 @@ struct TrackerPersistenceTests {
     @Test func malformedStoredDayIsNotSilentlySkipped() throws {
         let repository = try SwiftDataPeriodRepository.inMemory()
         let context = ModelContext(repository.container)
-        let record = TrackerSchemaV1.PeriodRecord(Period(start: try day(20260902)))
+        let record = TrackerSchemaV2.PeriodRecord(Period(start: try day(20260902)))
         record.startKey = 20260230
         context.insert(record)
         try context.save()
         #expect(throws: TrackingError.invalidDay) { try repository.load() }
-        #expect(try context.fetchCount(FetchDescriptor<TrackerSchemaV1.PeriodRecord>()) == 1)
+        #expect(try context.fetchCount(FetchDescriptor<TrackerSchemaV2.PeriodRecord>()) == 1)
     }
 
     @Test func conflictingCompletionRecordsAreRejected() throws {
         let repository = try SwiftDataPeriodRepository.inMemory()
         let context = ModelContext(repository.container)
-        context.insert(TrackerSchemaV1.AppStateRecord(completedAt: now))
-        context.insert(TrackerSchemaV1.AppStateRecord(completedAt: now))
+        context.insert(TrackerSchemaV2.AppStateRecord(completedAt: now))
+        context.insert(TrackerSchemaV2.AppStateRecord(completedAt: now))
         try context.save()
         #expect(throws: TrackingError.invalidData) { try repository.load() }
     }

@@ -42,37 +42,44 @@ final class SwiftDataPeriodRepository: PeriodRepository {
     let container: ModelContainer
     private let context: ModelContext
     private let saveContext: (ModelContext) throws -> Void
+    private let clearLegacyData: () throws -> Void
 
-    init(container: ModelContainer, save: @escaping (ModelContext) throws -> Void = { try $0.save() }) {
+    init(container: ModelContainer, clearLegacyData: @escaping () throws -> Void = {},
+         save: @escaping (ModelContext) throws -> Void = { try $0.save() }) {
         self.container = container
         context = ModelContext(container)
         context.autosaveEnabled = false
         saveContext = save
+        self.clearLegacyData = clearLegacyData
     }
 
-    static func local(url: URL) throws -> SwiftDataPeriodRepository {
+    static func local(url: URL, clearLegacyData: @escaping () throws -> Void = {}) throws -> SwiftDataPeriodRepository {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let schema = Schema(versionedSchema: TrackerSchemaV1.self)
+        let schema = Schema(versionedSchema: TrackerSchemaV2.self)
         let configuration = ModelConfiguration("CecyLocal", schema: schema, url: url, cloudKitDatabase: .none)
-        return try SwiftDataPeriodRepository(container: ModelContainer(for: schema, configurations: [configuration]))
+        return try SwiftDataPeriodRepository(container: ModelContainer(for: schema, migrationPlan: TrackerMigrationPlan.self,
+                                                                       configurations: [configuration]), clearLegacyData: clearLegacyData)
     }
 
     static func production() throws -> SwiftDataPeriodRepository {
         let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                                   appropriateFor: nil, create: true)
         return try local(url: support.appendingPathComponent("Cecy", isDirectory: true)
-            .appendingPathComponent("CecyPeriodsV1.store"))
+            .appendingPathComponent("CecyPeriodsV1.store"), clearLegacyData: {
+                try LegacyStoreCleanup.removeTemplateStore(in: support)
+            })
     }
 
     static func inMemory() throws -> SwiftDataPeriodRepository {
-        let schema = Schema(versionedSchema: TrackerSchemaV1.self)
+        let schema = Schema(versionedSchema: TrackerSchemaV2.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
-        return try SwiftDataPeriodRepository(container: ModelContainer(for: schema, configurations: [configuration]))
+        return try SwiftDataPeriodRepository(container: ModelContainer(for: schema, migrationPlan: TrackerMigrationPlan.self,
+                                                                       configurations: [configuration]))
     }
 
     func load() throws -> TrackerSnapshot {
-        let records = try context.fetch(FetchDescriptor<TrackerSchemaV1.PeriodRecord>())
-        let states = try context.fetch(FetchDescriptor<TrackerSchemaV1.AppStateRecord>())
+        let records = try context.fetch(FetchDescriptor<TrackerSchemaV2.PeriodRecord>())
+        let states = try context.fetch(FetchDescriptor<TrackerSchemaV2.AppStateRecord>())
         guard states.count <= 1, states.allSatisfy({ $0.key == "onboarding" }),
               states.allSatisfy({ $0.onboardingCompletedAt?.timeIntervalSinceReferenceDate.isFinite ?? true }) else {
             throw TrackingError.invalidData
@@ -89,12 +96,12 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         candidate.periods.sort { $0.start < $1.start }
         if completingOnboarding && candidate.onboardingCompletedAt == nil { candidate.onboardingCompletedAt = now }
         do {
-            periods.forEach { context.insert(TrackerSchemaV1.PeriodRecord($0)) }
+            periods.forEach { context.insert(TrackerSchemaV2.PeriodRecord($0)) }
             if completingOnboarding {
-                if let state = try context.fetch(FetchDescriptor<TrackerSchemaV1.AppStateRecord>()).first {
+                if let state = try context.fetch(FetchDescriptor<TrackerSchemaV2.AppStateRecord>()).first {
                     state.onboardingCompletedAt = candidate.onboardingCompletedAt
                 } else {
-                    context.insert(TrackerSchemaV1.AppStateRecord(completedAt: candidate.onboardingCompletedAt))
+                    context.insert(TrackerSchemaV2.AppStateRecord(completedAt: candidate.onboardingCompletedAt))
                 }
             }
             try saveContext(context)
@@ -111,15 +118,19 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         var updated = candidate.periods[index]
         updated.start = period.start
         updated.end = period.end
+        updated.flow = period.flow
+        updated.notes = period.notes
         updated.updatedAt = now
         candidate.periods[index] = updated
         try PeriodValidation.validate(candidate.periods, asOf: today)
-        guard let record = try context.fetch(FetchDescriptor<TrackerSchemaV1.PeriodRecord>()).first(where: { $0.id == period.id }) else {
+        guard let record = try context.fetch(FetchDescriptor<TrackerSchemaV2.PeriodRecord>()).first(where: { $0.id == period.id }) else {
             throw TrackingError.missingRecord
         }
         do {
             record.startKey = updated.start.key
             record.endKey = updated.end?.key
+            record.flowRaw = updated.flow?.rawValue
+            record.notes = updated.notes
             record.updatedAt = now
             try saveContext(context)
             candidate.periods.sort { $0.start < $1.start }
@@ -132,7 +143,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
 
     func delete(id: UUID) throws -> TrackerSnapshot {
         var candidate = try load()
-        guard let record = try context.fetch(FetchDescriptor<TrackerSchemaV1.PeriodRecord>()).first(where: { $0.id == id }) else {
+        guard let record = try context.fetch(FetchDescriptor<TrackerSchemaV2.PeriodRecord>()).first(where: { $0.id == id }) else {
             throw TrackingError.missingRecord
         }
         candidate.periods.removeAll { $0.id == id }
@@ -140,6 +151,22 @@ final class SwiftDataPeriodRepository: PeriodRepository {
             context.delete(record)
             try saveContext(context)
             return candidate
+        } catch {
+            context.rollback()
+            throw error
+        }
+    }
+
+    func deleteAll() throws -> TrackerSnapshot {
+        do {
+            // Fetch before deleting anything. Reset also works for malformed domain records.
+            let records = try context.fetch(FetchDescriptor<TrackerSchemaV2.PeriodRecord>())
+            let states = try context.fetch(FetchDescriptor<TrackerSchemaV2.AppStateRecord>())
+            try clearLegacyData()
+            records.forEach { context.delete($0) }
+            states.forEach { context.delete($0) }
+            try saveContext(context)
+            return TrackerSnapshot()
         } catch {
             context.rollback()
             throw error
