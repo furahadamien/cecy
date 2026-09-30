@@ -15,6 +15,7 @@ final class TrackerSession {
     private(set) var isSaving = false
     private(set) var failureMessage: String?
     var confirmation: String?
+    let privacy: TrackerPrivacy
 
     @ObservationIgnored private var repository: (any PeriodRepository)?
     @ObservationIgnored private let makeRepository: @MainActor () throws -> any PeriodRepository
@@ -22,13 +23,15 @@ final class TrackerSession {
     @ObservationIgnored private let zone: () -> TimeZone
 
     init(repository: @escaping @MainActor () throws -> any PeriodRepository = { try SwiftDataPeriodRepository.production() },
-         clock: @escaping () -> Date = Date.init, timeZone: @escaping () -> TimeZone = { .current }) {
+         clock: @escaping () -> Date = Date.init, timeZone: @escaping () -> TimeZone = { .current }, privacy: TrackerPrivacy? = nil) {
         makeRepository = repository
         self.clock = clock
         zone = timeZone
+        self.privacy = privacy ?? .isolated()
     }
 
     func load() {
+        guard privacy.canAccess else { return }
         phase = .loading
         do {
             if repository == nil { repository = try makeRepository() }
@@ -49,7 +52,7 @@ final class TrackerSession {
 
     /// A nil result means the transaction committed. Errors never include storage details.
     func save(_ periods: [Period], completingOnboarding: Bool = false) -> String? {
-        guard phase == .loaded, !isSaving, let repository else { return "Your records aren’t ready. Try loading them again." }
+        guard privacy.canAccess, phase == .loaded, !isSaving, let repository else { return "Your records aren’t ready. Unlock Cecy or try loading them again." }
         isSaving = true
         defer { isSaving = false }
         do {
@@ -72,6 +75,7 @@ final class TrackerSession {
         overview = CycleCalculator.overview(periods: snapshot.periods, today: today, engine: EvidencePredictionEngine())
         predictionReplay = try? PredictionBacktester.evaluate(periods: snapshot.periods, today: today)
         statistics = try? CycleStatistics.calculate(periods: snapshot.periods, today: today)
+        privacy.trackingChanged(prediction: overview?.estimate, now: clock(), timeZone: zone())
         do {
             insights = try CycleInsightEngine.generate(periods: snapshot.periods, symptoms: snapshot.symptoms, today: today)
             insightMessage = nil
@@ -108,16 +112,28 @@ final class TrackerSession {
         }
     }
 
+    func deleteAllAndWait() async -> String? {
+        guard privacy.canAccess, !isSaving else { return "Unlock Cecy and try again." }
+        do {
+            try privacy.prepareForReset()
+            await privacy.reminders.flush()
+            return deleteAll()
+        } catch {
+            return "Deletion did not finish. Records remain unchanged; reminders may already be disabled. Try again."
+        }
+    }
+
     func deleteAll() -> String? {
         mutate(confirmation: nil,
-               failure: "Deletion did not finish. Current tracker records remain unchanged; some legacy files may already have been removed. Please try again.") { repository, _, _ in
-            try repository.deleteAll()
+               failure: "Deletion did not finish. Current tracker records remain unchanged; reminders may be disabled and temporary or legacy files may already have been removed. Please try again.") { repository, _, _ in
+            try self.privacy.prepareForReset()
+            return try repository.deleteAll()
         }
     }
 
     private func mutate(confirmation: String?, failure: String,
                         operation: (any PeriodRepository, LocalDay, Date) throws -> TrackerSnapshot) -> String? {
-        guard phase == .loaded, !isSaving, let repository else { return "Your records aren’t ready. Try loading them again." }
+        guard privacy.canAccess, phase == .loaded, !isSaving, let repository else { return "Your records aren’t ready. Unlock Cecy or try loading them again." }
         isSaving = true
         defer { isSaving = false }
         do {
@@ -160,10 +176,10 @@ final class TrackerSession {
                     }
                 }
                 return repository
-            }, clock: { fixed }, timeZone: { TimeZone(secondsFromGMT: 0)! })
+            }, clock: { fixed }, timeZone: { TimeZone(secondsFromGMT: 0)! }, privacy: .testing(id: id))
         }
         #endif
-        return TrackerSession()
+        return TrackerSession(privacy: .production())
     }
 }
 
