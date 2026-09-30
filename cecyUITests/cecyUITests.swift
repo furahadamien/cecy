@@ -107,6 +107,35 @@ final class cecyUITests: XCTestCase {
     }
 
     @MainActor
+    func testCalendarGridIdentityAcrossAllLeadingOffsets() {
+        let app = launch(history: true)
+        XCTAssertTrue(app.tabBars.buttons["Calendar"].waitForExistence(timeout: 10))
+        app.tabBars.buttons["Calendar"].tap()
+        // The fixture starts in September 2026. July 2026–March 2027
+        // covers every leading-cell count (0...6) in the en_US calendar.
+        app.buttons["previousMonth"].tap()
+        app.buttons["previousMonth"].tap()
+        let months = ["202607", "202608", "202609", "202610", "202611",
+                      "202612", "202701", "202702", "202703"]
+        for (index, month) in months.enumerated() {
+            if index > 0 { app.buttons["nextMonth"].tap() }
+            for day in ["01", "07"] {
+                let matches = app.buttons.matching(identifier: "calendarDay_\(month)\(day)")
+                let button = matches.firstMatch
+                XCTAssertTrue(button.waitForExistence(timeout: 5))
+                XCTAssertEqual(matches.count, 1, "Duplicate calendar date in \(month)")
+                button.tap()
+                XCTAssertTrue(button.isSelected)
+            }
+            XCTAssertFalse(app.buttons["calendarDay_\(month)01"].isSelected)
+        }
+        app.scrollViews.buttons["Today"].tap()
+        let today = app.buttons["calendarDay_20260929"]
+        XCTAssertTrue(today.waitForExistence(timeout: 5))
+        XCTAssertTrue(today.isSelected)
+    }
+
+    @MainActor
     func testLargeTextCalendarList() {
         let app = launch(history: true, largeText: true)
         XCTAssertTrue(app.tabBars.buttons["Calendar"].waitForExistence(timeout: 10))

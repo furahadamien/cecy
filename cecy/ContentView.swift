@@ -229,10 +229,12 @@ private struct CalendarCanvas: View {
                             .font(.caption.weight(.medium))
                             .foregroundStyle(.secondary)
                             .accessibilityHidden(true)
+                            .id("weekday-\(index)")
                     }
                     // September 1, 2026 is a Tuesday in this fixed visual fixture.
-                    ForEach(0..<2, id: \.self) { _ in
+                    ForEach(0..<2, id: \.self) { index in
                         Color.clear.frame(height: 44).accessibilityHidden(true)
+                            .id("placeholder-\(index)")
                     }
                     ForEach(1...30, id: \.self) { day in
                         dayButton(day)
