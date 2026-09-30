@@ -109,8 +109,7 @@ final class PhaseThreeUITests: XCTestCase {
         reveal(confirmation, in: app); confirmation.tap(); confirmation.typeText("DELETE")
         let commit = app.buttons["confirmReset"]
         reveal(commit, in: app); commit.tap()
-        XCTAssertTrue(app.buttons["finishHistory"].waitForExistence(timeout: 10))
-        app.buttons["finishHistory"].tap()
+        OnboardingUITestSupport.complete(in: app)
         observations(in: app)
         XCTAssertTrue(app.staticTexts["No observations recorded yet."].exists)
     }

@@ -105,10 +105,10 @@ final class PhaseTwoUITests: XCTestCase {
         let commit = app.buttons["confirmReset"]
         reveal(commit, in: app)
         commit.tap()
-        XCTAssertTrue(app.buttons["finishHistory"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["onboardingContinue"].waitForExistence(timeout: 10))
         app.terminate()
         app.launch()
-        XCTAssertTrue(app.buttons["finishHistory"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["onboardingContinue"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.tabBars.buttons["Today"].exists)
     }
 }

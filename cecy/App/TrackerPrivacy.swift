@@ -105,13 +105,19 @@ struct PreparedExport: Identifiable {
         }
     }
 
-    func setReminders(daily: Bool, window: Bool, hour: Int, minute: Int) async {
-        guard canAccess, !isChangingReminders else { return }
+    enum ReminderSaveResult { case saved, permissionUnavailable, failed, interrupted }
+
+    @discardableResult
+    func setReminders(daily: Bool, window: Bool, hour: Int, minute: Int) async -> ReminderSaveResult {
+        guard canAccess, !isChangingReminders else { return .interrupted }
         isChangingReminders = true
+        message = nil
         defer { isChangingReminders = false }
         let token = generation
         if daily || window {
-            guard await reminders.permissionForUserRequest(), token == generation, canAccess else { return }
+            let permitted = await reminders.permissionForUserRequest()
+            guard token == generation, canAccess else { return .interrupted }
+            guard permitted else { return .permissionUnavailable }
         }
         var candidate = preferences
         candidate.dailyReminder = daily
@@ -124,13 +130,14 @@ struct PreparedExport: Identifiable {
             preferences = candidate
             reschedule()
             await reminders.flush()
-        } catch { message = "Reminder settings were not saved. Try again." }
+            return .saved
+        } catch { message = "Reminder settings were not saved. Try again."; return .failed }
     }
 
-    func export(snapshot: TrackerSnapshot, includeNotes: Bool, generatedAt: Date = Date()) {
+    func export(snapshot: TrackerSnapshot, includeNotes: Bool, generatedAt: Date = Date(), includeProfile: Bool = false) {
         guard canAccess else { return }
         do {
-            let data = try TrackerExport.encode(snapshot: snapshot, includeNotes: includeNotes, generatedAt: generatedAt)
+            let data = try TrackerExport.encode(snapshot: snapshot, includeNotes: includeNotes, generatedAt: generatedAt, includeProfile: includeProfile)
             preparedExport = PreparedExport(url: try exports.prepare(data))
             message = nil
         } catch { message = "The export could not be prepared. Your records are unchanged. Try again." }

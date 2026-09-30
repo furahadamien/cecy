@@ -13,7 +13,7 @@ struct HistoryEntryView: View {
 
     var body: some View {
         TrackerPage(title: isOnboarding ? "A clearer view of your cycle" : "Add previous periods",
-                    subtitle: "Start with dates you remember. No account needed.") {
+                    subtitle: "Start with dates you remember. Saved on this device.") {
             DisclosureGroup("About your privacy") { PrivacyDetails().padding(.top, 8) }
             TrackerCard {
                 Text("Previous period starts").font(.headline).accessibilityAddTraits(.isHeader)

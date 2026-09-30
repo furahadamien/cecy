@@ -16,6 +16,16 @@ struct TrackerSettingsView: View {
 
     var body: some View {
         SettingsForm(title: "Settings") {
+            Section("Personal details") {
+                NavigationLink { ProfileSettingsView(session: session) } label: {
+                    SettingsRow(title: "Profile", systemImage: "person.crop.circle",
+                                detail: session.snapshot.profile?.preferredName ?? "Add your personal details")
+                }.accessibilityIdentifier("profileSettings")
+                NavigationLink { AccountSettingsView(session: session) } label: {
+                    SettingsRow(title: "Apple Account", systemImage: "person.badge.key",
+                                detail: session.account.identity == nil ? "Not linked" : "Identity only · No cloud sync")
+                }.accessibilityIdentifier("accountSettings")
+            }
             Section {
                 NavigationLink { PrivacySettingsView(session: session) } label: {
                     SettingsRow(title: "Privacy and export", systemImage: "lock.shield",
@@ -29,7 +39,7 @@ struct TrackerSettingsView: View {
             } header: {
                 Text("Your preferences")
             } footer: {
-                Text("Stored on this device. No account required.")
+                Text("Your health data stays on your device.")
             }
             Section("About") {
                 NavigationLink { PredictionSettingsInfoView() } label: {
@@ -140,8 +150,8 @@ private struct AboutCecyView: View {
                 Text("Use synthetic records for now. Device privacy and accessibility verification are still pending before public release.")
             }
             Section("On your device") {
-                Text("No account, cloud sync, AI, analytics or Apple Health connection. Pattern calculations stay on your device.")
-                Text("You can edit, export or delete your records. System backups may still include app data.")
+                Text("Apple sign-in establishes your identity. Health records and pattern calculations stay local. No cloud sync, AI, analytics or Apple Health connection.")
+                Text("Health records and preferences are excluded from future system backups. Earlier backups and exported copies are not erased. Apple sign-in cannot restore records on another device yet.")
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -161,6 +171,7 @@ private struct DeleteAllDataView: View {
             SettingsForm(title: "Delete all data?") {
                 Section("What’s removed") {
                     Label("All periods, flow, symptoms, ratings and notes", systemImage: "trash")
+                    Label("Your profile and local Apple identity", systemImage: "person.crop.circle.badge.minus")
                     Label("Reminders and temporary exports", systemImage: "bell.slash")
                     Text("Saved onboarding and old template database files are also removed. You’ll return to onboarding.")
                         .font(.footnote).foregroundStyle(.secondary)
@@ -168,6 +179,7 @@ private struct DeleteAllDataView: View {
                 Section {
                     Text("App lock stays on if enabled.")
                     Text("Device backups and copies saved outside Cecy are not deleted.")
+                    Text("Your Apple Account and Apple’s sign-in authorization are not deleted. Manage that authorization in your Apple Account settings.")
                 } header: {
                     Text("What stays")
                 } footer: {

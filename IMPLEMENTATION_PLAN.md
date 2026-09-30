@@ -23,6 +23,7 @@ This document tracks the phased implementation plan derived from the product bri
 | 3 | Symptoms and local insights | Implemented; automated checks passed; manual acceptance pending |
 | 4 | Prediction quality | Implemented; automated checks passed; manual acceptance pending |
 | 5 | Privacy controls, export, and reminders | Implemented; UI/Release passed; protection unit assertion unresolved |
+| Pre-6 | Four-period onboarding, local profile, Apple identity | Implemented; validation and device gates in ONBOARDING_MILESTONE.md |
 | 6 | Optional HealthKit integration | Deferred |
 | 7 | Subscriptions | Deferred |
 | 8 | Optional AI explanations | Deferred |
@@ -32,7 +33,7 @@ This document tracks the phased implementation plan derived from the product bri
 ## Product and architecture guardrails
 
 - Native iOS: Swift, SwiftUI, async/await, and preferred SwiftData persistence.
-- No required account, backend, or network connection for core tracking.
+- New-user setup uses Sign in with Apple for identity; subsequent local tracking does not require a network connection. Existing users retain records and can link identity in Settings. No backend or health-data synchronization in the pre-6 milestone.
 - Keep health records on-device by default; optional integrations require informed consent.
 - Prefer native Apple frameworks and minimal dependencies.
 - Dependency flow: views → feature state/view models → use cases/domain services → repositories → persistence and system integrations.
@@ -45,6 +46,10 @@ This document tracks the phased implementation plan derived from the product bri
 - Keep basic prediction, privacy controls, deletion, and access to personal data available without a subscription.
 - Build a calm, accessible interface, not an all-pink imitation of existing trackers.
 - Do not preemptively build infrastructure for hypothetical cross-platform requirements.
+
+### Authorized detour before Phase 6
+
+See [Onboarding milestone](ONBOARDING_MILESTONE.md). The revised handoff requires four period starts, an editable local profile and Apple identity while retaining the existing prediction engine. Phase 6 and cloud sync remain deferred. Local records/profile and preferences are excluded from future system backups; earlier backups are not erased. Apple sign-in alone provides neither health-data backup nor cross-device recovery.
 
 ## Phase 0 — Confirm foundations and product rules
 

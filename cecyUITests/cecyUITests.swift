@@ -34,17 +34,14 @@ final class cecyUITests: XCTestCase {
     }
 
     @MainActor
-    func testSkipLogAndRelaunch() {
+    func testCompleteOnboardingLogAndRelaunch() {
         let app = launch()
-        let finish = app.buttons["finishHistory"]
-        XCTAssertTrue(finish.waitForExistence(timeout: 10))
-        reveal(finish, in: app)
-        finish.tap()
+        OnboardingUITestSupport.complete(in: app)
         XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 5))
         app.terminate()
         app.launch()
         XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 10))
-        XCTAssertFalse(app.buttons["finishHistory"].exists)
+        XCTAssertFalse(app.buttons["onboardingContinue"].exists)
         let log = app.buttons["logPeriod"]
         reveal(log, in: app)
         log.tap()
@@ -60,21 +57,14 @@ final class cecyUITests: XCTestCase {
     }
 
     @MainActor
-    func testOnboardingDraftCommitsOnlyOnContinue() {
+    func testOnboardingDraftDoesNotCommitBeforeAppleSignIn() {
         let app = launch()
-        let add = app.buttons["addHistoryDate"]
-        XCTAssertTrue(add.waitForExistence(timeout: 10))
-        reveal(add, in: app)
-        add.tap()
-        app.buttons["savePeriod"].tap()
-        XCTAssertTrue(app.buttons["finishHistory"].waitForExistence(timeout: 5))
+        OnboardingUITestSupport.reachApple(in: app)
         XCTAssertFalse(app.tabBars.buttons["Today"].exists)
-        let finish = app.buttons["finishHistory"]
-        reveal(finish, in: app)
-        finish.tap()
-        XCTAssertTrue(app.staticTexts["cycleDay"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.staticTexts["cycleDay"].label, "Day 1")
-        XCTAssertFalse(app.staticTexts["predictionWindow"].exists)
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.buttons["onboardingContinue"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.tabBars.buttons["Today"].exists)
+        XCTAssertTrue(app.navigationBars["Understand your cycle."].exists)
     }
 
     @MainActor

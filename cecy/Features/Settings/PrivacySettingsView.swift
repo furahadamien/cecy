@@ -4,6 +4,7 @@ import UIKit
 struct PrivacySettingsView: View {
     let session: TrackerSession
     @State private var includeNotes = false
+    @State private var includeProfile = false
     @State private var confirmDisableLock = false
     private var privacy: TrackerPrivacy { session.privacy }
 
@@ -36,15 +37,19 @@ struct PrivacySettingsView: View {
             .disabled(privacy.isAuthenticating)
             Section {
                 Toggle("Include private notes", isOn: $includeNotes).accessibilityIdentifier("exportNotes")
+                if session.snapshot.profile != nil {
+                    Toggle("Include personal profile", isOn: $includeProfile).accessibilityIdentifier("exportProfile")
+                }
                 DisclosureGroup("What’s included?") {
                     Text("Dates, record IDs, flow, observation types and ratings. Private notes are optional; predictions are not included.")
+                    Text("Personal profile is optional and includes your name, birth date, measurements and preferences. Apple identity is never exported.")
                     Text("JSON is a readable data file. Importing it back into Cecy is not supported.")
                     Text("Leaving Cecy while sharing may cancel the export.")
                 }
                 Label("Not encrypted. Share only with a destination you trust.", systemImage: "exclamationmark.shield")
                     .font(.footnote).foregroundStyle(.secondary)
                 Button {
-                    privacy.export(snapshot: session.snapshot, includeNotes: includeNotes)
+                    privacy.export(snapshot: session.snapshot, includeNotes: includeNotes, includeProfile: includeProfile)
                 } label: {
                     Label("Export JSON", systemImage: "square.and.arrow.up").frame(minHeight: 44)
                 }
@@ -81,7 +86,8 @@ private struct StorageSettingsInfoView: View {
                 Text("App lock is an additional screen gate, not separate encryption.")
             }
             Section("System backups") {
-                Text("Backups may contain your records and settings. Deleting data in Cecy does not erase backups or guarantee overwriting storage pages.")
+                Text("Local records, your profile and preferences are excluded from future system backups. Earlier backups may still contain data. Deleting data in Cecy does not erase earlier backups or guarantee overwriting storage pages.")
+                Text("No cloud sync or automatic restore is available yet. Keep a trusted export if needed; importing it into Cecy is not currently supported.")
             }
             Section("Exported files") {
                 Text("Temporary exports are excluded from backups and cleaned up after sharing, locking and on the next launch.")

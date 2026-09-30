@@ -16,6 +16,17 @@ final class TrackerSession {
     private(set) var failureMessage: String?
     var confirmation: String?
     let privacy: TrackerPrivacy
+    let account: AppleAccount
+    enum SetupStage: String {
+        case saving = "Saving your profile"
+        case analyzing = "Analyzing your cycles"
+        case predicting = "Preparing your first prediction"
+        case insights = "Getting your insights ready"
+        case reminders = "Applying your reminders"
+        case finishing = "Finishing setup"
+    }
+    private(set) var setupStage: SetupStage?
+    @ObservationIgnored private var setupRevision = 0
 
     @ObservationIgnored private var repository: (any PeriodRepository)?
     @ObservationIgnored private let makeRepository: @MainActor () throws -> any PeriodRepository
@@ -23,11 +34,13 @@ final class TrackerSession {
     @ObservationIgnored private let zone: () -> TimeZone
 
     init(repository: @escaping @MainActor () throws -> any PeriodRepository = { try SwiftDataPeriodRepository.production() },
-         clock: @escaping () -> Date = Date.init, timeZone: @escaping () -> TimeZone = { .current }, privacy: TrackerPrivacy? = nil) {
+         clock: @escaping () -> Date = Date.init, timeZone: @escaping () -> TimeZone = { .current },
+         privacy: TrackerPrivacy? = nil, account: AppleAccount? = nil) {
         makeRepository = repository
         self.clock = clock
         zone = timeZone
         self.privacy = privacy ?? .isolated()
+        self.account = account ?? AppleAccount()
     }
 
     func load() {
@@ -46,8 +59,74 @@ final class TrackerSession {
     }
 
     func refresh() {
-        guard phase == .loaded else { return }
+        guard phase == .loaded, !isSaving else { return }
         load()
+    }
+
+    func cancelSetup() { setupRevision += 1 }
+
+    func saveProfile(_ profile: LocalProfile) -> String? {
+        mutate(confirmation: "Profile updated.", failure: "Your profile hasn’t been saved. Try again.") { repository, today, _ in
+            try repository.saveProfile(profile, today: today)
+        }
+    }
+
+    /// Keychain, SwiftData and notification services cannot share one transaction.
+    /// Stage local records atomically, retry idempotently, and publish completion last.
+    func finishSetup(_ draft: OnboardingDraft) async -> String? {
+        guard privacy.canAccess, phase == .loaded, !isSaving, let repository else { return ProfileError.notReady.localizedDescription }
+        isSaving = true
+        let token = setupRevision
+        defer { isSaving = false; setupStage = nil }
+        func checkAccess() throws {
+            guard token == setupRevision, privacy.canAccess, !Task.isCancelled else { throw ProfileError.notReady }
+            guard account.state == .authorized, account.identity?.profileID == draft.profile.id else { throw ProfileError.identity }
+        }
+        do {
+            let now = clock()
+            let day = try LocalDay(date: now, timeZone: zone())
+            try checkAccess()
+            try draft.validate(today: day)
+            setupStage = .saving
+            await Task.yield()
+            try checkAccess()
+            let staged = try repository.prepareOnboarding(draft, today: day)
+            snapshot = staged
+            today = day
+            setupStage = .analyzing
+            await Task.yield()
+            try checkAccess()
+            statistics = try CycleStatistics.calculate(periods: staged.periods, today: day)
+            setupStage = .predicting
+            await Task.yield()
+            try checkAccess()
+            overview = CycleCalculator.overview(periods: staged.periods, today: day, engine: EvidencePredictionEngine())
+            predictionReplay = try PredictionBacktester.evaluate(periods: staged.periods, today: day)
+            setupStage = .insights
+            await Task.yield()
+            try checkAccess()
+            insights = try CycleInsightEngine.generate(periods: staged.periods, symptoms: staged.symptoms, today: day)
+            insightMessage = nil
+            setupStage = .reminders
+            privacy.trackingChanged(prediction: overview?.estimate, now: now, timeZone: zone())
+            let reminderResult = await privacy.setReminders(daily: draft.dailyReminder, window: draft.windowReminder,
+                                                           hour: draft.reminderHour, minute: draft.reminderMinute)
+            try checkAccess()
+            if reminderResult == .failed || reminderResult == .interrupted {
+                return privacy.message ?? "Reminder choices couldn’t be saved. Retry setup."
+            }
+            setupStage = .finishing
+            await Task.yield()
+            try checkAccess()
+            let completed = try repository.completeOnboarding(profileID: draft.profile.id, today: day, now: now)
+            publish(completed, today: day)
+            confirmation = reminderResult == .permissionUnavailable
+                ? "Setup complete. Notifications weren’t enabled; you can change this in Settings."
+                : "Your profile is ready."
+            return nil
+        } catch let error as ProfileError { return error.localizedDescription
+        } catch let error as TrackingError { return error.localizedDescription
+        } catch { return "Setup couldn’t finish. Your local records are intact. Try again." }
     }
 
     /// A nil result means the transaction committed. Errors never include storage details.
@@ -125,8 +204,9 @@ final class TrackerSession {
 
     func deleteAll() -> String? {
         mutate(confirmation: nil,
-               failure: "Deletion did not finish. Current tracker records remain unchanged; reminders may be disabled and temporary or legacy files may already have been removed. Please try again.") { repository, _, _ in
+                failure: "Deletion did not finish. Tracker records remain unchanged; reminders or the local Apple link may already be cleared. Please try again.") { repository, _, _ in
             try self.privacy.prepareForReset()
+            try self.account.removeLocalIdentity()
             return try repository.deleteAll()
         }
     }
@@ -143,6 +223,8 @@ final class TrackerSession {
             publish(committed, today: day)
             self.confirmation = confirmation
             return nil
+        } catch let error as ProfileError {
+            return error.localizedDescription
         } catch let error as TrackingError {
             return error.localizedDescription
         } catch { return failure }
@@ -176,10 +258,10 @@ final class TrackerSession {
                     }
                 }
                 return repository
-            }, clock: { fixed }, timeZone: { TimeZone(secondsFromGMT: 0)! }, privacy: .testing(id: id))
+            }, clock: { fixed }, timeZone: { TimeZone(secondsFromGMT: 0)! }, privacy: .testing(id: id), account: .testing(id: id))
         }
         #endif
-        return TrackerSession(privacy: .production())
+        return TrackerSession(privacy: .production(), account: .production())
     }
 }
 

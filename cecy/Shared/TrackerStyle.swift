@@ -86,8 +86,8 @@ struct PrivacyDetails: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Stored on this device", systemImage: "hand.raised")
                 .font(.headline)
-            Text("No account is required. Cecy does not connect your records to cloud sync, AI, analytics, or Apple Health.")
-            Text("Your device’s system backups may include app data. You can edit or delete local records; deletion does not remove device backups or shared exports. Optional app locking, export and discreet reminders are available in Settings.")
+            Text("Your health data stays on your device. Apple sign-in identifies you without uploading your health records. No cloud sync, AI, analytics or Apple Health connection.")
+            Text("Records and preferences are excluded from future system backups. Earlier backups and shared exports are not erased by local deletion. Apple sign-in cannot restore your records on another device yet. App locking, export and discreet reminders are in Settings.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
     }

@@ -54,8 +54,8 @@ final class SwiftDataPeriodRepository: PeriodRepository {
     }
 
     static func local(url: URL, clearLegacyData: @escaping () throws -> Void = {}) throws -> SwiftDataPeriodRepository {
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let schema = Schema(versionedSchema: TrackerSchemaV3.self)
+        try ProtectedFiles.directory(url.deletingLastPathComponent(), excludeFromBackup: true)
+        let schema = Schema(versionedSchema: TrackerSchemaV4.self)
         let configuration = ModelConfiguration("CecyLocal", schema: schema, url: url, cloudKitDatabase: .none)
         return try SwiftDataPeriodRepository(container: ModelContainer(for: schema, migrationPlan: TrackerMigrationPlan.self,
                                                                        configurations: [configuration]), clearLegacyData: clearLegacyData)
@@ -75,7 +75,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
     }
 
     static func inMemory() throws -> SwiftDataPeriodRepository {
-        let schema = Schema(versionedSchema: TrackerSchemaV3.self)
+        let schema = Schema(versionedSchema: TrackerSchemaV4.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         return try SwiftDataPeriodRepository(container: ModelContainer(for: schema, migrationPlan: TrackerMigrationPlan.self,
                                                                        configurations: [configuration]))
@@ -92,8 +92,65 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         try PeriodValidation.validate(periods)
         let symptoms = try context.fetch(FetchDescriptor<TrackerSchemaV3.SymptomRecord>()).map { try $0.value() }
         try SymptomValidation.validate(symptoms)
+        let profiles = try context.fetch(FetchDescriptor<TrackerSchemaV4.ProfileRecord>())
+        guard profiles.count <= 1 else { throw TrackingError.invalidData }
         return TrackerSnapshot(periods: periods, onboardingCompletedAt: states.first?.onboardingCompletedAt,
-                               symptoms: SymptomValidation.sorted(symptoms))
+                               symptoms: SymptomValidation.sorted(symptoms), profile: try profiles.first?.value())
+    }
+
+    private func writeProfile(_ profile: LocalProfile) throws {
+        if let record = try context.fetch(FetchDescriptor<TrackerSchemaV4.ProfileRecord>()).first {
+            record.payload = try JSONEncoder().encode(profile)
+        } else { context.insert(try TrackerSchemaV4.ProfileRecord(profile)) }
+    }
+
+    func saveProfile(_ profile: LocalProfile, today: LocalDay) throws -> TrackerSnapshot {
+        var candidate = try load()
+        try profile.validate(today: today)
+        guard candidate.profile == nil || candidate.profile?.id == profile.id else { throw ProfileError.identity }
+        do {
+            try writeProfile(profile)
+            try saveContext(context)
+            candidate.profile = profile
+            return candidate
+        } catch { context.rollback(); throw error }
+    }
+
+    func prepareOnboarding(_ draft: OnboardingDraft, today: LocalDay) throws -> TrackerSnapshot {
+        try draft.validate(today: today)
+        var candidate = try load()
+        guard candidate.onboardingCompletedAt == nil else { throw ProfileError.alreadyCompleted }
+        guard candidate.profile == nil || candidate.profile?.id == draft.profile.id else { throw ProfileError.identity }
+        do {
+            // Only unfinished setup can replace this draft history. Repeated attempts never append duplicates.
+            let records = try context.fetch(FetchDescriptor<TrackerSchemaV2.PeriodRecord>())
+            records.forEach { context.delete($0) }
+            draft.periods.forEach { context.insert(TrackerSchemaV2.PeriodRecord($0)) }
+            try writeProfile(draft.profile)
+            try saveContext(context)
+            candidate.profile = draft.profile
+            candidate.periods = draft.periods.sorted { $0.start < $1.start }
+            return candidate
+        } catch { context.rollback(); throw error }
+    }
+
+    func completeOnboarding(profileID: UUID, today: LocalDay, now: Date) throws -> TrackerSnapshot {
+        var candidate = try load()
+        guard candidate.profile?.id == profileID else { throw ProfileError.identity }
+        try candidate.profile?.validate(today: today)
+        guard candidate.profile?.typicalPeriodDays != nil else { throw ProfileError.duration }
+        guard candidate.periods.count >= 4 else { throw ProfileError.fourPeriods }
+        try PeriodValidation.validate(candidate.periods, asOf: today)
+        if candidate.onboardingCompletedAt != nil { return candidate }
+        guard now.timeIntervalSinceReferenceDate.isFinite else { throw TrackingError.invalidData }
+        do {
+            if let state = try context.fetch(FetchDescriptor<TrackerSchemaV2.AppStateRecord>()).first {
+                state.onboardingCompletedAt = now
+            } else { context.insert(TrackerSchemaV2.AppStateRecord(completedAt: now)) }
+            try saveContext(context)
+            candidate.onboardingCompletedAt = now
+            return candidate
+        } catch { context.rollback(); throw error }
     }
 
     func add(_ periods: [Period], completingOnboarding: Bool, today: LocalDay, now: Date) throws -> TrackerSnapshot {
@@ -222,10 +279,12 @@ final class SwiftDataPeriodRepository: PeriodRepository {
             let records = try context.fetch(FetchDescriptor<TrackerSchemaV2.PeriodRecord>())
             let states = try context.fetch(FetchDescriptor<TrackerSchemaV2.AppStateRecord>())
             let symptoms = try context.fetch(FetchDescriptor<TrackerSchemaV3.SymptomRecord>())
+            let profiles = try context.fetch(FetchDescriptor<TrackerSchemaV4.ProfileRecord>())
             try clearLegacyData()
             records.forEach { context.delete($0) }
             states.forEach { context.delete($0) }
             symptoms.forEach { context.delete($0) }
+            profiles.forEach { context.delete($0) }
             try saveContext(context)
             return TrackerSnapshot()
         } catch {
