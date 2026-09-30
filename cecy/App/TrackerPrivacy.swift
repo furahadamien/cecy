@@ -22,6 +22,7 @@ struct PreparedExport: Identifiable {
     @ObservationIgnored private let authentication: any DeviceAuthenticating
     @ObservationIgnored private let exports: any ExportFileManaging
     @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var attemptedAutomaticUnlock = false
     @ObservationIgnored private var prediction: CyclePrediction?
     @ObservationIgnored private var now = Date()
     @ObservationIgnored private var timeZone = TimeZone.current
@@ -64,7 +65,14 @@ struct PreparedExport: Identifiable {
 
     func unlock() async {
         guard isLocked else { return }
+        attemptedAutomaticUnlock = true
         if await authenticate("Unlock your private Cecy records") { isLocked = false; message = nil }
+    }
+
+    /// Once per foreground visit, not on every inactive/active transition caused by Face ID.
+    func unlockAutomatically() async {
+        guard isReady, isLocked, !isAuthenticating, !attemptedAutomaticUnlock else { return }
+        await unlock()
     }
 
     func setLockEnabled(_ enabled: Bool) async {
@@ -78,13 +86,17 @@ struct PreparedExport: Identifiable {
 
     func wentToBackground() {
         generation += 1
+        attemptedAutomaticUnlock = false
         authentication.cancel()
         isAuthenticating = false
         if preferences.lockEnabled { isLocked = true }
         cleanupExport()
     }
 
-    func lockNow() { wentToBackground() }
+    func lockNow() {
+        wentToBackground()
+        attemptedAutomaticUnlock = true
+    }
 
     func setAppearance(_ appearance: AppAppearance?) -> String? {
         guard canAccess else { return "Unlock Cecy to change its appearance." }
@@ -145,10 +157,12 @@ struct PreparedExport: Identifiable {
         } catch { message = "Reminder settings were not saved. Try again."; return .failed }
     }
 
-    func export(snapshot: TrackerSnapshot, includeNotes: Bool, generatedAt: Date = Date(), includeProfile: Bool = false) {
+    func export(snapshot: TrackerSnapshot, includeNotes: Bool, generatedAt: Date = Date(), includeProfile: Bool = false,
+                includeSexualActivity: Bool = false) {
         guard canAccess else { return }
         do {
-            let data = try TrackerExport.encode(snapshot: snapshot, includeNotes: includeNotes, generatedAt: generatedAt, includeProfile: includeProfile)
+            let data = try TrackerExport.encode(snapshot: snapshot, includeNotes: includeNotes, generatedAt: generatedAt,
+                                               includeProfile: includeProfile, includeSexualActivity: includeSexualActivity)
             preparedExport = PreparedExport(url: try exports.prepare(data))
             message = nil
         } catch { message = "The export could not be prepared. Your records are unchanged. Try again." }

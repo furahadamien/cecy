@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct OnboardingFlowView: View {
+    @Environment(\.colorScheme) private var colorScheme
     enum Step: Int, CaseIterable {
         case welcome, about, measurements, cycle, history, symptoms, context, goals, notifications, review, apple
         var title: String {
@@ -15,11 +16,11 @@ struct OnboardingFlowView: View {
             case .goals: "Your goals"
             case .notifications: "Your reminders"
             case .review: "Review your profile"
-            case .apple: "Save your Cecy profile"
+            case .apple: "Start tracking"
             }
         }
         var optional: Bool { [.measurements, .symptoms, .context, .goals, .notifications].contains(self) }
-        var subtitle: String {
+        var subtitle: String? {
             switch self {
             case .welcome: "A little understanding, day by day."
             case .about: "Let’s make Cecy feel like yours."
@@ -31,14 +32,14 @@ struct OnboardingFlowView: View {
             case .goals: "What would you like Cecy to help with?"
             case .notifications: "A gentle nudge, only when you want it."
             case .review: "Take a quick look. You can change anything later."
-            case .apple: "One last step to save your details on this device."
+            case .apple: nil
             }
         }
         var symbol: String {
             switch self {
             case .welcome: "leaf"
             case .about: "person.crop.circle"
-            case .measurements: "slider.horizontal.3"
+            case .measurements: "ruler"
             case .cycle: "drop"
             case .history: "calendar"
             case .symptoms: "heart.text.square"
@@ -77,16 +78,17 @@ struct OnboardingFlowView: View {
 
     var body: some View {
         Group {
-            if let stage = session.setupStage {
+            if session.setupStage != nil {
                 VStack(spacing: 20) {
-                    Image(systemName: "leaf.circle.fill").font(.system(size: 64)).foregroundStyle(.tint)
-                        .accessibilityHidden(true)
-                    Text("Setting up Cecy").font(.largeTitle.weight(.semibold))
-                    ProgressView(stage.rawValue).accessibilityIdentifier("setupStatus")
-                    Text("Step 12 of 12").font(.subheadline).foregroundStyle(.secondary)
-                    Text("Your health data stays on your device.").font(.footnote)
+                    ProgressView().controlSize(.large)
+                        .accessibilityLabel("Creating your account")
+                        .accessibilityIdentifier("setupStatus")
+                    Text("Creating your account…").font(.title2.weight(.semibold))
+                        .multilineTextAlignment(.center)
+                        .accessibilityIdentifier("creatingAccountMessage")
                 }
                 .padding().frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(TrackerPalette(scheme: colorScheme).background)
             } else {
                 OnboardingPage(title: step.title, subtitle: step.subtitle, symbol: step.symbol,
                                step: step.rawValue + 1, optional: step.optional) {
@@ -107,15 +109,12 @@ struct OnboardingFlowView: View {
                                         .accessibilityIdentifier("onboardingSkip")
                                 }
                                 Button { advance() } label: {
-                                    Text(editingReview ? "Back to review" : (step == .welcome ? "Get started" : (step == .review ? "Continue to Apple sign-in" : "Continue")))
+                                     Text(editingReview ? "Back to review" : "Continue")
                                         .frame(maxWidth: .infinity, minHeight: 44)
                                 }
                                     .buttonStyle(.borderedProminent).accessibilityIdentifier("onboardingContinue")
                             }
                         }
-                        Label("Your health data stays on your device.", systemImage: "iphone")
-                            .font(.caption).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(.horizontal).padding(.vertical, 8).background(.regularMaterial)
                 }
@@ -151,9 +150,6 @@ struct OnboardingFlowView: View {
                 Label("See your next estimated period window", systemImage: "calendar")
                 Label("Keep track of symptoms and how you feel", systemImage: "heart.text.square")
                 Label("Understand patterns in your own records", systemImage: "chart.xyaxis.line")
-            } footer: {
-                Text("No cloud backup yet. Deleting Cecy or losing this device can mean losing your records.")
-                    .font(.footnote).foregroundStyle(.secondary)
             }
         case .about:
             Section { ProfileBasicsFields(profile: $draft.profile, today: today) }
@@ -187,7 +183,7 @@ struct OnboardingFlowView: View {
                     Label(draft.periods.count < 4 ? "Add a period" : "Add another period", systemImage: "plus").frame(minHeight: 44)
                 }.accessibilityIdentifier("addOnboardingPeriod")
             } footer: {
-                Text("End dates are optional. These dates are saved only after Apple sign-in and setup.")
+                Text("End dates are optional.")
             }
         case .symptoms:
             Section {
@@ -227,7 +223,10 @@ struct OnboardingFlowView: View {
             review
         case .apple:
             AppleSignInSection(session: session, profileID: draft.profile.id) {
-                Task { error = await session.finishSetup(draft); errorFocused = error != nil }
+                Task {
+                    error = await session.finishSetup(draft, minimumPresentation: .milliseconds(1_200))
+                    errorFocused = error != nil
+                }
             }
         }
     }

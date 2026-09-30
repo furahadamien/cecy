@@ -63,6 +63,7 @@ nonisolated enum TrackerExport {
         let periods: [PeriodRecord]
         let observations: [ObservationRecord]
         let profile: ProfileRecord?
+        let sexualActivities: [SexualActivityRecord]?
     }
     struct ProfileRecord: Codable {
         let preferredName: String
@@ -109,14 +110,24 @@ nonisolated enum TrackerExport {
         let createdAt: Date
         let updatedAt: Date
     }
+    struct SexualActivityRecord: Codable {
+        let id: UUID
+        let date: String
+        let activities: [String]
+        let notes: String?
+        let createdAt: Date
+        let updatedAt: Date
+    }
     static func civilDate(_ day: LocalDay) -> String {
         String(format: "%04d-%02d-%02d", locale: Locale(identifier: "en_US_POSIX"), day.year, day.month, day.day)
     }
-    static func encode(snapshot: TrackerSnapshot, includeNotes: Bool, generatedAt: Date, includeProfile: Bool = false) throws -> Data {
+    static func encode(snapshot: TrackerSnapshot, includeNotes: Bool, generatedAt: Date, includeProfile: Bool = false,
+                       includeSexualActivity: Bool = false) throws -> Data {
         try PeriodValidation.validate(snapshot.periods)
         try SymptomValidation.validate(snapshot.symptoms)
+        try SexualActivityValidation.validate(snapshot.sexualActivities)
         guard generatedAt.timeIntervalSinceReferenceDate.isFinite else { throw TrackingError.invalidData }
-        let document = Document(formatVersion: includeProfile ? 2 : 1, generatedAt: generatedAt, includesPrivateNotes: includeNotes,
+        let document = Document(formatVersion: includeSexualActivity ? 3 : (includeProfile ? 2 : 1), generatedAt: generatedAt, includesPrivateNotes: includeNotes,
             periods: snapshot.periods.sorted { $0.start < $1.start }.map {
                 PeriodRecord(id: $0.id, start: civilDate($0.start), end: $0.end.map(civilDate), flow: $0.flow?.rawValue,
                              notes: includeNotes ? $0.notes : nil, createdAt: $0.createdAt, updatedAt: $0.updatedAt)
@@ -124,7 +135,11 @@ nonisolated enum TrackerExport {
                 ObservationRecord(id: $0.id, date: civilDate($0.day), type: $0.kind.rawValue, rating: $0.value,
                                   ratingLabel: $0.ratingLabel, notes: includeNotes ? $0.notes : nil,
                                   createdAt: $0.createdAt, updatedAt: $0.updatedAt)
-            }, profile: includeProfile ? try snapshot.profile.map(ProfileRecord.init) : nil)
+            }, profile: includeProfile ? try snapshot.profile.map(ProfileRecord.init) : nil,
+            sexualActivities: includeSexualActivity ? SexualActivityValidation.sorted(snapshot.sexualActivities).map {
+                SexualActivityRecord(id: $0.id, date: civilDate($0.day), activities: $0.orderedActivities.map(\.rawValue),
+                                     notes: includeNotes ? $0.notes : nil, createdAt: $0.createdAt, updatedAt: $0.updatedAt)
+            } : nil)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601

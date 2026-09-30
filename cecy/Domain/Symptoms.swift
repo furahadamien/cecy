@@ -21,6 +21,23 @@ nonisolated enum SymptomKind: String, CaseIterable, Sendable {
         }
     }
 
+    var symbol: String {
+        switch self {
+        case .cramps: "waveform.path.ecg"
+        case .headache: "head.profile"
+        case .bloating: "arrow.left.and.right"
+        case .fatigue: "battery.25percent"
+        case .moodChanges: "theatermasks"
+        case .acne: "circle.dotted"
+        case .backPain: "figure.stand"
+        case .nausea: "water.waves"
+        case .breastTenderness: "heart"
+        case .sleepQuality: "moon.zzz"
+        case .energyLevel: "bolt"
+        case .cravings: "fork.knife"
+        }
+    }
+
     var ratingTitle: String { self == .sleepQuality || self == .energyLevel ? "Rating (optional)" : "Severity (optional)" }
     var ratingLabels: [String] {
         switch self {

@@ -20,6 +20,7 @@ struct TrackerRootView: View {
                         Button("Retry privacy settings") {
                             session.privacy.start()
                             if session.privacy.canAccess { session.load() }
+                            if scenePhase == .active { Task { await session.privacy.unlockAutomatically() } }
                         }.frame(minHeight: 44)
                     } else { ProgressView() }
                 }
@@ -57,6 +58,7 @@ struct TrackerRootView: View {
         .background(PrivacyShield(isActive: scenePhase == .active))
         .task {
             session.privacy.start()
+            if scenePhase == .active { await session.privacy.unlockAutomatically() }
             if session.privacy.canAccess && session.phase == .loading { session.load() }
             if session.privacy.canAccess { await session.account.checkCredentialState() }
         }
@@ -64,7 +66,10 @@ struct TrackerRootView: View {
             if accessible { session.account.reload(); session.load() }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { session.refresh() }
+            if phase == .active {
+                session.refresh()
+                Task { await session.privacy.unlockAutomatically() }
+            }
             if phase == .background {
                 session.cancelSetup()
                 session.account.cancelPendingAuthorization()

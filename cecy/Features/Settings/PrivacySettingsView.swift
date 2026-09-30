@@ -5,6 +5,7 @@ struct PrivacySettingsView: View {
     let session: TrackerSession
     @State private var includeNotes = false
     @State private var includeProfile = false
+    @State private var includeSexualActivity = false
     @State private var confirmDisableLock = false
     private var privacy: TrackerPrivacy { session.privacy }
 
@@ -37,11 +38,13 @@ struct PrivacySettingsView: View {
             .disabled(privacy.isAuthenticating)
             Section {
                 Toggle("Include private notes", isOn: $includeNotes).accessibilityIdentifier("exportNotes")
+                Toggle("Include sexual activity", isOn: $includeSexualActivity).accessibilityIdentifier("exportSexualActivity")
                 if session.snapshot.profile != nil {
                     Toggle("Include personal profile", isOn: $includeProfile).accessibilityIdentifier("exportProfile")
                 }
                 DisclosureGroup("What’s included?") {
                     Text("Dates, record IDs, flow, observation types and ratings. Private notes are optional; predictions are not included.")
+                    Text("Sexual activity is excluded unless you turn it on above. Activity notes also require Include private notes.")
                     Text("Personal profile is optional and includes your name, birth date, measurements and preferences. Apple identity is never exported.")
                     Text("JSON is a readable data file. Importing it back into Cecy is not supported.")
                     Text("Leaving Cecy while sharing may cancel the export.")
@@ -49,7 +52,8 @@ struct PrivacySettingsView: View {
                 Label("Not encrypted. Share only with a destination you trust.", systemImage: "exclamationmark.shield")
                     .font(.footnote).foregroundStyle(.secondary)
                 Button {
-                    privacy.export(snapshot: session.snapshot, includeNotes: includeNotes, includeProfile: includeProfile)
+                    privacy.export(snapshot: session.snapshot, includeNotes: includeNotes, includeProfile: includeProfile,
+                                   includeSexualActivity: includeSexualActivity)
                 } label: {
                     Label("Export JSON", systemImage: "square.and.arrow.up").frame(minHeight: 44)
                 }

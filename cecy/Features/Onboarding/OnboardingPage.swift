@@ -4,7 +4,7 @@ struct OnboardingPage<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
     @AccessibilityFocusState private var headingFocused: Bool
     let title: String
-    let subtitle: String
+    let subtitle: String?
     let symbol: String
     let step: Int
     let optional: Bool
@@ -26,8 +26,10 @@ struct OnboardingPage<Content: View>: View {
                         .accessibilityAddTraits(.isHeader)
                         .accessibilityFocused($headingFocused)
                         .accessibilityIdentifier("onboardingHeading")
-                    Text(subtitle).font(.body).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if let subtitle {
+                        Text(subtitle).font(.body).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }.padding(.vertical, 8)
             }
             .listRowBackground(Color.clear)

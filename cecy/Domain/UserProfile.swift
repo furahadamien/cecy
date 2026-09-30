@@ -28,6 +28,24 @@ nonisolated enum CommonSymptom: String, Codable, CaseIterable, Sendable {
         default: rawValue.capitalized
         }
     }
+
+    var symbol: String {
+        switch self {
+        case .cramps: SymptomKind.cramps.symbol
+        case .headaches: SymptomKind.headache.symbol
+        case .bloating: SymptomKind.bloating.symbol
+        case .fatigue: SymptomKind.fatigue.symbol
+        case .moodChanges: SymptomKind.moodChanges.symbol
+        case .acne: SymptomKind.acne.symbol
+        case .backPain: SymptomKind.backPain.symbol
+        case .breastTenderness: SymptomKind.breastTenderness.symbol
+        case .nausea: SymptomKind.nausea.symbol
+        case .cravings: SymptomKind.cravings.symbol
+        case .sleepChanges: SymptomKind.sleepQuality.symbol
+        case .lowEnergy: SymptomKind.energyLevel.symbol
+        case .none: "circle.slash"
+        }
+    }
 }
 
 nonisolated enum CycleContext: String, Codable, CaseIterable, Sendable {

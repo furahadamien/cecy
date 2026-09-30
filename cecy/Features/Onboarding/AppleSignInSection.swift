@@ -6,7 +6,7 @@ struct AppleSignInSection: View {
         case saveDetails, connect, reconnect
         var title: String {
             switch self {
-            case .saveDetails: "Sign in to save your details."
+            case .saveDetails: "Sign in with Apple to save your data and begin cycle tracking."
             case .connect: "Connect your Apple Account."
             case .reconnect: "Sign in to see your saved details."
             }
@@ -23,8 +23,9 @@ struct AppleSignInSection: View {
         Section {
             Text(purpose.title).font(.headline)
                 .accessibilityIdentifier("appleSignInPurpose")
-            Text(purpose == .saveDetails ? "We’ll save your profile and period history on this device." : "Your health records stay on this device.")
-                .foregroundStyle(.secondary)
+            if purpose != .saveDetails {
+                Text("Your health records stay on this device.").foregroundStyle(.secondary)
+            }
             #if DEBUG
             if session.account.usesTestAuthorization {
                 Button("Continue with Apple (test)") {
@@ -36,7 +37,9 @@ struct AppleSignInSection: View {
             #endif
             if let message = session.account.message { InlineError(message: message) }
         } footer: {
-            Text("No cloud backup or cross-device restore. Internet is needed for Apple sign-in.")
+            if purpose != .saveDetails {
+                Text("No cloud backup or cross-device restore. Internet is needed for Apple sign-in.")
+            }
         }
         .disabled(!session.privacy.canAccess || session.account.isSigningIn || session.isSaving)
     }

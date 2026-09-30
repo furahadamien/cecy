@@ -47,6 +47,9 @@ struct TodayView: View {
                 }
                 .buttonStyle(.borderedProminent).accessibilityIdentifier("logPeriod")
                 SymptomLogButton(session: session, day: today)
+                SexualActivityLogButton(session: session, day: today)
+                NavigationLink("Sexual activity history") { SexualActivityHistoryView(session: session) }
+                    .frame(minHeight: 44).accessibilityIdentifier("sexualActivityHistory")
                 Button("Add previous periods", action: onHistory)
                     .frame(maxWidth: .infinity, minHeight: 44).buttonStyle(.bordered)
             }

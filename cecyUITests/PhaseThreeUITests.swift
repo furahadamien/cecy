@@ -15,6 +15,8 @@ final class PhaseThreeUITests: XCTestCase {
     }
 
     @MainActor private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
+        if element.isHittable { return }
+        for _ in 0..<4 { app.swipeDown() }
         for _ in 0..<12 {
             if element.isHittable { return }
             app.swipeUp()
@@ -28,6 +30,12 @@ final class PhaseThreeUITests: XCTestCase {
         reveal(picker, in: app)
         picker.tap()
         app.buttons[title].firstMatch.tap()
+    }
+
+    @MainActor private func toggleSymptom(_ kind: String, in app: XCUIApplication) {
+        let button = app.buttons["symptomKind_\(kind)"]
+        XCTAssertTrue(button.waitForExistence(timeout: 5))
+        reveal(button, in: app); button.tap()
     }
 
     @MainActor private func note(in app: XCUIApplication) -> XCUIElement {
@@ -47,13 +55,17 @@ final class PhaseThreeUITests: XCTestCase {
         let log = app.buttons["logSymptoms"]
         reveal(log, in: app); log.tap()
         XCTAssertFalse(app.buttons["saveSymptom"].isEnabled)
-        choose("symptomKind", "Headache", in: app)
-        choose("symptomRating", "Moderate", in: app)
+        toggleSymptom("headache", in: app)
+        XCTAssertTrue(app.buttons["symptomKind_headache"].isSelected)
+        toggleSymptom("headache", in: app)
+        XCTAssertFalse(app.buttons["saveSymptom"].isEnabled)
+        toggleSymptom("headache", in: app)
+        choose("symptomRating_headache", "Moderate", in: app)
         let field = note(in: app)
-        field.tap(); field.typeText("Synthetic observation")
+        reveal(field, in: app); field.tap(); field.typeText("Synthetic observation")
         app.buttons["saveSymptom"].tap()
         reveal(log, in: app); log.tap()
-        choose("symptomKind", "Headache", in: app)
+        toggleSymptom("headache", in: app)
         XCTAssertFalse(app.buttons["saveSymptom"].isEnabled)
         app.buttons["Cancel"].tap(); app.buttons["Discard changes"].tap()
         app.terminate(); app.launch()
@@ -61,18 +73,21 @@ final class PhaseThreeUITests: XCTestCase {
         observations(in: app)
         let edit = app.buttons["editSymptom_headache"]
         reveal(edit, in: app); edit.tap()
+        reveal(note(in: app), in: app)
         XCTAssertEqual(note(in: app).value as? String, "Synthetic observation")
         note(in: app).tap(); note(in: app).typeText(" discarded")
         app.buttons["Cancel"].tap(); app.buttons["Discard changes"].tap()
         reveal(edit, in: app); edit.tap()
+        reveal(note(in: app), in: app)
         XCTAssertEqual(note(in: app).value as? String, "Synthetic observation")
-        choose("symptomRating", "Severe", in: app)
+        choose("symptomRating_headache", "Severe", in: app)
         app.buttons["saveSymptom"].tap()
         app.terminate(); app.launch()
         XCTAssertTrue(log.waitForExistence(timeout: 10))
         observations(in: app)
         reveal(edit, in: app); edit.tap()
-        XCTAssertTrue(app.buttons["symptomRating"].label.contains("Severe"))
+        reveal(app.buttons["symptomRating_headache"], in: app)
+        XCTAssertTrue(app.buttons["symptomRating_headache"].label.contains("Severe"))
         app.buttons["Cancel"].tap()
         let delete = app.buttons["deleteSymptom_headache"]
         reveal(delete, in: app); delete.tap()
@@ -90,18 +105,29 @@ final class PhaseThreeUITests: XCTestCase {
         app.tabBars.buttons["Calendar"].tap()
         let log = app.buttons["logSymptoms"]
         reveal(log, in: app); log.tap()
-        choose("symptomKind", "Energy level", in: app)
-        choose("symptomRating", "Low", in: app)
-        choose("symptomKind", "Sleep quality", in: app)
-        XCTAssertTrue(app.buttons["symptomRating"].label.contains("Not rated"))
-        choose("symptomRating", "Good", in: app)
+        toggleSymptom("energyLevel", in: app)
+        choose("symptomRating_energyLevel", "Low", in: app)
+        toggleSymptom("sleepQuality", in: app)
+        reveal(app.buttons["symptomRating_sleepQuality"], in: app)
+        XCTAssertTrue(app.buttons["symptomRating_sleepQuality"].label.contains("Not rated"))
+        choose("symptomRating_sleepQuality", "Good", in: app)
+        XCTAssertTrue(app.buttons["symptomRating_energyLevel"].label.contains("Low"))
         app.buttons["saveSymptom"].tap()
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Calendar"].waitForExistence(timeout: 10))
+        app.tabBars.buttons["Calendar"].tap()
         let edit = app.buttons["editSymptom_sleepQuality"]
         reveal(edit, in: app); edit.tap()
-        XCTAssertTrue(app.buttons["symptomRating"].label.contains("Good"))
+        reveal(app.buttons["symptomRating_sleepQuality"], in: app)
+        XCTAssertTrue(app.buttons["symptomRating_sleepQuality"].label.contains("Good"))
+        app.buttons["Cancel"].tap()
+        let editEnergy = app.buttons["editSymptom_energyLevel"]
+        reveal(editEnergy, in: app); editEnergy.tap()
+        reveal(app.buttons["symptomRating_energyLevel"], in: app)
+        XCTAssertTrue(app.buttons["symptomRating_energyLevel"].label.contains("Low"))
         app.buttons["Cancel"].tap()
         for _ in 0..<6 { app.swipeDown() }
-        XCTAssertTrue(app.buttons["calendarDay_20260929"].label.contains("1 recorded observations"))
+        XCTAssertTrue(app.buttons["calendarDay_20260929"].label.contains("2 recorded observations"))
         app.tabBars.buttons["Settings"].tap()
         let reset = app.buttons["deleteAllData"]
         reveal(reset, in: app); reset.tap()
