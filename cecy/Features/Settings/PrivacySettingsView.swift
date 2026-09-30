@@ -9,12 +9,13 @@ struct PrivacySettingsView: View {
 
     var body: some View {
         @Bindable var privacy = privacy
-        TrackerPage(title: "Privacy and export") {
-            TrackerCard {
-                Text("App lock").font(.headline)
-                Text(privacy.preferences.lockEnabled ? "App lock is on." : "App lock is off.")
-                    .accessibilityIdentifier("lockState")
-                Text("Face ID or Touch ID, with your device passcode as fallback. Anyone who knows that passcode can unlock Cecy. Returning from the background requires unlocking again; unsaved drafts may be discarded.")
+        SettingsForm(title: "Privacy and export") {
+            if let message = privacy.message { Section { InlineError(message: message) } }
+            Section {
+                LabeledContent("Status") {
+                    Text(privacy.preferences.lockEnabled ? "On" : "Off")
+                        .accessibilityIdentifier("lockState")
+                }
                 if privacy.preferences.lockEnabled {
                     Button("Lock now") { privacy.lockNow() }.frame(minHeight: 44).accessibilityIdentifier("lockNow")
                     Button("Turn off app lock") { confirmDisableLock = true }.frame(minHeight: 44)
@@ -23,23 +24,45 @@ struct PrivacySettingsView: View {
                         .frame(minHeight: 44).accessibilityIdentifier("enableAppLock")
                 }
                 if privacy.isAuthenticating { ProgressView("Authenticating…") }
+                DisclosureGroup("When does Cecy lock?") {
+                    Text("With app lock on, returning from the background requires unlocking again. Unsaved drafts may be discarded.")
+                    Text("App lock protects the screen; it is not separate encryption.")
+                }
+            } header: {
+                Text("App lock")
+            } footer: {
+                Text("Uses Face ID, Touch ID or your device passcode. Anyone with that passcode can unlock Cecy.")
             }
             .disabled(privacy.isAuthenticating)
-            TrackerCard {
-                Text("Export your records").font(.headline)
-                Text("JSON contains readable health information, not an encrypted archive. It includes dates, IDs, flow, observation types and ratings. It does not include predictions. Importing this file into Cecy is not currently supported.")
+            Section {
                 Toggle("Include private notes", isOn: $includeNotes).accessibilityIdentifier("exportNotes")
-                Text("Only share with a destination you trust. Saved or shared copies leave Cecy’s control and cannot be removed by Delete all data. Leaving the app while sharing may cancel the export.")
-                Button("Prepare JSON export") { privacy.export(snapshot: session.snapshot, includeNotes: includeNotes) }
-                    .frame(minHeight: 44).accessibilityIdentifier("prepareExport")
+                DisclosureGroup("What’s included?") {
+                    Text("Dates, record IDs, flow, observation types and ratings. Private notes are optional; predictions are not included.")
+                    Text("JSON is a readable data file. Importing it back into Cecy is not supported.")
+                    Text("Leaving Cecy while sharing may cancel the export.")
+                }
+                Label("Not encrypted. Share only with a destination you trust.", systemImage: "exclamationmark.shield")
+                    .font(.footnote).foregroundStyle(.secondary)
+                Button {
+                    privacy.export(snapshot: session.snapshot, includeNotes: includeNotes)
+                } label: {
+                    Label("Export JSON", systemImage: "square.and.arrow.up").frame(minHeight: 44)
+                }
+                .accessibilityIdentifier("prepareExport")
+            } header: {
+                Text("Export records")
+            } footer: {
+                Text("Saved or shared copies leave Cecy’s control. Delete all data won’t remove them.")
             }
-            TrackerCard {
-                Text("Device storage and backups").font(.headline)
-                Text("Cecy requests complete iOS Data Protection for its records and temporary exports. Device passcode and system protections matter. App locking is an additional screen gate, not separate encryption.")
-                Text("System backups may contain records and settings. Temporary exports are excluded from backups and cleaned up after sharing, locking and on next launch. Deletion does not erase backups or guarantee overwriting storage pages.")
+            Section {
+                NavigationLink { StorageSettingsInfoView() } label: {
+                    Label("Storage and backups", systemImage: "externaldrive")
+                        .frame(minHeight: 44)
+                }
+                .accessibilityIdentifier("storageSettings")
             }
-            if let message = privacy.message { InlineError(message: message) }
         }
+        .navigationBarTitleDisplayMode(.inline)
         .alert("Turn off app lock?", isPresented: $confirmDisableLock) {
             Button("Keep app lock", role: .cancel) {}
             Button("Authenticate to turn off", role: .destructive) { Task { await privacy.setLockEnabled(false) } }
@@ -47,6 +70,25 @@ struct PrivacySettingsView: View {
         .sheet(item: $privacy.preparedExport, onDismiss: { privacy.cleanupExport() }) { export in
             ExportShareSheet(url: export.url) { privacy.cleanupExport() }
         }
+    }
+}
+
+private struct StorageSettingsInfoView: View {
+    var body: some View {
+        SettingsForm(title: "Storage and backups") {
+            Section("Device protection") {
+                Text("Cecy requests complete iOS Data Protection for records and temporary exports. Your device passcode and system protections matter.")
+                Text("App lock is an additional screen gate, not separate encryption.")
+            }
+            Section("System backups") {
+                Text("Backups may contain your records and settings. Deleting data in Cecy does not erase backups or guarantee overwriting storage pages.")
+            }
+            Section("Exported files") {
+                Text("Temporary exports are excluded from backups and cleaned up after sharing, locking and on the next launch.")
+                Text("Copies you save or share are outside Cecy’s control. Delete those separately if needed.")
+            }
+        }
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -78,35 +120,63 @@ struct ReminderSettingsView: View {
                       hour: preferences.reminderHour, minute: preferences.reminderMinute)) ?? Date())
     }
 
+    private var hasUnsavedChanges: Bool {
+        let parts = Calendar.current.dateComponents([.hour, .minute], from: time)
+        let saved = privacy.preferences
+        return daily != saved.dailyReminder || window != saved.windowReminder
+            || parts.hour != saved.reminderHour || parts.minute != saved.reminderMinute
+    }
+
     var body: some View {
-        Form {
-            Section("Choose reminders") {
-                Toggle("Daily logging reminder", isOn: $daily).accessibilityIdentifier("dailyReminder")
-                Toggle("Before estimated start window", isOn: $window).accessibilityIdentifier("windowReminder")
-                DatePicker("Local reminder time", selection: $time, displayedComponents: .hourAndMinute)
-                Text("The window reminder is scheduled for the day before the earliest estimated start, only when its time is still in the future. If no estimate is available, no window reminder is scheduled.")
+        SettingsForm(title: "Reminders") {
+            if let message = privacy.message { Section { InlineError(message: message) } }
+            Section {
+                Toggle("Daily check-in", isOn: $daily).accessibilityIdentifier("dailyReminder")
+                Toggle("Before period window", isOn: $window).accessibilityIdentifier("windowReminder")
+                DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)
+            } header: {
+                Text("Choose reminders")
+            } footer: {
+                Text("Uses local time. Period reminders need an available estimate and a future reminder time.")
             }
             Section {
-                Button("Save reminder choices") {
+                Button("Save changes") {
                     let parts = Calendar.current.dateComponents([.hour, .minute], from: time)
                     Task { await privacy.setReminders(daily: daily, window: window, hour: parts.hour ?? 20, minute: parts.minute ?? 0) }
                 }
                 .frame(minHeight: 44).accessibilityIdentifier("saveReminders")
                 if privacy.isChangingReminders { ProgressView("Updating reminders…") }
-                Text(privacy.reminders.status).accessibilityIdentifier("reminderStatus")
-                Text("Saved daily reminder: \(privacy.preferences.dailyReminder ? "On" : "Off")")
-                Text("Saved window reminder: \(privacy.preferences.windowReminder ? "On" : "Off")")
+                if hasUnsavedChanges {
+                    Text("Unsaved changes").font(.footnote).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("reminderDraftStatus")
+                }
             }
-            Section("Your privacy") {
-                Text("Notification text is always discreet and contains no symptoms, notes or predicted dates. iOS still knows the schedule. Permission is requested only when you save enabled reminders.")
-                Text("Reminders are recalculated when you open Cecy and change records or settings. Focus and system settings can delay or prevent delivery; reminders are not medical alerts.")
-                Button("Open iOS notification settings") {
+            Section("Saved settings") {
+                LabeledContent("Daily check-in") {
+                    Text(privacy.preferences.dailyReminder ? "On" : "Off")
+                        .accessibilityIdentifier("savedDailyReminder")
+                }
+                LabeledContent("Period window") {
+                    Text(privacy.preferences.windowReminder ? "On" : "Off")
+                        .accessibilityIdentifier("savedWindowReminder")
+                }
+                Text(privacy.reminders.status).accessibilityIdentifier("reminderStatus")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            Section {
+                DisclosureGroup("Delivery and privacy") {
+                    Text("Notifications never include symptoms, notes or predicted dates. iOS still knows the schedule. Permission is requested only when you save enabled reminders.")
+                    Text("A period reminder is scheduled the day before the earliest estimated start, only if that time is still in the future. No estimate means no period reminder.")
+                    Text("Reminders update when you open Cecy or change records or settings. Focus and system settings may delay or prevent delivery. These are not medical alerts.")
+                }
+                Button("iOS notification settings") {
                     if let url = URL(string: UIApplication.openNotificationSettingsURLString) { UIApplication.shared.open(url) }
                 }.frame(minHeight: 44)
+            } footer: {
+                Text("Discreet notifications. No health details on your lock screen.")
             }
-            if let message = privacy.message { InlineError(message: message) }
         }
         .disabled(privacy.isChangingReminders)
-        .navigationTitle("Reminders")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

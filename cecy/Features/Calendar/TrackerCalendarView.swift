@@ -63,11 +63,14 @@ struct TrackerCalendarView: View {
                                 }
                             } else {
                                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 44), spacing: 2), count: 7), spacing: 8) {
+                                    // Sibling ForEach ranges share the grid's identity space.
                                     ForEach(0..<7, id: \.self) { index in
                                         Text(weekdays[index]).font(.caption).accessibilityHidden(true)
+                                            .id("weekday-\(index)")
                                     }
-                                    ForEach(0..<leadingCells, id: \.self) { _ in
+                                    ForEach(0..<leadingCells, id: \.self) { index in
                                         Color.clear.frame(height: 44).accessibilityHidden(true)
+                                            .id("placeholder-\(index)")
                                     }
                                     ForEach(days) { day in dayButton(day, asList: false) }
                                 }

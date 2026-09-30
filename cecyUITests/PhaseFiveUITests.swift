@@ -3,12 +3,15 @@ import XCTest
 final class PhaseFiveUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
-    @MainActor private func launch() -> XCUIApplication {
+    @MainActor private func launch(largeText: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["CECY_UI_TEST_ID"] = UUID().uuidString
         app.launchEnvironment["CECY_UI_FIXTURE"] = "history"
         app.launchEnvironment["CECY_UI_AUTH"] = "success"
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        if largeText {
+            app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        }
         app.launch()
         XCTAssertTrue(app.buttons["logPeriod"].waitForExistence(timeout: 10))
         app.launchEnvironment.removeValue(forKey: "CECY_UI_FIXTURE")
@@ -25,6 +28,55 @@ final class PhaseFiveUITests: XCTestCase {
         app.tabBars.buttons["Settings"].tap()
         let link = app.buttons["privacySettings"]
         reveal(link, in: app); link.tap()
+    }
+
+    @MainActor func testSettingsSummaryAndDetailNavigation() {
+        let app = launch()
+        app.tabBars.buttons["Settings"].tap()
+        let privacyLink = app.buttons["privacySettings"]
+        XCTAssertTrue(privacyLink.waitForExistence(timeout: 5))
+        XCTAssertTrue(privacyLink.label.contains("App lock: Off"))
+        XCTAssertTrue(app.buttons["reminderSettings"].label.contains("Off"))
+        XCTAssertFalse(app.staticTexts["Internal prototype"].exists)
+
+        let predictions = app.buttons["predictionSettings"]
+        reveal(predictions, in: app); predictions.tap()
+        let details = app.buttons["predictionCalculationDetails"]
+        XCTAssertTrue(details.waitForExistence(timeout: 5))
+        let calculation = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "The center uses the median.")).firstMatch
+        XCTAssertFalse(calculation.exists)
+        details.tap()
+        reveal(calculation, in: app)
+        XCTAssertTrue(calculation.exists)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        let about = app.buttons["aboutCecy"]
+        reveal(about, in: app); about.tap()
+        XCTAssertTrue(app.staticTexts["Internal prototype"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        reveal(privacyLink, in: app); privacyLink.tap()
+        XCTAssertEqual(app.staticTexts["lockState"].label, "Off")
+        let storage = app.buttons["storageSettings"]
+        reveal(storage, in: app); storage.tap()
+        XCTAssertTrue(app.navigationBars["Storage and backups"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor func testSettingsRemainAccessibleAtLargestTextSize() {
+        let app = launch(largeText: true)
+        app.tabBars.buttons["Settings"].tap()
+        for identifier in ["privacySettings", "reminderSettings", "predictionSettings", "aboutCecy", "deleteAllData"] {
+            let row = app.buttons[identifier]
+            reveal(row, in: app)
+            XCTAssertGreaterThanOrEqual(row.frame.height, 44)
+        }
+        let privacyLink = app.buttons["privacySettings"]
+        reveal(privacyLink, in: app); privacyLink.tap()
+        let notes = app.switches["exportNotes"]
+        reveal(notes, in: app)
+        XCTAssertEqual(notes.value as? String, "0")
+        let export = app.buttons["prepareExport"]
+        reveal(export, in: app)
+        XCTAssertGreaterThanOrEqual(export.frame.height, 44)
     }
 
     @MainActor func testLockPersistsCancelFailsClosedAndBackgroundRelocks() {
@@ -84,8 +136,12 @@ final class PhaseFiveUITests: XCTestCase {
         let toggle = app.switches["dailyReminder"]
         XCTAssertEqual(toggle.value as? String, "0")
         toggle.switches.firstMatch.exists ? toggle.switches.firstMatch.tap() : toggle.tap()
+        XCTAssertTrue(app.staticTexts["reminderDraftStatus"].exists)
         app.buttons["saveReminders"].tap()
-        XCTAssertTrue(app.staticTexts["Saved daily reminder: On"].waitForExistence(timeout: 5))
+        let savedDaily = app.staticTexts["savedDailyReminder"]
+        let saved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "On"), object: savedDaily)
+        XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 5), .completed)
+        XCTAssertFalse(app.staticTexts["reminderDraftStatus"].exists)
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["logPeriod"].waitForExistence(timeout: 10))
         app.tabBars.buttons["Settings"].tap()
@@ -103,6 +159,6 @@ final class PhaseFiveUITests: XCTestCase {
         app.tabBars.buttons["Settings"].tap()
         reveal(reminders, in: app); reminders.tap()
         XCTAssertEqual(app.switches["dailyReminder"].value as? String, "0")
-        XCTAssertTrue(app.staticTexts["Saved daily reminder: Off"].exists)
+        XCTAssertEqual(app.staticTexts["savedDailyReminder"].label, "Off")
     }
 }
