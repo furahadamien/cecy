@@ -22,7 +22,7 @@ This document tracks the phased implementation plan derived from the product bri
 | 2 | Everyday period tracking | Implemented; automated checks passed; manual acceptance pending |
 | 3 | Symptoms and local insights | Implemented; automated checks passed; manual acceptance pending |
 | 4 | Prediction quality | Implemented; automated checks passed; manual acceptance pending |
-| 5 | Privacy controls, export, and reminders | Not started |
+| 5 | Privacy controls, export, and reminders | Implemented; UI/Release passed; protection unit assertion unresolved |
 | 6 | Optional HealthKit integration | Deferred |
 | 7 | Subscriptions | Deferred |
 | 8 | Optional AI explanations | Deferred |
@@ -235,33 +235,37 @@ Do not combine weighting, outlier exclusion, and complex confidence scoring unle
 
 **Goal:** Prepare the local product for dependable real-world use.
 
+**Design and evidence:** [PHASE_5_DESIGN.md](PHASE_5_DESIGN.md) and [PHASE_5_VALIDATION.md](PHASE_5_VALIDATION.md). Locking, JSON export, discreet reminders and coordinated reset are implemented. No health-schema migration, networking or third-party dependencies.
+
+**Verification incomplete:** All 15 UI flows and Release build passed. 64 of 65 unit tests passed; one test has four protection-attribute readback failures on Simulator. Its assertions remain intact. Approval was requested to separate device-only readback from simulator-safe filesystem checks. Physical-device protection must not be inferred from these results.
+
 ### Privacy and security
 
-- [ ] Verify iOS Data Protection for the persistent store and related files.
-- [ ] Review and accurately explain backup behavior; local-first does not mean device backups cannot contain app data.
-- [ ] Add optional Face ID/Touch ID locking with an intentional fallback policy.
-- [ ] Obscure sensitive app-switcher content where appropriate.
-- [ ] Keep health records and notes out of logs and diagnostics.
+- [ ] Verify iOS Data Protection on a signed device for the real store and recreated sidecars. Complete protection is requested in code and signing configuration; readback remains unresolved on Simulator.
+- [x] Explain backup behavior and external-copy/deletion limitations without claiming backups were inspected.
+- [x] Add optional Face ID/Touch ID locking with system device-passcode fallback; cancellation and stale replies remain locked.
+- [x] Implement app-switcher shielding above app-owned sheets and scene-activation synchronization. Actual snapshots remain a manual gate.
+- [x] Keep health records and notes out of application logs; diagnostic fixtures are synthetic only.
 
 ### Export and deletion
 
-- [ ] Add JSON or CSV export.
-- [ ] Consider a human-readable cycle report after the export foundation works.
-- [ ] Handle temporary export files securely.
-- [ ] Ensure delete-all-data clears derived caches and scheduled reminders.
+- [x] Add versioned JSON export with civil dates, IDs, metadata, flow and observations; notes require explicit consent.
+- [x] Consider a human-readable report: defer PDF/report UI until after the JSON foundation.
+- [x] Implement protected temporary export writes, backup exclusion and scoped cleanup/retry. Device-level protection verification remains open above.
+- [x] Clear derived state, temporary exports and owned reminders on reset; retain the security lock preference.
 
 ### Notifications
 
-- [ ] Add opt-in local period and symptom reminders behind a dedicated service.
-- [ ] Default to discreet notification content.
-- [ ] Reschedule after edits and prediction changes.
-- [ ] Handle denied or revoked permissions gracefully.
+- [x] Add opt-in local daily logging and pre-window reminders behind an isolated service.
+- [x] Use discreet notification content with no health details.
+- [x] Reconcile schedules after saved record, preference, date/time-zone changes and unlocked foreground refresh.
+- [x] Handle denied/revoked permissions and scheduling failures; serialize replacement and reset races.
 
 ### Completion criteria
 
-- [ ] Privacy controls work across app lifecycle transitions.
-- [ ] Exports accurately reflect recorded data.
-- [ ] Reminders remain optional and under user control.
+- [ ] Final privacy acceptance: signed-device protection, actual authentication/fallback, app-switcher snapshots, backup and notification-delivery checks.
+- [x] JSON export content/note consent and cleanup are covered by unit and UI tests.
+- [x] Reminder choices and reset are verified using injected delivery; real OS delivery remains a device gate.
 
 ## Phase 6 — Add optional HealthKit integration
 
@@ -414,7 +418,7 @@ Record important choices and their rationale as implementation proceeds.
 
 ## Next authorized implementation scope
 
-Phase 4 design, implementation, review, and automated verification are complete on `phase-4`. Phase 5 remains unstarted. Manual iOS 17, device/offline, and accessibility checks remain pending. No optional integrations have been introduced.
+Phase 5 is implemented on `phase-5`, but its protection test and manual release gates remain open. Do not label the full test suite green or begin Phase 6 without authorization. Local authentication and notifications remain optional; HealthKit, cloud, subscriptions and AI are deferred.
 
 ### Phase 1 verification record
 
@@ -466,3 +470,13 @@ Phase 4 design, implementation, review, and automated verification are complete 
 - An initial compiler error identified the Calendar explanation call missing the new arguments; corrected before passing verification. Final review confirmed replay failures clear stale evidence and both confidence paths use the same deterministic V1 replay.
 - `git diff --check` passed. No Simulator application was launched; tests used isolated synthetic records, never production storage. No commit or push performed.
 - Minimum-OS runtime, physical-device/offline behavior, storage protection/backup behavior and manual accessibility/layout checks remain release gates. Synthetic results are not representative medical evidence or calibration.
+
+### Phase 5 verification record
+
+- Implementation/design: [PHASE_5_DESIGN.md](PHASE_5_DESIGN.md); detailed results and device checklist: [PHASE_5_VALIDATION.md](PHASE_5_VALIDATION.md).
+- **64 of 65 unit/storage/state tests passed** across ten suites. One test reports four failed protection-attribute assertions on Simulator; the full unit suite remains failing and was not weakened to manufacture a pass.
+- **All 15 UI flows passed** on the final rerun, including the 12 Phase 1–4 regressions and three new privacy/export/reminder flows. Initial navigation/scroll/share-sheet failures are retained in earlier result bundles.
+- **Debug test targets compile and Release generic simulator build passed** for arm64/x86_64, targeting iOS 17. Tests ran on iPhone 17 Pro / iOS 26.2. This is not signed-device or minimum-OS runtime verification.
+- Result bundles: `/tmp/cecy-phase5-unit-checked.xcresult`, `/tmp/cecy-phase5-ui-final.xcresult`; Release log: `/tmp/cecy-phase5-release-final.log`. Temporary local artifacts, not committed files.
+- Complete Data Protection entitlement is connected to both app configurations; generated Info.plist includes the Face ID purpose string. File encryption/locked-device behavior still requires physical verification.
+- `git diff --check` passed. No Simulator application was launched. Test stores, preferences, exports, authentication and notifications are isolated from production. No commit or push performed.

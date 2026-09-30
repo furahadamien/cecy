@@ -12,6 +12,19 @@ struct TrackerRootView: View {
 
     var body: some View {
         Group {
+            if !session.privacy.isReady {
+                TrackerPage(title: "Opening Cecy") {
+                    if let error = session.privacy.startupError {
+                        InlineError(message: error)
+                        Button("Retry privacy settings") {
+                            session.privacy.start()
+                            if session.privacy.canAccess { session.load() }
+                        }.frame(minHeight: 44)
+                    } else { ProgressView() }
+                }
+            } else if session.privacy.isLocked {
+                LockedTrackerView(privacy: session.privacy)
+            } else {
             switch session.phase {
             case .loading:
                 ProgressView("Opening your records…")
@@ -34,11 +47,20 @@ struct TrackerRootView: View {
                     }
                 }
             }
+            }
         }
         .tint(TrackerPalette(scheme: colorScheme).accent)
-        .task { if session.phase == .loading { session.load() } }
+        .background(PrivacyShield(isActive: scenePhase == .active))
+        .task {
+            session.privacy.start()
+            if session.privacy.canAccess && session.phase == .loading { session.load() }
+        }
+        .onChange(of: session.privacy.canAccess) { _, accessible in
+            if accessible { session.load() }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { session.refresh() }
+            if phase == .background { session.privacy.wentToBackground() }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
             session.refresh()

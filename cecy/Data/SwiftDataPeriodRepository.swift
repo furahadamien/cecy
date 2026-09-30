@@ -64,10 +64,14 @@ final class SwiftDataPeriodRepository: PeriodRepository {
     static func production() throws -> SwiftDataPeriodRepository {
         let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                                   appropriateFor: nil, create: true)
-        return try local(url: support.appendingPathComponent("Cecy", isDirectory: true)
+        let directory = support.appendingPathComponent("Cecy", isDirectory: true)
+        try ProtectedFiles.protectTree(directory)
+        let repository = try local(url: directory
             .appendingPathComponent("CecyPeriodsV1.store"), clearLegacyData: {
                 try LegacyStoreCleanup.removeTemplateStore(in: support)
             })
+        try ProtectedFiles.protectTree(directory)
+        return repository
     }
 
     static func inMemory() throws -> SwiftDataPeriodRepository {

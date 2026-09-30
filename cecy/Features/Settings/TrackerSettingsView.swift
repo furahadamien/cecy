@@ -6,6 +6,10 @@ struct TrackerSettingsView: View {
     var body: some View {
         TrackerPage(title: "Settings", subtitle: "Your information. Your choices.") {
             TrackerCard(highlighted: true) { PrivacyDetails() }
+            NavigationLink("Privacy and export") { PrivacySettingsView(session: session) }
+                .frame(minHeight: 44).accessibilityIdentifier("privacySettings")
+            NavigationLink("Reminders") { ReminderSettingsView(privacy: session.privacy) }
+                .frame(minHeight: 44).accessibilityIdentifier("reminderSettings")
             TrackerCard {
                 Text("Your records").font(.headline)
                 Text("Edit or delete individual periods from Calendar or Manage recorded periods in Insights.")
@@ -26,7 +30,7 @@ struct TrackerSettingsView: View {
             }
             TrackerCard {
                 Text("Internal prototype").font(.headline)
-                Text("You can correct or delete saved records. Export and app locking are not available yet. Device and accessibility verification remain required before public release.")
+                Text("You can correct, export or delete saved records. Optional app locking and discreet local reminders are available. Device and accessibility verification remain required before public release.")
                 Text("Cecy \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")")
                     .font(.footnote).foregroundStyle(.secondary)
             }
@@ -40,13 +44,14 @@ private struct DeleteAllDataView: View {
     let session: TrackerSession
     @State private var confirmation = ""
     @State private var error: String?
+    @State private var isResetting = false
     @AccessibilityFocusState private var errorFocused: Bool
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    Text("This removes all local period dates, flow, symptoms, ratings, private notes, and onboarding completion, plus any old template database files. You will return to onboarding.")
+                    Text("This removes local period dates, flow, symptoms, ratings, private notes, onboarding completion, temporary exports and old template database files. Reminders are disabled and cleared. App lock stays enabled if you chose it. You will return to onboarding.")
                     Text("This cannot be undone. It does not erase device backups or copies outside the app, and is not a secure-erasure guarantee.")
                 }
                 Section("Type DELETE to confirm") {
@@ -54,10 +59,14 @@ private struct DeleteAllDataView: View {
                         .textInputAutocapitalization(.characters).autocorrectionDisabled()
                         .accessibilityIdentifier("resetConfirmation")
                     Button("Permanently delete local data", role: .destructive) {
-                        error = session.deleteAll()
-                        if error == nil { dismiss() } else { errorFocused = true }
+                        isResetting = true
+                        Task {
+                            error = await session.deleteAllAndWait()
+                            isResetting = false
+                            if error == nil { dismiss() } else { errorFocused = true }
+                        }
                     }
-                    .disabled(confirmation != "DELETE" || session.isSaving)
+                    .disabled(confirmation != "DELETE" || session.isSaving || isResetting || session.privacy.isChangingReminders || session.privacy.isAuthenticating)
                     .frame(minHeight: 44).accessibilityIdentifier("confirmReset")
                 }
                 if let error { InlineError(message: error).accessibilityFocused($errorFocused) }
@@ -65,9 +74,9 @@ private struct DeleteAllDataView: View {
             .navigationTitle("Delete all data?")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(session.isSaving) }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(session.isSaving || isResetting) }
             }
-            .interactiveDismissDisabled(session.isSaving)
+            .interactiveDismissDisabled(session.isSaving || isResetting)
         }
     }
 }

@@ -87,7 +87,7 @@ struct PrivacyDetails: View {
             Label("Stored on this device", systemImage: "hand.raised")
                 .font(.headline)
             Text("No account is required. Cecy does not connect your records to cloud sync, AI, analytics, or Apple Health.")
-            Text("Your device’s system backups may include app data. You can edit or delete local records; deletion does not remove device backups. App locking and export are planned for later phases.")
+            Text("Your device’s system backups may include app data. You can edit or delete local records; deletion does not remove device backups or shared exports. Optional app locking, export and discreet reminders are available in Settings.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
     }
