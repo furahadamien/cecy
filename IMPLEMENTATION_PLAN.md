@@ -21,7 +21,7 @@ This document tracks the phased implementation plan derived from the product bri
 | 1 | Smallest useful vertical slice | Implemented; automated checks passed; manual acceptance pending |
 | 2 | Everyday period tracking | Implemented; automated checks passed; manual acceptance pending |
 | 3 | Symptoms and local insights | Implemented; automated checks passed; manual acceptance pending |
-| 4 | Prediction quality | Not started |
+| 4 | Prediction quality | Implemented; automated checks passed; manual acceptance pending |
 | 5 | Privacy controls, export, and reminders | Not started |
 | 6 | Optional HealthKit integration | Deferred |
 | 7 | Subscriptions | Deferred |
@@ -210,20 +210,26 @@ Do not combine weighting, outlier exclusion, and complex confidence scoring unle
 
 **Goal:** Make uncertainty useful and defensible.
 
+**Design:** [PHASE_4_DESIGN.md](PHASE_4_DESIGN.md). Chronological replay of current corrected records, comparable median/mean/recent-weighted candidates, and evidence-aware Low/Moderate confidence. Production window dates remain unchanged. No schema changes or optional integrations.
+
+**Interpretation:** Replay is not an audit of forecasts actually issued or data known at the time. It excludes the target and later intervals from each prediction but reconstructs history from current records. Synthetic comparisons establish behavior, not real-world calibration.
+
 ### Tasks
 
-- [ ] Evaluate the initial algorithm against transparent baseline approaches.
-- [ ] Use chronological backtesting with only history available at each prediction point.
-- [ ] Measure prediction error and observed coverage of predicted windows.
-- [ ] Evaluate recent weighting and robust statistics only where they improve results.
-- [ ] Document treatment of unusually long or short cycles; never silently discard raw observations.
-- [ ] Refine confidence using history quantity, variability, and prediction-performance evidence.
-- [ ] Explain which records informed an estimate.
-- [ ] Avoid numerical probability claims unless calibrated.
+- [x] Evaluate the initial algorithm against transparent baseline approaches.
+- [x] Use chronological backtesting with only preceding recorded intervals at each prediction point; disclose that historical entry/edit availability cannot be reconstructed.
+- [x] Measure prediction error and observed coverage of predicted windows.
+- [x] Evaluate recent weighting and robust statistics only where they improve results.
+- [x] Document treatment of unusually long or short cycles; never silently discard raw observations.
+- [x] Refine confidence using history quantity, variability, and prediction-performance evidence.
+- [x] Explain which records informed an estimate.
+- [x] Avoid numerical probability claims unless calibrated.
 
 ### Completion criteria
 
-- [ ] The prediction policy is documented, tested, replaceable, and avoids unsupported certainty.
+- [x] The prediction policy is documented, tested, replaceable, and avoids unsupported certainty.
+
+**Validation:** 52 unit/storage/state tests, all 12 UI flows, and Release simulator build passed. See [PHASE_4_VALIDATION.md](PHASE_4_VALIDATION.md) for synthetic comparisons and the decision to retain the median window. Confidence remains uncalibrated; manual release checks remain open.
 
 ## Phase 5 — Add privacy controls, export, and reminders
 
@@ -392,7 +398,7 @@ Record important choices and their rationale as implementation proceeds.
 
 - iOS 17 runtime validation remains required before release; installed simulators are 26.2 and 27.0.
 - No menstrual schema was found in the repository. Old device stores were not inspected and must remain untouched. Reassess if prior distributed health-data builds are discovered.
-- Date handling and baseline prediction rules are implemented and unit-tested. Phase 4 still needs to evaluate prediction accuracy and coverage; confidence is provisional.
+- Date handling and baseline prediction rules are implemented and unit-tested. Phase 4 added chronological reconstruction and synthetic comparisons; independent real-world calibration remains open and confidence is provisional.
 - Full accessibility, physical-device signing, storage protection, and backup verification remain release requirements.
 - Free/premium boundaries: deferred until product validation.
 
@@ -408,7 +414,7 @@ Record important choices and their rationale as implementation proceeds.
 
 ## Next authorized implementation scope
 
-Phase 3 implementation, review, and automated verification are complete on `phase-3`. Phase 4 remains unstarted and requires separate authorization. Manual iOS 17, device/offline, and accessibility checks remain pending. No optional integrations have been introduced.
+Phase 4 design, implementation, review, and automated verification are complete on `phase-4`. Phase 5 remains unstarted. Manual iOS 17, device/offline, and accessibility checks remain pending. No optional integrations have been introduced.
 
 ### Phase 1 verification record
 
@@ -448,3 +454,15 @@ Phase 3 implementation, review, and automated verification are complete on `phas
 - iOS 17 runtime, physical-device/offline behavior, signing/data protection, dark mode/iPad layout, and manual VoiceOver/Dynamic Type audits remain release gates.
 
 - Final review: new observation timestamps default to creation time and are assigned by the repository; the existing Phase 2 file-backed V1 fixture now exercises the V1 → V2 → V3 migration chain. Current-store reset is transactional; legacy file cleanup is separate and cannot be rolled back. No confirmed blocking findings. `git diff --check` passed.
+
+### Phase 4 verification record
+
+- Design: [PHASE_4_DESIGN.md](PHASE_4_DESIGN.md); evaluation and decision: [PHASE_4_VALIDATION.md](PHASE_4_VALIDATION.md).
+- Production retains V1 median/window dates and uses V2 evidence-aware confidence. Replays are derived locally from current records, not stored or described as previously issued forecasts. No raw records, schemas, entitlements or dependencies changed.
+- **52 Swift Testing tests passed across eight suites**, including all earlier domain/storage/state regressions and ten new replay/confidence/state tests. Final run includes golden totals for all six synthetic fixtures and three candidates.
+- **All 12 UI flows passed** in one complete run: two new source/evidence/sparse-history flows plus all ten Phase 1–3 regressions, including large-text Calendar, editing, symptoms, reset and relaunch.
+- **Debug test builds and Release generic iOS Simulator build passed** on the iOS 26.2 test destination / iOS 17 deployment target. No iOS 17 runtime or signed-device claim. Existing test trailing-closure warnings and expected App Intents metadata warnings remain non-blocking.
+- Result bundles: `/tmp/cecy-phase4-final.xcresult`, `/tmp/cecy-phase4-ui.xcresult`; initial passing domain comparison: `/tmp/cecy-phase4-unit-verified.xcresult`; Release log: `/tmp/cecy-phase4-release.log`. Temporary local artifacts, not repository files.
+- An initial compiler error identified the Calendar explanation call missing the new arguments; corrected before passing verification. Final review confirmed replay failures clear stale evidence and both confidence paths use the same deterministic V1 replay.
+- `git diff --check` passed. No Simulator application was launched; tests used isolated synthetic records, never production storage. No commit or push performed.
+- Minimum-OS runtime, physical-device/offline behavior, storage protection/backup behavior and manual accessibility/layout checks remain release gates. Synthetic results are not representative medical evidence or calibration.

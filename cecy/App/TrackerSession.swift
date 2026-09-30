@@ -9,6 +9,7 @@ final class TrackerSession {
     private(set) var today: LocalDay?
     private(set) var overview: CycleOverview?
     private(set) var statistics: CycleStatistics?
+    private(set) var predictionReplay: PredictionReplay?
     private(set) var insights: [CycleInsight] = []
     private(set) var insightMessage: String?
     private(set) var isSaving = false
@@ -68,7 +69,8 @@ final class TrackerSession {
     private func publish(_ snapshot: TrackerSnapshot, today: LocalDay) {
         self.snapshot = snapshot
         self.today = today
-        overview = CycleCalculator.overview(periods: snapshot.periods, today: today)
+        overview = CycleCalculator.overview(periods: snapshot.periods, today: today, engine: EvidencePredictionEngine())
+        predictionReplay = try? PredictionBacktester.evaluate(periods: snapshot.periods, today: today)
         statistics = try? CycleStatistics.calculate(periods: snapshot.periods, today: today)
         do {
             insights = try CycleInsightEngine.generate(periods: snapshot.periods, symptoms: snapshot.symptoms, today: today)

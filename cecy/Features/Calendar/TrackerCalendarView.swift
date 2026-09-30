@@ -96,7 +96,9 @@ struct TrackerCalendarView: View {
             CalendarDateSheet(day: selection) { selection = $0 }
         }
         .sheet(isPresented: $showExplanation) {
-            if let estimate = overview.estimate { PredictionExplanation(estimate: estimate) }
+            if let estimate = overview.estimate {
+                PredictionExplanation(estimate: estimate, sources: Array(overview.intervals.suffix(6)), replay: session.predictionReplay)
+            }
         }
     }
 
