@@ -66,7 +66,9 @@ struct TodayView: View {
             }
         }
         .sheet(isPresented: $showExplanation) {
-            if let estimate = overview.estimate { PredictionExplanation(estimate: estimate) }
+            if let estimate = overview.estimate {
+                PredictionExplanation(estimate: estimate, sources: Array(overview.intervals.suffix(6)), replay: session.predictionReplay)
+            }
         }
     }
 }
@@ -111,6 +113,8 @@ struct PredictionSummary: View {
 struct PredictionExplanation: View {
     @Environment(\.dismiss) private var dismiss
     let estimate: CyclePrediction
+    let sources: [CycleInterval]
+    let replay: PredictionReplay?
 
     var body: some View {
         NavigationStack {
@@ -124,12 +128,24 @@ struct PredictionExplanation: View {
                     Text("The recorded intervals behind it").font(.headline)
                     Text(estimate.sourceLengths.map { "\($0)" }.joined(separator: ", ") + " days")
                     Text("This early model uses up to six recent completed intervals. It uses the median for the center and adds two days around the shortest and longest intervals.")
-                    Text(estimate.confidence == .moderate
-                         ? "Six intervals with a spread of at most seven days support a Moderate label. This is not a measured probability."
-                         : "Limited history or variation in the recorded intervals means confidence remains Low.")
+                    Text(PredictionEvidence.policy).font(.caption)
+                    if let replay {
+                        Text(PredictionEvidence.assess(sourceLengths: estimate.sourceLengths, replay: replay).reason)
+                            .accessibilityIdentifier("confidenceReason")
+                    }
+                    Text("Confidence thresholds are provisional display rules, not measured probabilities. Historical coverage is not a future probability.")
                     Text("There is no guaranteed start date. Records are never discarded merely because an interval is unusual.")
                         .foregroundStyle(.secondary)
                 }
+                TrackerCard {
+                    Text("Source dates").font(.headline)
+                    ForEach(sources) { source in
+                        Text("\(DayText.range(source.start, source.nextStart)): \(source.length) days")
+                    }
+                    Text("Intervals older than the six most recent remain in your records but do not enter this window. No interval is excluded for being unusually long or short.")
+                }
+                NavigationLink("Prediction history check") { PredictionHistoryView(replay: replay) }
+                    .frame(minHeight: 44).accessibilityIdentifier("predictionReplayLink")
                 Text("This is an uncalibrated estimate, not medical advice. Missing records affect it. Do not use it for contraception or diagnosis.")
                     .font(.footnote).foregroundStyle(.secondary)
             }

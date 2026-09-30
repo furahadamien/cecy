@@ -19,6 +19,12 @@ struct CycleHistoryView: View {
                 Label("Manage recorded periods", systemImage: "list.bullet.rectangle").frame(minHeight: 44)
             }
             .accessibilityIdentifier("managePeriods")
+            NavigationLink {
+                PredictionHistoryView(replay: session.predictionReplay)
+            } label: {
+                Label("Prediction history check", systemImage: "calendar.badge.clock").frame(minHeight: 44)
+            }
+            .accessibilityIdentifier("predictionReplayLink")
             TrackerCard(highlighted: true) {
                 Text("Completed cycle intervals").font(.headline).accessibilityAddTraits(.isHeader)
                 Text("An interval is the number of calendar days between two recorded starts. Bleeding end dates are not needed to calculate it.")
@@ -58,7 +64,9 @@ struct CycleHistoryView: View {
                 .font(.footnote).foregroundStyle(.secondary)
         }
         .sheet(isPresented: $showExplanation) {
-            if let estimate = overview.estimate { PredictionExplanation(estimate: estimate) }
+            if let estimate = overview.estimate {
+                PredictionExplanation(estimate: estimate, sources: Array(overview.intervals.suffix(6)), replay: session.predictionReplay)
+            }
         }
     }
 }
