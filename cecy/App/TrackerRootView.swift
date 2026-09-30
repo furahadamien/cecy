@@ -71,9 +71,9 @@ private struct TrackerTabs: View {
                 TrackerCalendarView(session: session, today: today, overview: overview) { loggingDay = $0 }
             }
             .tabItem { Label("Calendar", systemImage: "calendar") }.tag(1)
-            NavigationStack { CycleHistoryView(overview: overview) }
+            NavigationStack { CycleHistoryView(session: session, overview: overview) }
                 .tabItem { Label("Insights", systemImage: "chart.xyaxis.line") }.tag(2)
-            NavigationStack { TrackerSettingsView() }
+            NavigationStack { TrackerSettingsView(session: session) }
                 .tabItem { Label("Settings", systemImage: "slider.horizontal.3") }.tag(3)
         }
         .sheet(item: $loggingDay) { day in

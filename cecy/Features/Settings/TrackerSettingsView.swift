@@ -1,9 +1,17 @@
 import SwiftUI
 
 struct TrackerSettingsView: View {
+    let session: TrackerSession
+    @State private var showReset = false
     var body: some View {
         TrackerPage(title: "Settings", subtitle: "Your information. Your choices.") {
             TrackerCard(highlighted: true) { PrivacyDetails() }
+            TrackerCard {
+                Text("Your records").font(.headline)
+                Text("Edit or delete individual periods from Calendar or Manage recorded periods in Insights.")
+                Button("Delete all data", role: .destructive) { showReset = true }
+                    .frame(minHeight: 44).accessibilityIdentifier("deleteAllData")
+            }
             TrackerCard {
                 Text("About predictions").font(.headline).accessibilityAddTraits(.isHeader)
                 Text("Four recorded starts provide the three completed intervals needed for a first estimate. Up to six recent intervals are used.")
@@ -15,10 +23,48 @@ struct TrackerSettingsView: View {
             }
             TrackerCard {
                 Text("Internal prototype").font(.headline)
-                Text("Review dates before saving. Editing or deleting saved records, export, and additional privacy controls are not available in this phase. This build is not ready for public use.")
+                Text("You can correct or delete saved records. Export and app locking are not available yet. Device and accessibility verification remain required before public release.")
                 Text("Cecy \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")")
                     .font(.footnote).foregroundStyle(.secondary)
             }
+        }
+        .sheet(isPresented: $showReset) { DeleteAllDataView(session: session) }
+    }
+}
+
+private struct DeleteAllDataView: View {
+    @Environment(\.dismiss) private var dismiss
+    let session: TrackerSession
+    @State private var confirmation = ""
+    @State private var error: String?
+    @AccessibilityFocusState private var errorFocused: Bool
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("This removes all local period dates, flow, notes, and onboarding completion, plus any old template database files. You will return to onboarding.")
+                    Text("This cannot be undone. It does not erase device backups or copies outside the app, and is not a secure-erasure guarantee.")
+                }
+                Section("Type DELETE to confirm") {
+                    TextField("DELETE", text: $confirmation)
+                        .textInputAutocapitalization(.characters).autocorrectionDisabled()
+                        .accessibilityIdentifier("resetConfirmation")
+                    Button("Permanently delete local data", role: .destructive) {
+                        error = session.deleteAll()
+                        if error == nil { dismiss() } else { errorFocused = true }
+                    }
+                    .disabled(confirmation != "DELETE" || session.isSaving)
+                    .frame(minHeight: 44).accessibilityIdentifier("confirmReset")
+                }
+                if let error { InlineError(message: error).accessibilityFocused($errorFocused) }
+            }
+            .navigationTitle("Delete all data?")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(session.isSaving) }
+            }
+            .interactiveDismissDisabled(session.isSaving)
         }
     }
 }

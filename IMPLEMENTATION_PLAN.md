@@ -19,7 +19,7 @@ This document tracks the phased implementation plan derived from the product bri
 | --- | --- | --- |
 | 0 | Foundations and product rules | Complete — September 29, 2026 |
 | 1 | Smallest useful vertical slice | Implemented; automated checks passed; manual acceptance pending |
-| 2 | Everyday period tracking | Not started |
+| 2 | Everyday period tracking | Implemented; automated checks passed; manual acceptance pending |
 | 3 | Symptoms and local insights | Not started |
 | 4 | Prediction quality | Not started |
 | 5 | Privacy controls, export, and reminders | Not started |
@@ -150,24 +150,30 @@ Do not combine weighting, outlier exclusion, and complex confidence scoring unle
 
 **Goal:** Make the core tracker reliable for ongoing use.
 
+**Design:** [Phase 2 system and interaction decisions](PHASE_2_DESIGN.md).
+
+**Implemented scope:** Saved-period editing and confirmed deletion, optional overall flow and private notes, confirmed-end entry, descriptive statistics, and confirmed local-data reset. Existing V1 records migrate in place to V2; no prediction algorithm changes or optional services were introduced. Unknown end dates remain unknown, not assumed ongoing bleeding.
+
+**Validation status:** 29 domain/repository/state tests passed, including V1 migration and reset rollback. All 4 Phase 1 UI regressions passed; the corrected Phase 2 UI rerun passed all 3 new flows. Debug test builds and the Release simulator build passed. Manual iOS 17, physical-device/offline, VoiceOver/contrast, iPad/RTL/orientation, and storage-protection checks remain open; these are not established by simulator tests.
+
 ### Tasks
 
-- [ ] Add and edit period starts and ends.
-- [ ] Delete individual records with appropriate confirmation.
-- [ ] Support optional notes and a clearly defined flow representation.
-- [ ] Handle ongoing periods and conflicting dates.
-- [ ] Refresh calculations after every relevant edit.
-- [ ] Improve empty states, validation, save failures, and onboarding re-entry.
-- [ ] Add average and median cycle length to basic Insights.
-- [ ] Add cycle-length history, distribution, and variability.
-- [ ] Calculate average period duration from completed records only.
-- [ ] Establish Today, Calendar, Insights, and Settings as the four primary destinations.
-- [ ] Implement delete-all-data behavior.
+- [x] Add and edit period starts and ends.
+- [x] Delete individual records with appropriate confirmation.
+- [x] Support optional notes and a clearly defined flow representation.
+- [x] Handle ongoing periods and conflicting dates.
+- [x] Refresh calculations after every relevant edit.
+- [x] Improve empty states, validation, save failures, and onboarding re-entry.
+- [x] Add average and median cycle length to basic Insights.
+- [x] Add cycle-length history, distribution, and variability.
+- [x] Calculate average period duration from completed records only.
+- [x] Establish Today, Calendar, Insights, and Settings as the four primary destinations.
+- [x] Implement delete-all-data behavior.
 
 ### Completion criteria
 
-- [ ] Daily logging and historical correction work reliably.
-- [ ] Every displayed statistic is traceable to recorded data.
+- [x] Daily logging and historical correction work reliably.
+- [x] Every displayed statistic is traceable to recorded data.
 
 ## Phase 3 — Add symptoms and meaningful local insights
 
@@ -400,7 +406,7 @@ Record important choices and their rationale as implementation proceeds.
 
 ## Next authorized implementation scope
 
-Phase 1 is authorized and implemented as an internal prototype. Finish recorded validation gates and review the app before authorizing Phase 2. Saved-record correction/deletion, symptoms, and all optional integrations remain outside this implementation.
+Phase 2 implementation and automated verification are complete on `phase-2`. Review the changes and outstanding manual acceptance gates before authorizing Phase 3. Symptoms, patterns, and optional integrations remain outside this implementation. Manual iOS 17, device/offline, and accessibility checks remain pending.
 
 ### Phase 1 verification record
 
@@ -413,3 +419,17 @@ Phase 1 is authorized and implemented as an internal prototype. Finish recorded 
 - Build/test results: `/tmp/cecy-phase1-verified.xcresult`, `/tmp/cecy-phase1-unit-final.xcresult`; Release log: `/tmp/cecy-phase1-release.log`. These are local temporary artifacts, not repository files.
 - `git diff --check`: passed. No optional capabilities or dependencies were added.
 - Automated checks do not establish minimum-OS runtime compatibility, physical-device storage protection, a full accessibility audit, or disconnected-network behavior. Those remain unchecked above.
+
+
+### Phase 2 verification record
+
+- Design and acceptance: [PHASE_2_DESIGN.md](PHASE_2_DESIGN.md).
+- **29 Swift Testing tests passed** across 4 suites on iPhone 17 Pro / iOS 26.2. Includes in-place V1-to-V2 file migration, metadata round trips, note limits, statistics, edit/delete recomputation, reset durability, and rollback/retry when saves or legacy cleanup fail.
+- **4 Phase 1 UI regressions passed** in the full run: history/prediction/duplicate prevention, large text Calendar, onboarding drafts, skip/log/relaunch.
+- Initial new UI run found an adaptive confirmation-dialog cancellation issue and a test tap targeting the switch's label rather than its control. Saved-period deletion now uses an explicit two-action alert; the edit test verifies the actual switch value before saving.
+- **3 Phase 2 UI tests passed** on the corrected rerun: delete cancellation/confirmation and recalculation; confirmed end and note persistence plus discarded-edit preservation; reset cancellation/confirmation and onboarding after relaunch.
+- **Debug test builds and Release generic iOS Simulator build passed** (arm64/x86_64, iOS 17 deployment target). Expected App Intents metadata warning only. This is not an iOS 17 runtime or signed-device test.
+- Evidence: `/tmp/cecy-phase2-full.xcresult` (29 unit tests and 4 regression UI passes, plus the two initial failures), `/tmp/cecy-phase2-ui-verified.xcresult` (3 corrected UI passes), and `/tmp/cecy-phase2-release.log` (Release success). Temporary local artifacts, not committed files.
+- No additional editor or Simulator application windows were opened. All fixtures use isolated synthetic records. Production data was not reset during testing.
+- Reset removes current logical records and onboarding state; only confirmed production reset also removes the allowlisted old template store/sidecars. It does not purge backups or guarantee secure overwriting of storage pages.
+- No commit or push was performed as part of implementation. Phase 3 and optional integrations remain unstarted.

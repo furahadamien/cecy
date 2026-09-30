@@ -57,7 +57,7 @@ struct HistoryEntryView: View {
             .buttonStyle(.borderedProminent)
             .disabled(session.isSaving || (!isOnboarding && drafts.isEmpty))
             .accessibilityIdentifier("finishHistory")
-            Text("This first version provides rough estimates, not medical advice or contraceptive guidance. Saved-date editing is planned for the next phase; please review dates before saving.")
+            Text("Predictions are rough estimates, not medical advice or contraceptive guidance. You can correct saved entries later from Calendar or Insights.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
         .toolbar {

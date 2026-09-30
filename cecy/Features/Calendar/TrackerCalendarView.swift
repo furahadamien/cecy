@@ -182,7 +182,8 @@ struct TrackerCalendarView: View {
                 } else {
                     Text("End not recorded. No later bleeding days are assumed.")
                 }
-                Text("Saved-date correction is planned for the next phase.").font(.footnote).foregroundStyle(.secondary)
+                PeriodExtraDetails(period: period)
+                PeriodRecordActions(session: session, period: period).id(period.id)
             } else {
                 Text("No period recorded for this day.")
             }

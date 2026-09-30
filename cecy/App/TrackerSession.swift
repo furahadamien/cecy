@@ -8,6 +8,7 @@ final class TrackerSession {
     private(set) var snapshot = TrackerSnapshot()
     private(set) var today: LocalDay?
     private(set) var overview: CycleOverview?
+    private(set) var statistics: CycleStatistics?
     private(set) var isSaving = false
     private(set) var failureMessage: String?
     var confirmation: String?
@@ -66,8 +67,45 @@ final class TrackerSession {
         self.snapshot = snapshot
         self.today = today
         overview = CycleCalculator.overview(periods: snapshot.periods, today: today)
+        statistics = try? CycleStatistics.calculate(periods: snapshot.periods, today: today)
         failureMessage = nil
         phase = .loaded
+    }
+
+    func update(_ period: Period) -> String? {
+        mutate(confirmation: "Period updated.", failure: "Your changes haven’t been saved. They are still here so you can try again.") {
+            try $0.update(period, today: $1, now: $2)
+        }
+    }
+
+    func delete(id: UUID) -> String? {
+        mutate(confirmation: "Period deleted.", failure: "This period wasn’t deleted. Try again.") { repository, _, _ in
+            try repository.delete(id: id)
+        }
+    }
+
+    func deleteAll() -> String? {
+        mutate(confirmation: nil,
+               failure: "Deletion did not finish. Current tracker records remain unchanged; some legacy files may already have been removed. Please try again.") { repository, _, _ in
+            try repository.deleteAll()
+        }
+    }
+
+    private func mutate(confirmation: String?, failure: String,
+                        operation: (any PeriodRepository, LocalDay, Date) throws -> TrackerSnapshot) -> String? {
+        guard phase == .loaded, !isSaving, let repository else { return "Your records aren’t ready. Try loading them again." }
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            let now = clock()
+            let day = try LocalDay(date: now, timeZone: zone())
+            let committed = try operation(repository, day, now)
+            publish(committed, today: day)
+            self.confirmation = confirmation
+            return nil
+        } catch let error as TrackingError {
+            return error.localizedDescription
+        } catch { return failure }
     }
 
     static func live() -> TrackerSession {
