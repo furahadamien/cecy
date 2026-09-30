@@ -55,7 +55,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
 
     static func local(url: URL, clearLegacyData: @escaping () throws -> Void = {}) throws -> SwiftDataPeriodRepository {
         try ProtectedFiles.directory(url.deletingLastPathComponent(), excludeFromBackup: true)
-        let schema = Schema(versionedSchema: TrackerSchemaV4.self)
+        let schema = Schema(versionedSchema: TrackerSchemaV5.self)
         let configuration = ModelConfiguration("CecyLocal", schema: schema, url: url, cloudKitDatabase: .none)
         return try SwiftDataPeriodRepository(container: ModelContainer(for: schema, migrationPlan: TrackerMigrationPlan.self,
                                                                        configurations: [configuration]), clearLegacyData: clearLegacyData)
@@ -75,7 +75,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
     }
 
     static func inMemory() throws -> SwiftDataPeriodRepository {
-        let schema = Schema(versionedSchema: TrackerSchemaV4.self)
+        let schema = Schema(versionedSchema: TrackerSchemaV5.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         return try SwiftDataPeriodRepository(container: ModelContainer(for: schema, migrationPlan: TrackerMigrationPlan.self,
                                                                        configurations: [configuration]))
@@ -94,8 +94,11 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         try SymptomValidation.validate(symptoms)
         let profiles = try context.fetch(FetchDescriptor<TrackerSchemaV4.ProfileRecord>())
         guard profiles.count <= 1 else { throw TrackingError.invalidData }
+        let activities = try context.fetch(FetchDescriptor<TrackerSchemaV5.SexualActivityRecord>()).map { try $0.value() }
+        try SexualActivityValidation.validate(activities)
         return TrackerSnapshot(periods: periods, onboardingCompletedAt: states.first?.onboardingCompletedAt,
-                               symptoms: SymptomValidation.sorted(symptoms), profile: try profiles.first?.value())
+                               symptoms: SymptomValidation.sorted(symptoms), profile: try profiles.first?.value(),
+                               sexualActivities: SexualActivityValidation.sorted(activities))
     }
 
     private func writeProfile(_ profile: LocalProfile) throws {
@@ -257,6 +260,29 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         }
     }
 
+    func addSymptoms(_ entries: [SymptomEntry], today: LocalDay, now: Date) throws -> TrackerSnapshot {
+        guard !entries.isEmpty else { throw TrackingError.invalidData }
+        var candidate = try load()
+        var values = entries.map {
+            SymptomEntry(id: $0.id, day: $0.day, kind: $0.kind, value: $0.value, notes: $0.notes, createdAt: now)
+        }
+        try SymptomValidation.validate(candidate.symptoms + values, asOf: today)
+        for index in values.indices {
+            if values[index].notes?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
+                values[index].notes = nil
+            }
+        }
+        candidate.symptoms = SymptomValidation.sorted(candidate.symptoms + values)
+        do {
+            values.forEach { context.insert(TrackerSchemaV3.SymptomRecord($0)) }
+            try saveContext(context)
+            return candidate
+        } catch {
+            context.rollback()
+            throw error
+        }
+    }
+
     func deleteSymptom(id: UUID) throws -> TrackerSnapshot {
         var candidate = try load()
         guard let record = try context.fetch(FetchDescriptor<TrackerSchemaV3.SymptomRecord>()).first(where: { $0.id == id }) else {
@@ -273,6 +299,44 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         }
     }
 
+    func saveSexualActivity(_ entry: SexualActivityEntry, editing: Bool, today: LocalDay, now: Date) throws -> TrackerSnapshot {
+        var candidate = try load()
+        let original = candidate.sexualActivities.first { $0.id == entry.id }
+        if editing && original == nil { throw TrackingError.missingRecord }
+        var value = SexualActivityEntry(id: entry.id, day: entry.day, activities: entry.activities, notes: entry.notes,
+                                        createdAt: editing ? original!.createdAt : now, updatedAt: now)
+        if editing { candidate.sexualActivities.removeAll { $0.id == entry.id } }
+        try SexualActivityValidation.validate(candidate.sexualActivities + [value], asOf: today)
+        if value.notes?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true { value.notes = nil }
+        candidate.sexualActivities = SexualActivityValidation.sorted(candidate.sexualActivities + [value])
+        do {
+            if editing {
+                guard let record = try context.fetch(FetchDescriptor<TrackerSchemaV5.SexualActivityRecord>()).first(where: { $0.id == value.id }) else {
+                    throw TrackingError.missingRecord
+                }
+                record.dayKey = value.day.key
+                record.activitiesRaw = value.orderedActivities.map(\.rawValue)
+                record.notes = value.notes
+                record.updatedAt = value.updatedAt
+            } else { context.insert(TrackerSchemaV5.SexualActivityRecord(value)) }
+            try saveContext(context)
+            return candidate
+        } catch { context.rollback(); throw error }
+    }
+
+    func deleteSexualActivity(id: UUID) throws -> TrackerSnapshot {
+        var candidate = try load()
+        guard let record = try context.fetch(FetchDescriptor<TrackerSchemaV5.SexualActivityRecord>()).first(where: { $0.id == id }) else {
+            throw TrackingError.missingRecord
+        }
+        do {
+            context.delete(record)
+            try saveContext(context)
+            candidate.sexualActivities.removeAll { $0.id == id }
+            return candidate
+        } catch { context.rollback(); throw error }
+    }
+
     func deleteAll() throws -> TrackerSnapshot {
         do {
             // Fetch before deleting anything. Reset also works for malformed domain records.
@@ -280,11 +344,13 @@ final class SwiftDataPeriodRepository: PeriodRepository {
             let states = try context.fetch(FetchDescriptor<TrackerSchemaV2.AppStateRecord>())
             let symptoms = try context.fetch(FetchDescriptor<TrackerSchemaV3.SymptomRecord>())
             let profiles = try context.fetch(FetchDescriptor<TrackerSchemaV4.ProfileRecord>())
+            let activities = try context.fetch(FetchDescriptor<TrackerSchemaV5.SexualActivityRecord>())
             try clearLegacyData()
             records.forEach { context.delete($0) }
             states.forEach { context.delete($0) }
             symptoms.forEach { context.delete($0) }
             profiles.forEach { context.delete($0) }
+            activities.forEach { context.delete($0) }
             try saveContext(context)
             return TrackerSnapshot()
         } catch {

@@ -94,7 +94,7 @@ final class TrackerSession {
 
     /// Keychain, SwiftData and notification services cannot share one transaction.
     /// Stage local records atomically, retry idempotently, and publish completion last.
-    func finishSetup(_ draft: OnboardingDraft) async -> String? {
+    func finishSetup(_ draft: OnboardingDraft, minimumPresentation: Duration = .zero) async -> String? {
         guard privacy.canAccess, !account.requiresSignIn, phase == .loaded, !isSaving, let repository else { return ProfileError.notReady.localizedDescription }
         isSaving = true
         let token = setupRevision
@@ -109,6 +109,8 @@ final class TrackerSession {
             try checkAccess()
             try draft.validate(today: day)
             setupStage = .saving
+            let presentationClock = ContinuousClock()
+            let presentationDeadline = presentationClock.now.advanced(by: minimumPresentation)
             await Task.yield()
             try checkAccess()
             let staged = try repository.prepareOnboarding(draft, today: day)
@@ -138,6 +140,11 @@ final class TrackerSession {
             }
             setupStage = .finishing
             await Task.yield()
+            // UI callers can keep the confirmation readable without adding delay to slow setup.
+            // Completion stays uncommitted during the wait; backgrounding/cancellation still fail closed.
+            if minimumPresentation > .zero {
+                try await presentationClock.sleep(until: presentationDeadline)
+            }
             try checkAccess()
             let completed = try repository.completeOnboarding(profileID: draft.profile.id, today: day, now: now)
             publish(completed, today: day)
@@ -206,9 +213,29 @@ final class TrackerSession {
         }
     }
 
+    func addSymptoms(_ entries: [SymptomEntry]) -> String? {
+        mutate(confirmation: entries.count == 1 ? "Observation recorded." : "Observations recorded.",
+               failure: "Your observations haven’t been saved. Your draft is still here; try again.") {
+            try $0.addSymptoms(entries, today: $1, now: $2)
+        }
+    }
+
     func deleteSymptom(id: UUID) -> String? {
         mutate(confirmation: "Observation deleted.", failure: "This observation wasn’t deleted. Try again.") { repository, _, _ in
             try repository.deleteSymptom(id: id)
+        }
+    }
+
+    func saveSexualActivity(_ entry: SexualActivityEntry, editing: Bool = false) -> String? {
+        mutate(confirmation: editing ? "Activity record updated." : "Activity recorded.",
+               failure: "Your activity hasn’t been saved. Your draft is still here; try again.") {
+            try $0.saveSexualActivity(entry, editing: editing, today: $1, now: $2)
+        }
+    }
+
+    func deleteSexualActivity(id: UUID) -> String? {
+        mutate(confirmation: "Activity record deleted.", failure: "This activity record wasn’t deleted. Try again.") { repository, _, _ in
+            try repository.deleteSexualActivity(id: id)
         }
     }
 
@@ -265,6 +292,8 @@ final class TrackerSession {
             self.confirmation = confirmation
             return nil
         } catch let error as ProfileError {
+            return error.localizedDescription
+        } catch let error as SexualActivityError {
             return error.localizedDescription
         } catch let error as TrackingError {
             return error.localizedDescription

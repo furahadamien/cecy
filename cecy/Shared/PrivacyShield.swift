@@ -63,16 +63,16 @@ struct PrivacyShield: UIViewRepresentable {
 }
 
 struct LockedTrackerView: View {
+    @Environment(\.colorScheme) private var colorScheme
     let privacy: TrackerPrivacy
     var body: some View {
-        TrackerPage(title: "Cecy is locked", subtitle: "Your records stay private until you unlock.") {
-            Label("Device-owner authentication", systemImage: "lock.fill")
-            Text("Use Face ID, Touch ID or your device passcode. Cecy has no separate PIN or recovery bypass.")
-            Button("Unlock Cecy") { Task { await privacy.unlock() } }
+        VStack(spacing: 16) {
+            Button("Unlock") { Task { await privacy.unlock() } }
                 .buttonStyle(.borderedProminent).frame(minHeight: 44)
                 .disabled(privacy.isAuthenticating).accessibilityIdentifier("unlockCecy")
-            if privacy.isAuthenticating { ProgressView("Authenticating…") }
-            if let message = privacy.message { InlineError(message: message) }
+            if privacy.isAuthenticating { ProgressView().accessibilityLabel("Unlocking") }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(TrackerPalette(scheme: colorScheme).background.ignoresSafeArea())
     }
 }

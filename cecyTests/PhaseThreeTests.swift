@@ -208,6 +208,39 @@ nonisolated struct PhaseThreeDomainTests {
         #expect(try repository.deleteAll() == TrackerSnapshot())
     }
 
+    @Test func batchSymptomsSaveTogetherAndConflictsPreserveExistingRecords() throws {
+        let repository = try SwiftDataPeriodRepository.inMemory()
+        let entries = [SymptomEntry(day: today, kind: .cramps, value: 3, notes: "Shared note"),
+                       SymptomEntry(day: today, kind: .sleepQuality, value: 1, notes: "Shared note")]
+        let saved = try repository.addSymptoms(entries, today: today, now: now)
+        #expect(Set(saved.symptoms.map(\.id)) == Set(entries.map(\.id)))
+        #expect(saved.symptoms.first(where: { $0.kind == .cramps })?.value == 3)
+        #expect(saved.symptoms.first(where: { $0.kind == .sleepQuality })?.value == 1)
+        #expect(saved.symptoms.allSatisfy { $0.notes == "Shared note" && $0.createdAt == now })
+        #expect(throws: TrackingError.duplicateSymptom) {
+            try repository.addSymptoms([SymptomEntry(day: today, kind: .headache),
+                                        SymptomEntry(day: today, kind: .cramps)], today: today, now: now)
+        }
+        #expect(try repository.load() == saved)
+        #expect(SymptomKind.allCases.allSatisfy { !$0.symbol.isEmpty })
+    }
+
+    @Test func failedBatchRollsBackEverySymptomAndCanRetry() throws {
+        let memory = try SwiftDataPeriodRepository.inMemory()
+        var fail = true
+        let repository = SwiftDataPeriodRepository(container: memory.container, save: { context in
+            if fail { throw Failure.disk }; try context.save()
+        })
+        let entries = [SymptomEntry(day: today, kind: .headache, notes: "  "),
+                       SymptomEntry(day: today, kind: .energyLevel, value: 2)]
+        #expect(throws: Failure.self) { try repository.addSymptoms(entries, today: today, now: now) }
+        #expect(try repository.load().symptoms.isEmpty)
+        fail = false
+        let saved = try repository.addSymptoms(entries, today: today, now: now)
+        #expect(saved.symptoms.count == 2 && saved.symptoms.allSatisfy { $0.notes == nil })
+        #expect(try repository.load() == saved)
+    }
+
     @Test func malformedStoredObservationFailsVisiblyButResetWorks() throws {
         let repository = try SwiftDataPeriodRepository.inMemory()
         let context = ModelContext(repository.container)

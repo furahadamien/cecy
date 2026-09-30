@@ -12,13 +12,9 @@ struct ProfileBasicsFields: View {
         Button {
             choosingBirthday = true
         } label: {
-            LabeledContent("Date of birth", value: profile.birthDayKey.flatMap { try? LocalDay(key: $0) }.map(DayText.full) ?? "Choose date")
+            LabeledContent("Date of birth", value: profile.birthDayKey.flatMap { try? LocalDay(key: $0) }.map { DayText.full($0) } ?? "Choose date")
         }
         .accessibilityIdentifier("profileBirthday")
-        Picker("Measurements", selection: $profile.measurementSystem) {
-            ForEach(MeasurementSystem.allCases, id: \.self) { Text($0.title).tag($0) }
-        }
-        .accessibilityIdentifier("profileUnits")
         .sheet(isPresented: $choosingBirthday) {
             BirthdaySheet(day: profile.birthDayKey.flatMap { try? LocalDay(key: $0) }, today: today) {
                 profile.birthDayKey = $0.key
@@ -63,95 +59,124 @@ struct ProfileMeasurementFields: View {
     @Binding var profile: LocalProfile
 
     var body: some View {
-        MeasurementSliderField(kind: .height, units: profile.measurementSystem, value: $profile.heightCentimeters)
-        MeasurementSliderField(kind: .weight, units: profile.measurementSystem, value: $profile.weightKilograms)
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Measurement units").font(.headline)
+            Picker("Measurement units", selection: $profile.measurementSystem) {
+                Text("cm / kg").tag(MeasurementSystem.metric)
+                Text("ft + in / lb").tag(MeasurementSystem.imperial)
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("profileUnits")
+        }
+        MeasurementWheelField(kind: .height, units: profile.measurementSystem, value: $profile.heightCentimeters)
+        MeasurementWheelField(kind: .weight, units: profile.measurementSystem, value: $profile.weightKilograms)
     }
 }
 
-private struct MeasurementSliderField: View {
-    let kind: MeasurementSliderKind
+private struct MeasurementWheelField: View {
+    let kind: MeasurementPickerKind
     let units: MeasurementSystem
     @Binding var value: Double?
-    @State private var expanded = false
+    @ScaledMetric(relativeTo: .body) private var wheelHeight = 160.0
 
-    private var range: ClosedRange<Double> { kind.range(system: units, current: value, expanded: expanded) }
-    private var displayed: Double { kind.display(value ?? kind.suggestedCanonicalValue, system: units) }
     private var valueText: String {
-        value == nil ? "Not added" : "\(displayed.formatted(.number.precision(.fractionLength(0...1)))) \(kind.unit(units))"
+        value.map { kind.formatted($0, system: units) } ?? "Not added"
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(kind.title).font(.headline)
-            Text(valueText).font(.system(.title2, design: .rounded, weight: .semibold)).monospacedDigit()
-                .accessibilityIdentifier("\(kind.identifier)Value")
-            Slider(value: Binding(get: { displayed }, set: {
-                value = min(kind.validCanonicalRange.upperBound, max(kind.validCanonicalRange.lowerBound, kind.canonical($0, system: units)))
-            }), in: range, step: kind.step(units)) {
-                Text("\(kind.title) in \(kind.unit(units))")
-            } onEditingChanged: { editing in
-                if editing && value == nil { value = kind.suggestedCanonicalValue }
-            }
-            .accessibilityValue(valueText)
-            .accessibilityHint("Adjust to add or change this optional measurement.")
-            .accessibilityIdentifier(kind.identifier)
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("\(range.lowerBound.formatted(.number.precision(.fractionLength(0...1)))) \(kind.unit(units))")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(kind.title).font(.headline)
+                    Text(valueText).font(.subheadline).foregroundStyle(.secondary).monospacedDigit()
+                        .accessibilityIdentifier("\(kind.identifier)Value")
+                }
                 Spacer()
-                Text("\(range.upperBound.formatted(.number.precision(.fractionLength(0...1)))) \(kind.unit(units))")
-            }.font(.caption).foregroundStyle(.secondary).accessibilityHidden(true)
-            HStack {
-                adjustmentButton("minus", direction: -1)
-                Text(value == nil ? "Slide to add" : "Fine tune").font(.caption).foregroundStyle(.secondary)
-                adjustmentButton("plus", direction: 1)
-                Spacer(minLength: 8)
                 if value != nil {
                     Button("Clear") { value = nil }.frame(minWidth: 44, minHeight: 44)
                         .accessibilityLabel("Clear \(kind.title.lowercased())")
                         .accessibilityIdentifier("\(kind.identifier)Clear")
+                } else {
+                    Button("Add") { value = kind.suggestedCanonicalValue }
+                        .frame(minWidth: 44, minHeight: 44)
+                        .accessibilityLabel("Add \(kind.title.lowercased())")
+                        .accessibilityIdentifier("\(kind.identifier)Add")
                 }
             }
-            Button(expanded ? "Use compact range" : "Need a wider range?") { expanded.toggle() }
-                .font(.footnote).frame(minHeight: 44)
-                .accessibilityIdentifier("\(kind.identifier)Range")
+            if value != nil {
+                Picker(kind.title, selection: Binding(get: {
+                    kind.index(for: value ?? kind.suggestedCanonicalValue, system: units)
+                }, set: { index in
+                    value = kind.value(at: index, system: units)
+                })) {
+                    ForEach(kind.indices(system: units), id: \.self) { index in
+                        Text(kind.formatted(kind.value(at: index, system: units), system: units)).tag(index)
+                    }
+                }
+                .pickerStyle(.wheel).labelsHidden()
+                .frame(height: wheelHeight).clipped()
+                .id(units)
+                .accessibilityLabel(kind.title)
+                .accessibilityHint("Swipe up or down to change this optional measurement.")
+                .accessibilityIdentifier(kind.identifier)
+            }
         }
         .padding(.vertical, 8)
         .buttonStyle(.borderless)
-    }
-
-    private func adjustmentButton(_ symbol: String, direction: Double) -> some View {
-        Button {
-            value = kind.adjusted(value, system: units, direction: direction)
-        } label: {
-            Image(systemName: symbol).frame(minWidth: 44, minHeight: 44)
-                .background(.quaternary, in: Circle())
-        }
-        .accessibilityLabel("\(direction < 0 ? "Decrease" : "Increase") \(kind.title.lowercased())")
-        .accessibilityIdentifier("\(kind.identifier)\(direction < 0 ? "Decrease" : "Increase")")
     }
 }
 
 struct ProfileCycleFields: View {
     @Binding var profile: LocalProfile
     var body: some View {
-        Picker("Usually predictable?", selection: $profile.predictability) {
-            ForEach(CyclePredictability.allCases, id: \.self) { Text($0.title).tag($0) }
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Usually predictable?").font(.headline)
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(CyclePredictability.allCases, id: \.self) { choice in
+                        SelectionChip(title: choice.title, selected: profile.predictability == choice) {
+                            profile.predictability = choice
+                        }
+                        .accessibilityIdentifier("profilePredictability_\(choice.rawValue)")
+                    }
+                }.padding(.vertical, 4)
+            }
+            .accessibilityIdentifier("profilePredictability")
         }
-        .accessibilityIdentifier("profilePredictability")
-        Picker("Typical period length", selection: $profile.typicalPeriodDays) {
-            Text("Choose days").tag(Int?.none)
-            ForEach(1...30, id: \.self) { Text("\($0) days").tag(Int?.some($0)) }
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Typical period length").font(.headline)
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(1...30, id: \.self) { days in
+                            SelectionChip(title: days == 1 ? "1 day" : "\(days) days", selected: profile.typicalPeriodDays == days) {
+                                profile.typicalPeriodDays = profile.typicalPeriodDays == days ? nil : days
+                            }
+                            .id(days)
+                            .accessibilityIdentifier("profileDuration_\(days)")
+                        }
+                    }.padding(.vertical, 4)
+                }
+                .onAppear {
+                    if let days = profile.typicalPeriodDays { proxy.scrollTo(days, anchor: .center) }
+                }
+                .accessibilityIdentifier("profileDuration")
+            }
         }
-        .accessibilityIdentifier("profileDuration")
     }
 }
 
 struct ProfileSymptomFields: View {
     @Binding var profile: LocalProfile
     var body: some View {
-        ForEach(CommonSymptom.allCases, id: \.self) { symptom in
-            ProfileChoiceRow(title: symptom.title, selected: profile.commonSymptoms.contains(symptom)) { profile.toggle(symptom) }
+        SelectionFlowLayout {
+            ForEach(CommonSymptom.allCases, id: \.self) { symptom in
+                SelectionChip(title: symptom.title, symbol: symptom.symbol, selected: profile.commonSymptoms.contains(symptom)) {
+                    profile.toggle(symptom)
+                }
                 .accessibilityIdentifier("commonSymptom_\(symptom.rawValue)")
+            }
         }
+        .accessibilityIdentifier("commonSymptoms")
     }
 }
 

@@ -1,8 +1,9 @@
 import Foundation
 import Testing
+import UIKit
 @testable import cecy
 
-nonisolated struct AppearanceAndSliderTests {
+nonisolated struct AppearanceAndMeasurementTests {
     @Test func existingPreferencesFollowDeviceWithoutLosingPrivacyChoices() throws {
         let data = Data(#"{"version":1,"lockEnabled":true,"dailyReminder":true,"windowReminder":false,"reminderHour":8,"reminderMinute":30}"#.utf8)
         let old = try JSONDecoder().decode(PrivacyPreferences.self, from: data)
@@ -17,31 +18,60 @@ nonisolated struct AppearanceAndSliderTests {
         #expect(throws: DecodingError.self) { try JSONDecoder().decode(PrivacyPreferences.self, from: invalid) }
     }
 
-    @Test func slidersKeepMeasurementsOptionalAndConvertPrecisely() {
+    @Test func wheelsKeepMeasurementsOptionalAndConvertPrecisely() {
         let profile = LocalProfile()
         for units in MeasurementSystem.allCases {
-            for kind in [MeasurementSliderKind.height, .weight] {
-                let range = kind.range(system: units, current: nil, expanded: false)
-                #expect(range.contains(kind.display(kind.suggestedCanonicalValue, system: units)))
-                let changed = kind.adjusted(nil, system: units, direction: 1)
-                let difference = kind.display(changed, system: units) - kind.display(kind.suggestedCanonicalValue, system: units)
+            for kind in [MeasurementPickerKind.height, .weight] {
+                for index in kind.indices(system: units) {
+                    let value = kind.value(at: index, system: units)
+                    #expect(kind.validCanonicalRange.contains(value))
+                    #expect(kind.index(for: value, system: units) == index)
+                }
+                let index = kind.index(for: kind.suggestedCanonicalValue, system: units)
+                let difference = kind.display(kind.value(at: index + 1, system: units), system: units)
+                    - kind.display(kind.value(at: index, system: units), system: units)
                 #expect(abs(difference - kind.step(units)) < 0.000001)
-                #expect(kind.adjusted(kind.validCanonicalRange.lowerBound, system: units, direction: -1) == kind.validCanonicalRange.lowerBound)
-                #expect(kind.adjusted(kind.validCanonicalRange.upperBound, system: units, direction: 1) == kind.validCanonicalRange.upperBound)
             }
         }
         #expect(profile.heightCentimeters == nil && profile.weightKilograms == nil)
     }
 
-    @Test func slidersIncludeExistingValuesOutsideCompactRange() {
-        for units in MeasurementSystem.allCases {
-            #expect(MeasurementSliderKind.height.range(system: units, current: 295, expanded: false)
-                .contains(MeasurementSliderKind.height.display(295, system: units)))
-            #expect(MeasurementSliderKind.weight.range(system: units, current: 260, expanded: false)
-                .contains(MeasurementSliderKind.weight.display(260, system: units)))
-            #expect(MeasurementSliderKind.weight.range(system: units, current: nil, expanded: true)
-                .contains(MeasurementSliderKind.weight.display(999, system: units)))
+    @Test func unitChangesDoNotRoundStoredMeasurements() {
+        var profile = LocalProfile()
+        profile.heightCentimeters = 170.18
+        profile.weightKilograms = 65.25
+        for _ in 0..<10 {
+            for units in MeasurementSystem.allCases {
+                profile.measurementSystem = units
+                _ = MeasurementPickerKind.height.index(for: profile.heightCentimeters!, system: units)
+                _ = MeasurementPickerKind.weight.index(for: profile.weightKilograms!, system: units)
+            }
         }
+        #expect(profile.heightCentimeters == 170.18)
+        #expect(profile.weightKilograms == 65.25)
+    }
+
+    @Test func heightUsesFeetAndInchesAndCarriesAtFootBoundaries() {
+        let height = MeasurementPickerKind.height
+        #expect(height.formatted(170.18, system: .imperial) == "5 ft 7 in")
+        #expect(height.formatted(182.88, system: .imperial) == "6 ft 0 in")
+        #expect(height.formatted(71.99 * 2.54, system: .imperial) == "6 ft 0 in")
+        #expect(height.formatted(170, system: .metric) == "170 cm")
+        for units in MeasurementSystem.allCases {
+            for kind in [MeasurementPickerKind.height, .weight] {
+                let range = kind.indices(system: units)
+                #expect(kind.index(for: kind.validCanonicalRange.lowerBound, system: units) == range.lowerBound)
+                #expect(kind.index(for: kind.validCanonicalRange.upperBound, system: units) == range.upperBound)
+            }
+        }
+    }
+
+    @MainActor @Test func symptomSymbolsExistAndMatchAcrossScreens() {
+        for symptom in SymptomKind.allCases { #expect(UIImage(systemName: symptom.symbol) != nil) }
+        for symptom in CommonSymptom.allCases { #expect(UIImage(systemName: symptom.symbol) != nil) }
+        #expect(CommonSymptom.headaches.symbol == SymptomKind.headache.symbol)
+        #expect(CommonSymptom.sleepChanges.symbol == SymptomKind.sleepQuality.symbol)
+        #expect(CommonSymptom.lowEnergy.symbol == SymptomKind.energyLevel.symbol)
     }
 
     @Test func existingAppleIdentityDefaultsToNotSignedOut() throws {

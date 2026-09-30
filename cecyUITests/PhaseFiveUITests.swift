@@ -110,16 +110,17 @@ final class PhaseFiveUITests: XCTestCase {
         app.launchEnvironment["CECY_UI_AUTH"] = "cancel"
         app.launch()
         let unlock = app.buttons["unlockCecy"]
-        XCTAssertTrue(unlock.waitForExistence(timeout: 10)); unlock.tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Authentication was cancelled")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(unlock.waitForExistence(timeout: 10))
+        XCTAssertEqual(unlock.label, "Unlock")
+        XCTAssertFalse(app.staticTexts["Cecy is locked"].exists)
+        XCTAssertFalse(app.staticTexts["Device-owner authentication"].exists)
+        XCTAssertTrue(unlock.isEnabled)
+        unlock.tap()
         XCTAssertFalse(app.buttons["logPeriod"].exists)
         app.terminate(); app.launchEnvironment["CECY_UI_AUTH"] = "success"; app.launch()
-        XCTAssertTrue(unlock.waitForExistence(timeout: 10)); unlock.tap()
+        // Launch and foreground return authenticate without a button tap.
         XCTAssertTrue(app.buttons["logPeriod"].waitForExistence(timeout: 10))
         XCUIDevice.shared.press(.home); app.activate()
-        XCTAssertTrue(unlock.waitForExistence(timeout: 10))
-        XCTAssertFalse(app.buttons["logPeriod"].exists)
-        unlock.tap()
         XCTAssertTrue(app.buttons["logPeriod"].waitForExistence(timeout: 10))
         privacy(in: app)
         app.buttons["Turn off app lock"].tap()

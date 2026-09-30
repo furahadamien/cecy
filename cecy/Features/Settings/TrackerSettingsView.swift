@@ -190,7 +190,7 @@ struct DeleteAllDataView: View {
         NavigationStack {
             SettingsForm(title: "Delete all data?") {
                 Section("What’s removed") {
-                    Label("All periods, flow, symptoms, ratings and notes", systemImage: "trash")
+                    Label("All periods, flow, symptoms, ratings, sexual activity and notes", systemImage: "trash")
                     Label("Your profile and local Apple identity", systemImage: "person.crop.circle.badge.minus")
                     Label("Reminders and temporary exports", systemImage: "bell.slash")
                     Text("Saved onboarding and old template database files are also removed. You’ll return to onboarding.")

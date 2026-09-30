@@ -78,7 +78,7 @@ struct TrackerCalendarView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Label("Recorded start or confirmed bleeding day", systemImage: "drop.fill")
                                 Label("Estimated start window · Dashed border", systemImage: "circle.dashed")
-                                Label("Recorded observation · Square marker", systemImage: "square.fill")
+                                Label("Recorded symptom or activity · Square marker", systemImage: "square.fill")
                                 Text("An underlined date is selected. Estimates are not recorded bleeding days.")
                             }
                             .font(.footnote).padding(8)
@@ -132,13 +132,18 @@ struct TrackerCalendarView: View {
 
     private func record(on day: LocalDay) -> Period? { session.snapshot.periods.first { $0.contains(day) } }
 
+    private func observationCount(on day: LocalDay) -> Int {
+        session.snapshot.symptoms.filter { $0.day == day }.count
+            + session.snapshot.sexualActivities.filter { $0.day == day }.count
+    }
+
     private func status(_ day: LocalDay) -> String {
         var parts: [String] = []
         if day == today { parts.append("Today") }
         if let period = record(on: day) {
             parts.append(period.start == day ? "Recorded period start" : "Confirmed bleeding day")
         } else { parts.append("No recorded period") }
-        let count = session.snapshot.symptoms.filter { $0.day == day }.count
+        let count = observationCount(on: day)
         if count > 0 { parts.append("\(count) recorded observations") }
         if overview.estimate?.contains(day) == true { parts.append("Possible next period start; estimate") }
         return parts.joined(separator: ". ")
@@ -158,7 +163,7 @@ struct TrackerCalendarView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "drop.fill").opacity(recorded ? 1 : 0)
                         Image(systemName: "circle.fill").opacity(day == today ? 1 : 0)
-                        Image(systemName: "square.fill").opacity(session.snapshot.symptoms.contains { $0.day == day } ? 1 : 0)
+                        Image(systemName: "square.fill").opacity(observationCount(on: day) > 0 ? 1 : 0)
                     }
                     .font(.system(size: 8)).accessibilityHidden(true)
                 }
@@ -210,10 +215,17 @@ struct TrackerCalendarView: View {
                 }
                 .buttonStyle(.borderedProminent).accessibilityIdentifier("calendarLogPeriod")
             }
-            if selection <= today { SymptomLogButton(session: session, day: selection) }
+            if selection <= today {
+                SymptomLogButton(session: session, day: selection)
+                SexualActivityLogButton(session: session, day: selection)
+            }
             ForEach(session.snapshot.symptoms.filter { $0.day == selection }) { entry in
                 Divider()
                 SymptomRecordView(session: session, entry: entry)
+            }
+            ForEach(session.snapshot.sexualActivities.filter { $0.day == selection }) { entry in
+                Divider()
+                SexualActivityRecordView(session: session, entry: entry)
             }
         }
         .accessibilityElement(children: .contain)

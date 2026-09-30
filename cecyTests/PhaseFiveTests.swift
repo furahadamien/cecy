@@ -89,7 +89,9 @@ nonisolated struct PhaseFiveDomainTests {
     var suspend = false
     var pending: CheckedContinuation<Bool, Never>?
     var cancellations = 0
+    var attempts = 0
     func authenticate(reason: String) async -> Bool {
+        attempts += 1
         if suspend { return await withCheckedContinuation { pending = $0 } }
         return result
     }
@@ -174,6 +176,42 @@ nonisolated struct PhaseFiveDomainTests {
         privacy.wentToBackground(); session.refresh()
         #expect(privacy.isLocked && opened == 1)
         #expect(session.save([]) != nil && session.deleteAll() != nil)
+    }
+
+    @Test func automaticUnlockAttemptsOnceAndManualRetryRemainsAvailable() async {
+        let store = TestPreferences(); store.value.lockEnabled = true
+        let auth = TestAuthentication(); auth.result = false
+        let privacy = controller(store, auth: auth); privacy.start()
+        await privacy.unlockAutomatically()
+        #expect(privacy.isLocked && auth.attempts == 1)
+        await privacy.unlockAutomatically()
+        #expect(privacy.isLocked && auth.attempts == 1)
+        auth.result = true
+        await privacy.unlock()
+        #expect(privacy.canAccess && auth.attempts == 2)
+        privacy.lockNow()
+        await privacy.unlockAutomatically()
+        #expect(privacy.isLocked && auth.attempts == 2)
+        privacy.wentToBackground()
+        await privacy.unlockAutomatically()
+        #expect(privacy.canAccess && auth.attempts == 3)
+    }
+
+    @Test func backgroundInvalidatesAutomaticAuthentication() async {
+        let store = TestPreferences(); store.value.lockEnabled = true
+        let auth = TestAuthentication(); auth.suspend = true
+        let privacy = controller(store, auth: auth); privacy.start()
+        let task = Task { await privacy.unlockAutomatically() }
+        await waitUntil { auth.pending != nil }
+        #expect(auth.pending != nil)
+        await privacy.unlockAutomatically()
+        #expect(auth.attempts == 1)
+        privacy.wentToBackground()
+        auth.finish(true); await task.value
+        #expect(privacy.isLocked && !privacy.isAuthenticating)
+        auth.suspend = false
+        await privacy.unlockAutomatically()
+        #expect(privacy.canAccess && auth.attempts == 2)
     }
 
     @Test func staleAuthenticationCannotUnlockOrEnableLock() async throws {

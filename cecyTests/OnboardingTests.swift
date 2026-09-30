@@ -184,6 +184,45 @@ nonisolated struct OnboardingDomainTests {
         #expect(session.snapshot == TrackerSnapshot() && account.identity == nil)
     }
 
+    @Test func setupPresentationFinishesBeforePublishingCompletion() async throws {
+        let draft = try onboardingFixture()
+        let repository = try SwiftDataPeriodRepository.inMemory()
+        let account = AppleAccount()
+        try account.link(userID: "synthetic", profileID: draft.profile.id, protectsExistingProfile: false)
+        let session = TrackerSession(repository: { repository }, clock: { self.today.formattingDate }, account: account)
+        session.load()
+        let clock = ContinuousClock()
+        let start = clock.now
+        #expect(await session.finishSetup(draft, minimumPresentation: .milliseconds(40)) == nil)
+        #expect(start.duration(to: clock.now) >= .milliseconds(40))
+        #expect(session.snapshot.onboardingCompletedAt != nil)
+        #expect(session.setupStage == nil && !session.isSaving)
+        #expect(session.overview?.estimate != nil)
+    }
+
+    @Test func cancellationDuringPresentationDoesNotCompleteOnboarding() async throws {
+        let draft = try onboardingFixture()
+        let repository = try SwiftDataPeriodRepository.inMemory()
+        let account = AppleAccount()
+        try account.link(userID: "synthetic", profileID: draft.profile.id, protectsExistingProfile: false)
+        let session = TrackerSession(repository: { repository }, clock: { self.today.formattingDate }, account: account)
+        session.load()
+        let task = Task { await session.finishSetup(draft, minimumPresentation: .seconds(30)) }
+        defer { task.cancel() }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while session.setupStage != .finishing && ContinuousClock.now < deadline { await Task.yield() }
+        try #require(session.setupStage == .finishing)
+        #expect(session.snapshot.onboardingCompletedAt == nil)
+        #expect(try repository.load().onboardingCompletedAt == nil)
+        session.cancelSetup()
+        task.cancel()
+        #expect(await task.value != nil)
+        #expect(session.setupStage == nil && !session.isSaving)
+        #expect(try repository.load().onboardingCompletedAt == nil)
+        #expect(await session.finishSetup(draft) == nil)
+        #expect(session.snapshot.periods.count == 4)
+    }
+
     @Test func missingIdentityCannotPersistOnboarding() async throws {
         let repository = try SwiftDataPeriodRepository.inMemory()
         let session = TrackerSession(repository: { repository }, clock: { self.today.formattingDate })
