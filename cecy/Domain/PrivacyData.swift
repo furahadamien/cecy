@@ -13,6 +13,8 @@ nonisolated struct PrivacyPreferences: Codable, Equatable, Sendable {
     var reminderMinute = 0
     // Missing in earlier preference files means follow the device, not a reset of privacy choices.
     var appearance: AppAppearance?
+    // Missing in legacy files means no AI consent, never an implicit opt-in.
+    var aiConsent: AIConsentRecord?
 
     func validate() throws {
         guard version == 1, (0...23).contains(reminderHour), (0...59).contains(reminderMinute) else { throw TrackingError.invalidData }
@@ -76,6 +78,7 @@ nonisolated enum TrackerExport {
         let commonSymptoms: [String]
         let cycleContext: [String]
         let goals: [String]
+        let wellnessPreferences: WellnessRecord?
 
         init(_ profile: LocalProfile) throws {
             try profile.validate()
@@ -89,6 +92,24 @@ nonisolated enum TrackerExport {
             commonSymptoms = profile.commonSymptoms.map(\.rawValue).sorted()
             cycleContext = profile.cycleContext.map(\.rawValue).sorted()
             goals = profile.goals.map(\.rawValue).sorted()
+            wellnessPreferences = profile.wellnessPreferences.map(WellnessRecord.init)
+        }
+    }
+    struct WellnessRecord: Codable {
+        let activityLevel: String?
+        let preferredExercises: [String]?
+        let dietaryPreference: String?
+        let foodAllergyStatus: String
+        let foodAllergies: [String]
+        let goals: [String]?
+
+        init(_ preferences: WellnessPreferences) {
+            activityLevel = preferences.activityLevel?.rawValue
+            preferredExercises = preferences.preferredExercises.map { $0.map(\.rawValue).sorted() }
+            dietaryPreference = preferences.dietaryPreference?.rawValue
+            foodAllergyStatus = preferences.foodAllergyStatus.rawValue
+            foodAllergies = preferences.foodAllergies.sorted()
+            goals = preferences.goals.map { $0.map(\.rawValue).sorted() }
         }
     }
     struct PeriodRecord: Codable {
@@ -127,7 +148,8 @@ nonisolated enum TrackerExport {
         try SymptomValidation.validate(snapshot.symptoms)
         try SexualActivityValidation.validate(snapshot.sexualActivities)
         guard generatedAt.timeIntervalSinceReferenceDate.isFinite else { throw TrackingError.invalidData }
-        let document = Document(formatVersion: includeSexualActivity ? 3 : (includeProfile ? 2 : 1), generatedAt: generatedAt, includesPrivateNotes: includeNotes,
+        let version = includeProfile && snapshot.profile?.wellnessPreferences != nil ? 4 : (includeSexualActivity ? 3 : (includeProfile ? 2 : 1))
+        let document = Document(formatVersion: version, generatedAt: generatedAt, includesPrivateNotes: includeNotes,
             periods: snapshot.periods.sorted { $0.start < $1.start }.map {
                 PeriodRecord(id: $0.id, start: civilDate($0.start), end: $0.end.map(civilDate), flow: $0.flow?.rawValue,
                              notes: includeNotes ? $0.notes : nil, createdAt: $0.createdAt, updatedAt: $0.updatedAt)

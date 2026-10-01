@@ -31,6 +31,16 @@ struct ProfileSettingsView: View {
                     Text("Typical length is your own summary, not a measured average. Edit historical dates in Calendar or Insights to update predictions.")
                 }
                 Section {
+                    NavigationLink {
+                        WellnessPreferencesView(preferences: $profile.wellnessPreferences)
+                    } label: {
+                        Label("Wellness preferences", systemImage: "leaf")
+                    }
+                    .accessibilityIdentifier("profileWellness")
+                } footer: {
+                    Text("Optional activity, exercise, food, allergy and wellness choices. Included in profile exports and explicit, consented AI wellness requests; not used for predictions.")
+                }
+                Section {
                     DisclosureGroup("Common symptoms (\(profile.commonSymptoms.count))") { ProfileSymptomFields(profile: $profile) }
                     DisclosureGroup("Cycle context (\(profile.cycleContext.count))") { ProfileContextFields(profile: $profile) }
                     DisclosureGroup("Tracking goals (\(profile.goals.count))") { ProfileGoalFields(profile: $profile) }
@@ -44,7 +54,7 @@ struct ProfileSettingsView: View {
                     Text("Reminder changes are saved on their own screen. Save your profile edits here.")
                 }
                 Section {
-                    Label("Your health data stays on your device.", systemImage: "iphone")
+                    Label("Your records are stored on this device. Optional AI sends only the information you choose to submit.", systemImage: "iphone")
                         .font(.footnote)
                     Text("No cloud backup or cross-device restore yet. Existing users can add a profile without re-entering period history.")
                         .font(.footnote).foregroundStyle(.secondary)

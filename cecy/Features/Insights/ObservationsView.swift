@@ -31,7 +31,13 @@ struct ObservationsView: View {
                 .font(.footnote).foregroundStyle(.secondary)
             }
             .frame(minHeight: 44)
-            ForEach(session.insights) { InsightCard(insight: $0) }
+            ForEach(session.insights) { insight in
+                InsightCard(insight: insight)
+                NavigationLink {
+                    AIFeatureView(session: session, feature: .insight(insight))
+                } label: { Label("Explain this observation", systemImage: "sparkles").frame(minHeight: 44) }
+                .accessibilityIdentifier("explainInsight_\(insight.id)")
+            }
             TrackerCard {
                 Text("Recorded-day counts · All history").font(.headline)
                 Text("Counts describe days logged, not how often you experienced a symptom. Sleep and energy are ratings, not adverse symptoms by themselves.")
@@ -48,7 +54,7 @@ struct ObservationsView: View {
                     TrackerCard { SymptomRecordView(session: session, entry: entry) }
                 }
             }
-            Text("All analysis stays on your device. These are descriptive observations, not medical diagnoses. Pattern policy v\(CycleInsightEngine.policyVersion).")
+            Text("These facts are calculated on your device. Optional AI explanations send selected facts only after consent. These are descriptive observations, not medical diagnoses. Pattern policy v\(CycleInsightEngine.policyVersion).")
                 .font(.footnote).foregroundStyle(.secondary)
         }
     }

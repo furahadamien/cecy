@@ -86,7 +86,7 @@ struct PrivacyDetails: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Stored on this device", systemImage: "hand.raised")
                 .font(.headline)
-            Text("Your health data stays on your device. Apple sign-in identifies you without uploading your health records. No cloud sync, AI, analytics or Apple Health connection.")
+            Text("Your records are stored on this device. Apple sign-in does not upload them. Apple Health import is optional and read-only. Optional AI sends selected information to Cecy’s Azure service and OpenAI only after separate consent and an explicit request. No health-data cloud sync or analytics.")
             Text("Records and preferences are excluded from future system backups. Earlier backups and shared exports are not erased by local deletion. Apple sign-in cannot restore your records on another device yet. App locking, export and discreet reminders are in Settings.")
                 .font(.footnote).foregroundStyle(.secondary)
         }

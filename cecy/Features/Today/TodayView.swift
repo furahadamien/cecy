@@ -55,6 +55,17 @@ struct TodayView: View {
             }
             Text("A count from recorded dates—not an estimate of cycle phase. Missing records can affect the result.")
                 .font(.footnote).foregroundStyle(.secondary)
+            TrackerCard {
+                NavigationLink {
+                    AIFeatureView(session: session, feature: .wellness)
+                } label: {
+                    Label("For today · Optional wellness suggestions", systemImage: "sparkles")
+                        .frame(minHeight: 44)
+                }
+                .accessibilityIdentifier("dailyWellnessAI")
+                Text("Review today’s symptoms and your preferences before requesting food, movement and recovery ideas.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
             if let insight = session.insights.first { InsightCard(insight: insight) }
             if let message = session.insightMessage { InlineError(message: message) }
             if let latest = session.snapshot.periods.last {

@@ -18,6 +18,11 @@ final class TrackerSession {
     let privacy: TrackerPrivacy
     let account: AppleAccount
     let healthImport: HealthImportReview
+    let ai: AIRequestCoordinator
+    var canUseAI: Bool {
+        privacy.canAccess && privacy.aiEnabled && !account.requiresSignIn && phase == .loaded
+            && snapshot.onboardingCompletedAt != nil && !isSaving
+    }
     enum SetupStage: String {
         case saving = "Saving your profile"
         case analyzing = "Analyzing your cycles"
@@ -37,16 +42,27 @@ final class TrackerSession {
     init(repository: @escaping @MainActor () throws -> any PeriodRepository = { try SwiftDataPeriodRepository.production() },
          clock: @escaping () -> Date = Date.init, timeZone: @escaping () -> TimeZone = { .current },
          privacy: TrackerPrivacy? = nil, account: AppleAccount? = nil,
-         healthReader: (any HealthFlowReading)? = nil) {
+         healthReader: (any HealthFlowReading)? = nil, aiService: any AIService = UnavailableAIService()) {
         makeRepository = repository
         self.clock = clock
         zone = timeZone
         self.privacy = privacy ?? .isolated()
         self.account = account ?? AppleAccount()
         healthImport = HealthImportReview(reader: healthReader ?? UnavailableHealthReader())
+        ai = AIRequestCoordinator(service: aiService)
+    }
+
+    func performAI(_ request: AIRequest) {
+        ai.begin(request) { [weak self] in self?.canUseAI == true }
+    }
+
+    func setAIEnabled(_ enabled: Bool) -> String? {
+        if !enabled { ai.invalidate() }
+        return privacy.setAIEnabled(enabled, now: clock())
     }
 
     func load() {
+        ai.invalidate()
         guard privacy.canAccess, !account.requiresSignIn else { return }
         phase = .loading
         do {
@@ -75,6 +91,7 @@ final class TrackerSession {
         catch { return "Logout couldn’t be saved securely. You are still signed in. Try again." }
         cancelSetup()
         healthImport.stop()
+        ai.invalidate()
         privacy.cleanupExport()
         snapshot = TrackerSnapshot()
         today = nil
@@ -197,6 +214,7 @@ final class TrackerSession {
     }
 
     private func publish(_ snapshot: TrackerSnapshot, today: LocalDay) {
+        ai.invalidate()
         self.snapshot = snapshot
         self.today = today
         overview = CycleCalculator.overview(periods: snapshot.periods, today: today, engine: EvidencePredictionEngine())
@@ -261,6 +279,7 @@ final class TrackerSession {
 
     func deleteAllAndWait() async -> String? {
         guard privacy.canAccess, !isSaving else { return "Unlock Cecy and try again." }
+        ai.invalidate()
         healthImport.stop()
         if account.requiresSignIn { return await resetWhileSignedOut() }
         do {
@@ -292,6 +311,7 @@ final class TrackerSession {
     }
 
     func deleteAll() -> String? {
+        ai.invalidate()
         healthImport.stop()
         return mutate(confirmation: nil,
                 failure: "Deletion did not finish. Tracker records remain unchanged; reminders or the local Apple link may already be cleared. Please try again.") { repository, _, _ in
@@ -314,6 +334,8 @@ final class TrackerSession {
             self.confirmation = confirmation
             return nil
         } catch let error as ProfileError {
+            return error.localizedDescription
+        } catch let error as WellnessValidationError {
             return error.localizedDescription
         } catch let error as SexualActivityError {
             return error.localizedDescription
@@ -338,13 +360,29 @@ final class TrackerSession {
             return TrackerSession(repository: {
                 let repository = try SwiftDataPeriodRepository.local(url: url)
                 let fixture = ProcessInfo.processInfo.environment["CECY_UI_FIXTURE"]
-                if fixture == "history" || fixture == "patterns",
+                if fixture == "history" || fixture == "patterns" || fixture == "wellness" || fixture == "ai",
                    try repository.load().onboardingCompletedAt == nil {
-                    let keys = fixture == "patterns" ? [20260410, 20260509, 20260607, 20260705, 20260804, 20260902]
+                    let keys = fixture == "patterns" || fixture == "ai" ? [20260410, 20260509, 20260607, 20260705, 20260804, 20260902]
                         : [20260607, 20260705, 20260804, 20260902]
-                    let periods = try keys.map { Period(start: try LocalDay(key: $0)) }
+                    let periods = try keys.map { key in
+                        let start = try LocalDay(key: key)
+                        return Period(start: start, end: fixture == "ai" ? try start.adding(days: 4) : nil)
+                    }
                     _ = try repository.add(periods, completingOnboarding: true, today: LocalDay(key: 20260929), now: fixed)
-                    if fixture == "patterns" {
+                    if fixture == "wellness" || fixture == "ai" {
+                        var profile = LocalProfile()
+                        profile.preferredName = "Synthetic Alex"
+                        profile.birthDayKey = 19950512
+                        profile.typicalPeriodDays = 5
+                        if fixture == "ai" {
+                            profile.wellnessPreferences = WellnessPreferences(activityLevel: .moderatelyActive, preferredExercises: [.walking],
+                                dietaryPreference: .vegetarian, foodAllergyStatus: .listed, foodAllergies: ["Peanuts"], goals: [.manageSymptoms])
+                            _ = try repository.addSymptoms([SymptomEntry(day: LocalDay(key: 20260929), kind: .cramps, value: 3)],
+                                                           today: LocalDay(key: 20260929), now: fixed)
+                        }
+                        _ = try repository.saveProfile(profile, today: LocalDay(key: 20260929))
+                    }
+                    if fixture == "patterns" || fixture == "ai" {
                         for period in periods {
                             let entry = try SymptomEntry(day: period.start.adding(days: -1), kind: .headache)
                             _ = try repository.saveSymptom(entry, editing: false, today: LocalDay(key: 20260929), now: fixed)
@@ -353,10 +391,11 @@ final class TrackerSession {
                 }
                 return repository
             }, clock: { fixed }, timeZone: { TimeZone(secondsFromGMT: 0)! }, privacy: .testing(id: id), account: .testing(id: id),
-               healthReader: FixtureHealthReader(mode: ProcessInfo.processInfo.environment["CECY_UI_HEALTH"] ?? "unavailable"))
+               healthReader: FixtureHealthReader(mode: ProcessInfo.processInfo.environment["CECY_UI_HEALTH"] ?? "unavailable"),
+               aiService: FixtureAIService(mode: ProcessInfo.processInfo.environment["CECY_UI_AI"] ?? "unavailable"))
         }
         #endif
-        return TrackerSession(privacy: .production(), account: .production(), healthReader: HealthKitService())
+        return TrackerSession(privacy: .production(), account: .production(), healthReader: HealthKitService(), aiService: RemoteAIService())
     }
 }
 
