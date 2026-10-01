@@ -67,8 +67,8 @@ nonisolated struct AppearanceAndMeasurementTests {
     }
 
     @MainActor @Test func symptomSymbolsExistAndMatchAcrossScreens() {
-        for symptom in SymptomKind.allCases { #expect(UIImage(systemName: symptom.symbol) != nil) }
-        for symptom in CommonSymptom.allCases { #expect(UIImage(systemName: symptom.symbol) != nil) }
+        for symptom in SymptomKind.allCases { #expect(UIImage(systemName: symptom.symbol) != nil, "Missing symbol: \(symptom.symbol)") }
+        for symptom in CommonSymptom.allCases { #expect(UIImage(systemName: symptom.symbol) != nil, "Missing symbol: \(symptom.symbol)") }
         #expect(CommonSymptom.headaches.symbol == SymptomKind.headache.symbol)
         #expect(CommonSymptom.sleepChanges.symbol == SymptomKind.sleepQuality.symbol)
         #expect(CommonSymptom.lowEnergy.symbol == SymptomKind.energyLevel.symbol)

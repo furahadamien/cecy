@@ -164,7 +164,11 @@ nonisolated struct SexualActivityDomainTests {
         let repository = try SwiftDataPeriodRepository.inMemory()
         let periods = try [20260607, 20260705, 20260804, 20260902].map { Period(start: try LocalDay(key: $0)) }
         _ = try repository.add(periods, completingOnboarding: true, today: today, now: now)
-        let privacy = TrackerPrivacy.isolated()
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let privacy = TrackerPrivacy(storage: MemoryPrivacyPreferences(), authentication: FixedDeviceAuthentication(succeeds: true),
+                                     exports: ProtectedExportFiles(directory: directory), delivery: MemoryReminderDelivery())
+        privacy.start()
         let session = TrackerSession(repository: { repository }, clock: { self.now }, timeZone: { .gmt }, privacy: privacy)
         session.load()
         let overview = session.overview
@@ -174,6 +178,7 @@ nonisolated struct SexualActivityDomainTests {
         #expect(session.overview == overview && session.insights == insights)
         let saved = session.snapshot
         await privacy.setLockEnabled(true)
+        #expect(privacy.preferences.lockEnabled)
         privacy.lockNow()
         #expect(!privacy.canAccess)
         #expect(session.saveSexualActivity(entry, editing: true) != nil)

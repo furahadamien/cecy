@@ -55,7 +55,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
 
     static func local(url: URL, clearLegacyData: @escaping () throws -> Void = {}) throws -> SwiftDataPeriodRepository {
         try ProtectedFiles.directory(url.deletingLastPathComponent(), excludeFromBackup: true)
-        let schema = Schema(versionedSchema: TrackerSchemaV5.self)
+        let schema = Schema(versionedSchema: TrackerSchemaV6.self)
         let configuration = ModelConfiguration("CecyLocal", schema: schema, url: url, cloudKitDatabase: .none)
         return try SwiftDataPeriodRepository(container: ModelContainer(for: schema, migrationPlan: TrackerMigrationPlan.self,
                                                                        configurations: [configuration]), clearLegacyData: clearLegacyData)
@@ -75,7 +75,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
     }
 
     static func inMemory() throws -> SwiftDataPeriodRepository {
-        let schema = Schema(versionedSchema: TrackerSchemaV5.self)
+        let schema = Schema(versionedSchema: TrackerSchemaV6.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         return try SwiftDataPeriodRepository(container: ModelContainer(for: schema, migrationPlan: TrackerMigrationPlan.self,
                                                                        configurations: [configuration]))
@@ -96,9 +96,12 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         guard profiles.count <= 1 else { throw TrackingError.invalidData }
         let activities = try context.fetch(FetchDescriptor<TrackerSchemaV5.SexualActivityRecord>()).map { try $0.value() }
         try SexualActivityValidation.validate(activities)
+        let imports = try context.fetch(FetchDescriptor<TrackerSchemaV6.HealthImportRecord>()).map { try $0.value() }
+        guard Set(imports.map(\.id)).count == imports.count else { throw TrackingError.invalidData }
         return TrackerSnapshot(periods: periods, onboardingCompletedAt: states.first?.onboardingCompletedAt,
                                symptoms: SymptomValidation.sorted(symptoms), profile: try profiles.first?.value(),
-                               sexualActivities: SexualActivityValidation.sorted(activities))
+                               sexualActivities: SexualActivityValidation.sorted(activities),
+                               healthImports: imports.sorted { $0.id.uuidString < $1.id.uuidString })
     }
 
     private func writeProfile(_ profile: LocalProfile) throws {
@@ -337,6 +340,22 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         } catch { context.rollback(); throw error }
     }
 
+    func importHealthStart(_ sample: HealthFlowSample, confirmedStart: LocalDay,
+                           today: LocalDay, now: Date, timeZone: TimeZone) throws -> TrackerSnapshot {
+        var candidate = try load()
+        let (period, receipt) = try HealthImportPolicy.prepare(sample: sample, confirmedStart: confirmedStart,
+                                                               existing: candidate, today: today, now: now, timeZone: timeZone)
+        do {
+            let record = try TrackerSchemaV6.HealthImportRecord(receipt)
+            context.insert(TrackerSchemaV2.PeriodRecord(period))
+            context.insert(record)
+            try saveContext(context)
+            candidate.periods = (candidate.periods + [period]).sorted { $0.start < $1.start }
+            candidate.healthImports = (candidate.healthImports + [receipt]).sorted { $0.id.uuidString < $1.id.uuidString }
+            return candidate
+        } catch { context.rollback(); throw error }
+    }
+
     func deleteAll() throws -> TrackerSnapshot {
         do {
             // Fetch before deleting anything. Reset also works for malformed domain records.
@@ -345,12 +364,14 @@ final class SwiftDataPeriodRepository: PeriodRepository {
             let symptoms = try context.fetch(FetchDescriptor<TrackerSchemaV3.SymptomRecord>())
             let profiles = try context.fetch(FetchDescriptor<TrackerSchemaV4.ProfileRecord>())
             let activities = try context.fetch(FetchDescriptor<TrackerSchemaV5.SexualActivityRecord>())
+            let imports = try context.fetch(FetchDescriptor<TrackerSchemaV6.HealthImportRecord>())
             try clearLegacyData()
             records.forEach { context.delete($0) }
             states.forEach { context.delete($0) }
             symptoms.forEach { context.delete($0) }
             profiles.forEach { context.delete($0) }
             activities.forEach { context.delete($0) }
+            imports.forEach { context.delete($0) }
             try saveContext(context)
             return TrackerSnapshot()
         } catch {

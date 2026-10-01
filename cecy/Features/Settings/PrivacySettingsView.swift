@@ -44,6 +44,7 @@ struct PrivacySettingsView: View {
                 }
                 DisclosureGroup("What’s included?") {
                     Text("Dates, record IDs, flow, observation types and ratings. Private notes are optional; predictions are not included.")
+                    Text("Accepted Apple Health period dates are included. Health sample identifiers and source metadata are not exported.")
                     Text("Sexual activity is excluded unless you turn it on above. Activity notes also require Include private notes.")
                     Text("Personal profile is optional and includes your name, birth date, measurements and preferences. Apple identity is never exported.")
                     Text("JSON is a readable data file. Importing it back into Cecy is not supported.")
@@ -92,6 +93,7 @@ private struct StorageSettingsInfoView: View {
             Section("System backups") {
                 Text("Local records, your profile and preferences are excluded from future system backups. Earlier backups may still contain data. Deleting data in Cecy does not erase earlier backups or guarantee overwriting storage pages.")
                 Text("No cloud sync or automatic restore is available yet. Keep a trusted export if needed; importing it into Cecy is not currently supported.")
+                Text("Apple Health manages its own records and sync settings. Cecy’s read-only import and local deletion do not change those records or settings.")
             }
             Section("Exported files") {
                 Text("Temporary exports are excluded from backups and cleaned up after sharing, locking and on the next launch.")
