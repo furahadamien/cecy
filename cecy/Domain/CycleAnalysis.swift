@@ -140,6 +140,7 @@ nonisolated struct TrackerSnapshot: Equatable, Sendable {
     var symptoms: [SymptomEntry] = []
     var profile: LocalProfile?
     var sexualActivities: [SexualActivityEntry] = []
+    var healthImports: [HealthImportReceipt] = []
 }
 
 @MainActor
@@ -157,4 +158,14 @@ protocol PeriodRepository {
     func saveProfile(_ profile: LocalProfile, today: LocalDay) throws -> TrackerSnapshot
     func prepareOnboarding(_ draft: OnboardingDraft, today: LocalDay) throws -> TrackerSnapshot
     func completeOnboarding(profileID: UUID, today: LocalDay, now: Date) throws -> TrackerSnapshot
+    func importHealthStart(_ sample: HealthFlowSample, confirmedStart: LocalDay,
+                           today: LocalDay, now: Date, timeZone: TimeZone) throws -> TrackerSnapshot
+}
+
+extension PeriodRepository {
+    // Older test repositories do not gain an implicit, non-atomic import implementation.
+    func importHealthStart(_ sample: HealthFlowSample, confirmedStart: LocalDay,
+                           today: LocalDay, now: Date, timeZone: TimeZone) throws -> TrackerSnapshot {
+        throw HealthImportError.unavailable
+    }
 }

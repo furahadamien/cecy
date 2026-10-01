@@ -21,10 +21,12 @@ import XCTest
     }
 
     static func birthday(in app: XCUIApplication) {
+        let keyboardReturn = app.keyboards.buttons["Return"]
+        if keyboardReturn.exists && keyboardReturn.isHittable { keyboardReturn.tap() }
         reveal(app.buttons["profileBirthday"], in: app)
         app.buttons["profileBirthday"].tap()
         let wheels = app.pickerWheels
-        XCTAssertTrue(wheels.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(wheels.firstMatch.waitForExistence(timeout: 5), app.debugDescription)
         wheels.element(boundBy: 2).adjust(toPickerWheelValue: "1995")
         wheels.element(boundBy: 0).adjust(toPickerWheelValue: "May")
         wheels.element(boundBy: 1).adjust(toPickerWheelValue: "12")
@@ -34,9 +36,15 @@ import XCTest
     static func choose(_ identifier: String, inRow row: String, app: XCUIApplication) {
         let choice = app.buttons[identifier]
         let list = app.scrollViews[row]
+        XCTAssertTrue(list.waitForExistence(timeout: 5))
+        reveal(list, in: app)
+        XCTAssertTrue(choice.waitForExistence(timeout: 5))
         for _ in 0..<15 {
             if choice.isHittable { break }
-            list.swipeLeft()
+            let moveRight = choice.frame.midX < list.frame.minX
+            let start = list.coordinate(withNormalizedOffset: CGVector(dx: moveRight ? 0.25 : 0.75, dy: 0.5))
+            let end = list.coordinate(withNormalizedOffset: CGVector(dx: moveRight ? 0.75 : 0.25, dy: 0.5))
+            start.press(forDuration: 0.1, thenDragTo: end)
         }
         XCTAssertTrue(choice.isHittable, app.debugDescription)
         XCTAssertGreaterThanOrEqual(choice.frame.height, 44)

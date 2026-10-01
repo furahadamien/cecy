@@ -4,5 +4,7 @@
 <dict>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Use Face ID to unlock your private Cecy records and confirm app-lock changes.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Cecy reads menstrual-flow samples when you choose Apple Health review. Confirm period starts before saving them locally. Cecy does not write to Apple Health.</string>
 </dict>
 </plist>

@@ -13,6 +13,8 @@ This document tracks the phased implementation plan derived from the product bri
 - Complete each phase's acceptance criteria before expanding scope.
 - Optional integrations may be reordered or deferred based on product validation.
 
+Authorized remaining sequence: **6 → 9A → 9B → 8 → 7**. See [phase order](PHASE_ORDER.md).
+
 ### Progress overview
 
 | Phase | Focus | Status |
@@ -24,7 +26,7 @@ This document tracks the phased implementation plan derived from the product bri
 | 4 | Prediction quality | Implemented; automated checks passed; manual acceptance pending |
 | 5 | Privacy controls, export, and reminders | Implemented; UI/Release passed; protection unit assertion unresolved |
 | Pre-6 | Four-period onboarding, local profile, Apple identity | Implemented; validation and device gates in ONBOARDING_MILESTONE.md |
-| 6 | Optional HealthKit integration | Deferred |
+| 6 | Optional HealthKit integration | Implemented; 13 Phase 6 unit / 3 focused UI checks and Release passed; full-suite/device gates open |
 | 7 | Subscriptions | Deferred |
 | 8 | Optional AI explanations | Deferred |
 | 9A | Optional personal cloud synchronization | Deferred |
@@ -49,7 +51,7 @@ This document tracks the phased implementation plan derived from the product bri
 
 ### Authorized detour before Phase 6
 
-See [Onboarding milestone](ONBOARDING_MILESTONE.md). The revised handoff requires four period starts, an editable local profile and Apple identity while retaining the existing prediction engine. Phase 6 and cloud sync remain deferred. Local records/profile and preferences are excluded from future system backups; earlier backups are not erased. Apple sign-in alone provides neither health-data backup nor cross-device recovery.
+See [Onboarding milestone](ONBOARDING_MILESTONE.md). The revised handoff requires four period starts, an editable local profile and Apple identity while retaining the existing prediction engine. The onboarding detour is implemented. Phase 6 read-only Health import is now underway; cloud sync remains deferred. Local records/profile and preferences are excluded from future system backups; earlier backups are not erased. Apple sign-in alone provides neither health-data backup nor cross-device recovery.
 
 ## Phase 0 — Confirm foundations and product rules
 
@@ -274,17 +276,19 @@ Do not combine weighting, outlier exclusion, and complex confidence scoring unle
 
 ## Phase 6 — Add optional HealthKit integration
 
+Implementation and acceptance details: [design](PHASE_6_DESIGN.md), [validation](PHASE_6_VALIDATION.md). No write or background-sync scope.
+
 **Goal:** Complement local records without making Apple Health a dependency or the only source of truth.
 
 ### Tasks
 
-- [ ] Select a narrow initial set of supported data types.
-- [ ] Request permissions only when the user enables the relevant feature.
-- [ ] Isolate HealthKit behind a dedicated service.
-- [ ] Define provenance, deduplication, conflicts, and import/export direction.
-- [ ] Prevent read/write feedback loops.
-- [ ] Explain what disabling integration or deleting data does and does not remove from Apple Health.
-- [ ] Treat unavailable reads carefully; an empty result is not proof that records do not exist.
+- [x] Select a narrow initial set of supported data types.
+- [x] Request permissions only when the user enables the relevant feature.
+- [x] Isolate HealthKit behind a dedicated service.
+- [x] Define provenance, deduplication, conflicts, and import/export direction.
+- [x] Prevent read/write feedback loops.
+- [x] Explain what disabling integration or deleting data does and does not remove from Apple Health.
+- [x] Treat unavailable reads carefully; an empty result is not proof that records do not exist.
 
 ### Completion criteria
 

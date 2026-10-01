@@ -17,6 +17,7 @@ final class TrackerSession {
     var confirmation: String?
     let privacy: TrackerPrivacy
     let account: AppleAccount
+    let healthImport: HealthImportReview
     enum SetupStage: String {
         case saving = "Saving your profile"
         case analyzing = "Analyzing your cycles"
@@ -35,12 +36,14 @@ final class TrackerSession {
 
     init(repository: @escaping @MainActor () throws -> any PeriodRepository = { try SwiftDataPeriodRepository.production() },
          clock: @escaping () -> Date = Date.init, timeZone: @escaping () -> TimeZone = { .current },
-         privacy: TrackerPrivacy? = nil, account: AppleAccount? = nil) {
+         privacy: TrackerPrivacy? = nil, account: AppleAccount? = nil,
+         healthReader: (any HealthFlowReading)? = nil) {
         makeRepository = repository
         self.clock = clock
         zone = timeZone
         self.privacy = privacy ?? .isolated()
         self.account = account ?? AppleAccount()
+        healthImport = HealthImportReview(reader: healthReader ?? UnavailableHealthReader())
     }
 
     func load() {
@@ -71,6 +74,7 @@ final class TrackerSession {
         do { try account.signOut() }
         catch { return "Logout couldn’t be saved securely. You are still signed in. Try again." }
         cancelSetup()
+        healthImport.stop()
         privacy.cleanupExport()
         snapshot = TrackerSnapshot()
         today = nil
@@ -84,6 +88,22 @@ final class TrackerSession {
         repository = nil
         phase = .loading
         return nil
+    }
+
+    func reviewAppleHealth(months: Int) {
+        healthImport.begin(months: months, now: clock(), timeZone: zone()) { [weak self] in
+            guard let self else { return false }
+            return privacy.canAccess && !account.requiresSignIn && phase == .loaded && !isSaving
+                && snapshot.onboardingCompletedAt != nil
+        }
+    }
+
+    func importHealthStart(_ sample: HealthFlowSample, confirmedStart: LocalDay) -> String? {
+        guard healthImport.contains(sample) else { return HealthImportError.interrupted.localizedDescription }
+        let mappingZone = healthImport.mappingTimeZone
+        return mutate(confirmation: "Period start imported.", failure: "Import wasn’t saved. No records were changed. Try again.") {
+            try $0.importHealthStart(sample, confirmedStart: confirmedStart, today: $1, now: $2, timeZone: mappingZone)
+        }
     }
 
     func saveProfile(_ profile: LocalProfile) -> String? {
@@ -241,6 +261,7 @@ final class TrackerSession {
 
     func deleteAllAndWait() async -> String? {
         guard privacy.canAccess, !isSaving else { return "Unlock Cecy and try again." }
+        healthImport.stop()
         if account.requiresSignIn { return await resetWhileSignedOut() }
         do {
             try privacy.prepareForReset()
@@ -271,7 +292,8 @@ final class TrackerSession {
     }
 
     func deleteAll() -> String? {
-        mutate(confirmation: nil,
+        healthImport.stop()
+        return mutate(confirmation: nil,
                 failure: "Deletion did not finish. Tracker records remain unchanged; reminders or the local Apple link may already be cleared. Please try again.") { repository, _, _ in
             try self.privacy.prepareForReset()
             try self.account.removeLocalIdentity()
@@ -294,6 +316,8 @@ final class TrackerSession {
         } catch let error as ProfileError {
             return error.localizedDescription
         } catch let error as SexualActivityError {
+            return error.localizedDescription
+        } catch let error as HealthImportError {
             return error.localizedDescription
         } catch let error as TrackingError {
             return error.localizedDescription
@@ -328,10 +352,11 @@ final class TrackerSession {
                     }
                 }
                 return repository
-            }, clock: { fixed }, timeZone: { TimeZone(secondsFromGMT: 0)! }, privacy: .testing(id: id), account: .testing(id: id))
+            }, clock: { fixed }, timeZone: { TimeZone(secondsFromGMT: 0)! }, privacy: .testing(id: id), account: .testing(id: id),
+               healthReader: FixtureHealthReader(mode: ProcessInfo.processInfo.environment["CECY_UI_HEALTH"] ?? "unavailable"))
         }
         #endif
-        return TrackerSession(privacy: .production(), account: .production())
+        return TrackerSession(privacy: .production(), account: .production(), healthReader: HealthKitService())
     }
 }
 

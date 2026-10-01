@@ -24,7 +24,7 @@ nonisolated enum SymptomKind: String, CaseIterable, Sendable {
     var symbol: String {
         switch self {
         case .cramps: "waveform.path.ecg"
-        case .headache: "head.profile"
+        case .headache: "brain.head.profile"
         case .bloating: "arrow.left.and.right"
         case .fatigue: "battery.25percent"
         case .moodChanges: "theatermasks"

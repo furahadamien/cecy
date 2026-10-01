@@ -38,10 +38,15 @@ struct TrackerSettingsView: View {
                     SettingsRow(title: "Reminders", systemImage: "bell", detail: reminderSummary)
                 }
                 .accessibilityIdentifier("reminderSettings")
+                NavigationLink { HealthImportSettingsView(session: session) } label: {
+                    SettingsRow(title: "Apple Health", systemImage: "heart.text.clipboard",
+                                detail: "Optional · Review and import")
+                }
+                .accessibilityIdentifier("healthSettings")
             } header: {
                 Text("Your preferences")
             } footer: {
-                Text("Your health data stays on your device.")
+                Text("Cecy keeps its records on this device. Optional Apple Health import is read-only.")
             }
             Section {
                 Toggle(isOn: Binding(get: {
@@ -170,7 +175,7 @@ private struct AboutCecyView: View {
                 Text("Use synthetic records for now. Device privacy and accessibility verification are still pending before public release.")
             }
             Section("On your device") {
-                Text("Apple sign-in establishes your identity. Health records and pattern calculations stay local. No cloud sync, AI, analytics or Apple Health connection.")
+                Text("Apple sign-in establishes your identity. Cecy records and pattern calculations stay local. Optional Apple Health import is read-only and requires review. No cloud sync, AI or analytics.")
                 Text("Health records and preferences are excluded from future system backups. Earlier backups and exported copies are not erased. Apple sign-in cannot restore records on another device yet.")
             }
         }
@@ -199,6 +204,7 @@ struct DeleteAllDataView: View {
                 Section {
                     Text("App lock stays on if enabled.")
                     Text("Device backups and copies saved outside Cecy are not deleted.")
+                    Text("Records in Apple Health are not deleted. Local import review history is cleared.")
                     Text("Your Apple Account and Apple’s sign-in authorization are not deleted. Manage that authorization in your Apple Account settings.")
                 } header: {
                     Text("What stays")

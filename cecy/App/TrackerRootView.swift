@@ -64,6 +64,10 @@ struct TrackerRootView: View {
         }
         .onChange(of: session.privacy.canAccess) { _, accessible in
             if accessible { session.account.reload(); session.load() }
+            else { session.healthImport.stop() }
+        }
+        .onChange(of: session.account.requiresSignIn) { _, required in
+            if required { session.healthImport.stop() }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
@@ -71,6 +75,7 @@ struct TrackerRootView: View {
                 Task { await session.privacy.unlockAutomatically() }
             }
             if phase == .background {
+                session.healthImport.stop()
                 session.cancelSetup()
                 session.account.cancelPendingAuthorization()
                 session.privacy.wentToBackground()
