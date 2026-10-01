@@ -8,6 +8,10 @@ struct CycleHistoryView: View {
     var body: some View {
         TrackerPage(title: "Insights", subtitle: "Your cycle history, from recorded starts.") {
             NavigationLink {
+                AIFeatureView(session: session, feature: .question)
+            } label: { Label("Ask about your records", systemImage: "sparkles").frame(minHeight: 44) }
+            .accessibilityIdentifier("askCecy")
+            NavigationLink {
                 ObservationsView(session: session)
             } label: {
                 Label("Observations and patterns", systemImage: "square.text.square").frame(minHeight: 44)
@@ -49,8 +53,16 @@ struct CycleHistoryView: View {
                     Text("\(interval.length) days").font(.title2.weight(.semibold))
                     Text("Start: \(DayText.full(interval.start))")
                     Text("Next start: \(DayText.full(interval.nextStart))")
+                    if session.snapshot.periods.contains(where: { $0.start == interval.start && $0.end != nil }) {
+                        NavigationLink("Your cycle summary · AI") {
+                            AIFeatureView(session: session, feature: .summary(interval.start))
+                        }
+                        .frame(minHeight: 44).accessibilityIdentifier("cycleSummaryAI_\(interval.start.key)")
+                    } else {
+                        Text("An AI summary also needs a confirmed bleeding end date.").font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
-                .accessibilityElement(children: .combine)
+                .accessibilityElement(children: .contain)
             }
             if let start = overview.latestStart {
                 TrackerCard {

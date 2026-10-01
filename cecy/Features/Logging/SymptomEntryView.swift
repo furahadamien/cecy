@@ -46,6 +46,16 @@ struct SymptomEntryView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if original == nil {
+                    Section {
+                        NavigationLink {
+                            AISymptomEntryView(session: session, day: day)
+                        } label: {
+                            Label("Describe how you feel", systemImage: "sparkles")
+                        }
+                        .accessibilityIdentifier("describeSymptoms")
+                    } footer: { Text("Optional AI with review before saving. Manual selection remains below.") }
+                }
                 Section {
                     SelectionFlowLayout {
                         ForEach(SymptomKind.allCases, id: \.self) { kind in

@@ -1,20 +1,21 @@
 # Cecy — Agreed remaining phase order
 
-September 30, 2026 · User-directed roadmap update
+October 1, 2026 · User-directed AI gateway handoff update
 
 ## Authoritative execution order
 
-**Phase 6 → Phase 9A → Phase 9B → Phase 8 → Phase 7.**
+**AI implementation resumed October 1 after the user authorized all five handoff features.** Local prerequisites are complete; all five iOS paths are implemented. The continuation run passed all 62 focused unit/storage/transport tests and all four AI UI scenarios together; Debug and a fresh unsigned iOS Release build also passed. See [PHASE_8_VALIDATION.md](PHASE_8_VALIDATION.md). No new backend or live gateway requests. Earlier wait-for-review instructions are superseded; prototype/device acceptance is not waived.
 
-This sequencing supersedes the original numerical delivery order in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). Keep phase numbers and their task definitions stable so existing references remain valid. Implement and validate one phase at a time, not all remaining phases in one change.
+The September 30 deferral of regression resolution and baseline/Phase 6 acceptance remains in effect, superseding the immediate next step in the earlier **6 → 9A → 9B → 8 → 7** sequence. The October 1 handoff supplies the deployed `cecyaiendpoints` Azure gateway and five tasks. Reuse that service; do not create a backend or select a model in the iOS client. [PHASE_8_AI_IMPLEMENTATION_PLAN.md](PHASE_8_AI_IMPLEMENTATION_PLAN.md) remains the AI plan. Its missing local data prerequisites were implemented first. The subsequent, newly authorized AI work is recorded in PHASE_8_VALIDATION.md; no live gateway requests were made during implementation. Track work and deferrals in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 | Order | Phase | Scope |
 | --- | --- | --- |
-| 1 — next | 6 | Optional HealthKit integration; preparation and proposed scope in [PHASE_6_DESIGN.md](PHASE_6_DESIGN.md) |
-| 2 | 9A | Optional personal cloud synchronization |
-| 3 | 9B | Optional partner sharing, treated as a separate project from personal synchronization |
-| 4 | 8 | Bounded, opt-in AI explanations grounded in deterministic local findings |
-| 5 — last | 7 | Subscriptions, after the preceding features and a dedicated stabilization/polish pass meet acceptance criteria |
+| Complete — local prerequisite implementation | Pre-8 | Digestive changes and optional wellness profile preferences; 45 focused unit/storage tests, three UI flows across reruns, Debug and unsigned Release builds passed; manual/baseline gates still open |
+| Implemented — focused checks passed; contract/release gates open | 8 | Existing-gateway foundation/consent, confirmed normalization, explanations, wellness, summaries and bounded questions. Live contract/prototype/device gates remain open |
+| Deferred — resume checkpoint not yet agreed | Baseline / 6 | Regression resolution and outstanding device/Phase 6 acceptance; still required before release |
+| Deferred | 9A | Optional personal cloud synchronization |
+| Deferred, after 9A | 9B | Optional partner sharing, a separate project from personal synchronization |
+| Last | 7 | Subscriptions, after preceding features and stabilization/polish meet acceptance criteria |
 
 ## Product-quality gate before subscriptions
 
@@ -41,8 +42,8 @@ These are measurable quality gates, not a promise that software can be defect-fr
 
 ## Current starting state
 
-Phase 5 and the pre–Phase 6 onboarding/UX/activity refinements are implemented and merged. Phase 6 preparation is on `phase-6`; HealthKit implementation has not started. The older implementation plan's “Phase 5 not started” and “Phase 6 deferred” status text is stale.
+Phase 5, onboarding/UX/activity refinements and Phase 6 read-only HealthKit import are implemented and merged. The user reports the existing AI gateway deployed/tested; iOS integration now implements all five tasks; focused tests are recorded in PHASE_8_VALIDATION.md, not a release sign-off. The October 1 handoff has been reconciled with SwiftData V6 and the proposed plan on `planning/phase-8-gpt`. Backend test claims do not establish iOS acceptance. Anonymous access without rate limiting/quotas remains a separate prototype hardening/release gate, not a request to implement new backend infrastructure.
 
-Outstanding iOS test execution and signed-device validation remain open; see [PHASE_5_VALIDATION.md](PHASE_5_VALIDATION.md), [ONBOARDING_MILESTONE.md](ONBOARDING_MILESTONE.md), and [PHASE_6_DESIGN.md](PHASE_6_DESIGN.md). Reordering phases does not mark those checks complete.
+Regression fixes and signed-device validation are explicitly deferred, not complete; see [PHASE_5_VALIDATION.md](PHASE_5_VALIDATION.md), [ONBOARDING_MILESTONE.md](ONBOARDING_MILESTONE.md), and [PHASE_6_VALIDATION.md](PHASE_6_VALIDATION.md). Historical full-suite results remain 113/114 unit and 19/30 UI tests passing; that full baseline has not been rerun here. Focused local-prerequisite validation is recorded separately in LOCAL_WELLNESS_PREREQUISITES.md. Reordering does not waive release gates or feature-specific testing.
 
-This change records sequencing only. It adds no capabilities, permissions, network services, AI requests, or subscription code.
+The completed local prerequisite detour added digestive-change tracking and wellness preferences without networking. Subsequent Phase 8 work adds optional, consented AI processing; it adds no cloud synchronization, backend resources or subscriptions.

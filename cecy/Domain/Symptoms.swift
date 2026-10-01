@@ -2,7 +2,7 @@ import Foundation
 
 nonisolated enum SymptomKind: String, CaseIterable, Sendable {
     case cramps, headache, bloating, fatigue, moodChanges, acne, backPain, nausea
-    case breastTenderness, sleepQuality, energyLevel, cravings
+    case breastTenderness, sleepQuality, energyLevel, cravings, digestiveChanges
 
     var title: String {
         switch self {
@@ -18,6 +18,7 @@ nonisolated enum SymptomKind: String, CaseIterable, Sendable {
         case .sleepQuality: "Sleep quality"
         case .energyLevel: "Energy level"
         case .cravings: "Cravings"
+        case .digestiveChanges: "Digestive changes"
         }
     }
 
@@ -35,6 +36,7 @@ nonisolated enum SymptomKind: String, CaseIterable, Sendable {
         case .sleepQuality: "moon.zzz"
         case .energyLevel: "bolt"
         case .cravings: "fork.knife"
+        case .digestiveChanges: "waveform.path"
         }
     }
 

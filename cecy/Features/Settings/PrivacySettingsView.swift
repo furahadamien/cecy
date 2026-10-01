@@ -13,6 +13,7 @@ struct PrivacySettingsView: View {
         @Bindable var privacy = privacy
         SettingsForm(title: "Privacy and export") {
             if let message = privacy.message { Section { InlineError(message: message) } }
+            AIPrivacySection(session: session)
             Section {
                 LabeledContent("Status") {
                     Text(privacy.preferences.lockEnabled ? "On" : "Off")
@@ -46,7 +47,7 @@ struct PrivacySettingsView: View {
                     Text("Dates, record IDs, flow, observation types and ratings. Private notes are optional; predictions are not included.")
                     Text("Accepted Apple Health period dates are included. Health sample identifiers and source metadata are not exported.")
                     Text("Sexual activity is excluded unless you turn it on above. Activity notes also require Include private notes.")
-                    Text("Personal profile is optional and includes your name, birth date, measurements and preferences. Apple identity is never exported.")
+                    Text("Personal profile is optional and includes your name, birth date, measurements and preferences, including any wellness choices and food allergies. Apple identity is never exported.")
                     Text("JSON is a readable data file. Importing it back into Cecy is not supported.")
                     Text("Leaving Cecy while sharing may cancel the export.")
                 }

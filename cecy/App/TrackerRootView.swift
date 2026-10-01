@@ -64,12 +64,16 @@ struct TrackerRootView: View {
         }
         .onChange(of: session.privacy.canAccess) { _, accessible in
             if accessible { session.account.reload(); session.load() }
-            else { session.healthImport.stop() }
+            else { session.healthImport.stop(); session.ai.invalidate() }
         }
         .onChange(of: session.account.requiresSignIn) { _, required in
-            if required { session.healthImport.stop() }
+            if required { session.healthImport.stop(); session.ai.invalidate() }
+        }
+        .onChange(of: session.privacy.aiEnabled) { _, enabled in
+            if !enabled { session.ai.invalidate() }
         }
         .onChange(of: scenePhase) { _, phase in
+            if phase != .active { session.ai.invalidate() }
             if phase == .active {
                 session.refresh()
                 Task { await session.privacy.unlockAutomatically() }

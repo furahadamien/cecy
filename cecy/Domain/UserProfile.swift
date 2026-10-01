@@ -17,7 +17,7 @@ nonisolated enum CyclePredictability: String, Codable, CaseIterable, Sendable {
 /// Preferences, never dated observations or prediction inputs.
 nonisolated enum CommonSymptom: String, Codable, CaseIterable, Sendable {
     case cramps, headaches, bloating, fatigue, moodChanges, acne, backPain
-    case breastTenderness, nausea, cravings, sleepChanges, lowEnergy, none
+    case breastTenderness, nausea, cravings, sleepChanges, lowEnergy, digestiveChanges, none
     var title: String {
         switch self {
         case .moodChanges: "Mood changes"
@@ -25,6 +25,7 @@ nonisolated enum CommonSymptom: String, Codable, CaseIterable, Sendable {
         case .breastTenderness: "Breast tenderness"
         case .sleepChanges: "Sleep changes"
         case .lowEnergy: "Low energy"
+        case .digestiveChanges: "Digestive changes"
         default: rawValue.capitalized
         }
     }
@@ -43,6 +44,7 @@ nonisolated enum CommonSymptom: String, Codable, CaseIterable, Sendable {
         case .cravings: SymptomKind.cravings.symbol
         case .sleepChanges: SymptomKind.sleepQuality.symbol
         case .lowEnergy: SymptomKind.energyLevel.symbol
+        case .digestiveChanges: SymptomKind.digestiveChanges.symbol
         case .none: "circle.slash"
         }
     }
@@ -91,6 +93,8 @@ nonisolated struct LocalProfile: Codable, Equatable, Sendable, Identifiable {
     var commonSymptoms: Set<CommonSymptom> = []
     var cycleContext: Set<CycleContext> = []
     var goals: Set<TrackingGoal> = []
+    // Synthesized optional decoding preserves existing profile payloads without guessed answers.
+    var wellnessPreferences: WellnessPreferences?
 
     mutating func toggle(_ symptom: CommonSymptom) {
         if commonSymptoms.remove(symptom) != nil { return }
@@ -116,6 +120,7 @@ nonisolated struct LocalProfile: Codable, Equatable, Sendable, Identifiable {
         if let typicalPeriodDays, !(1...30).contains(typicalPeriodDays) { throw ProfileError.duration }
         if commonSymptoms.contains(.none), commonSymptoms.count > 1 { throw ProfileError.selection }
         if cycleContext.contains(.none) || cycleContext.contains(.preferNotToSay), cycleContext.count > 1 { throw ProfileError.selection }
+        try wellnessPreferences?.validate()
     }
 }
 

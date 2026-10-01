@@ -64,7 +64,9 @@ nonisolated enum CycleInsightEngine {
         return insights
     }
 
-    private static func timingInsights(periods: [Period], symptoms: [SymptomEntry], today: LocalDay) -> [CycleInsight] {
+    static func timingSupport(periods: [Period], symptoms: [SymptomEntry], today: LocalDay,
+                              kind: SymptomKind, offsets: ClosedRange<Int>) -> [TimingSupport] {
+        let periods = periods.sorted { $0.start < $1.start }
         let eligible = Array(periods.enumerated().compactMap { index, period -> Period? in
             guard let end = try? period.start.adding(days: 2), end < today,
                   (try? period.start.adding(days: -3)) != nil,
@@ -72,17 +74,21 @@ nonisolated enum CycleInsightEngine {
                   index + 1 == periods.count || period.start.days(until: periods[index + 1].start) >= 6 else { return nil }
             return period
         }.suffix(6))
-        guard eligible.count >= 3 else { return [] }
+        let logs = SymptomValidation.sorted(symptoms.filter { $0.kind == kind && kind.qualifiesForTiming(value: $0.value) })
+        return eligible.map { period in
+            TimingSupport(start: period.start, logDays: logs.filter {
+                offsets.contains(period.start.days(until: $0.day))
+            }.map(\.day))
+        }
+    }
+
+    private static func timingInsights(periods: [Period], symptoms: [SymptomEntry], today: LocalDay) -> [CycleInsight] {
         return SymptomKind.allCases.compactMap { kind in
             let logs = SymptomValidation.sorted(symptoms.filter { $0.kind == kind && kind.qualifiesForTiming(value: $0.value) })
-            func support(_ offsets: ClosedRange<Int>) -> [TimingSupport] {
-                eligible.map { period in
-                    TimingSupport(start: period.start, logDays: logs.filter {
-                        offsets.contains(period.start.days(until: $0.day))
-                    }.map(\.day))
-                }
-            }
-            let before = support(-3 ... -1), after = support(0...2)
+            let before = timingSupport(periods: periods, symptoms: symptoms, today: today, kind: kind, offsets: -3 ... -1)
+            let after = timingSupport(periods: periods, symptoms: symptoms, today: today, kind: kind, offsets: 0...2)
+            let eligible = periods.filter { period in before.contains { $0.start == period.start } }
+            guard eligible.count >= 3 else { return nil }
             let beforeCount = before.filter { !$0.logDays.isEmpty }.count
             let afterCount = after.filter { !$0.logDays.isEmpty }.count
             let chooseBefore = beforeCount >= afterCount

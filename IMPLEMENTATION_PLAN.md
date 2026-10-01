@@ -1,5 +1,17 @@
 # Cecy — Implementation Plan
 
+## October 1 continuation — consolidated AI verification
+
+Reviewed the existing implementation rather than restarting completed work. All five AI paths are present. A fresh combined run passed all 62 tests in eight focused unit/storage/transport suites and all four Phase 8 UI scenarios, using synthetic fixtures only. A fresh unsigned iOS Release build also passed. Results are recorded in [PHASE_8_VALIDATION.md](PHASE_8_VALIDATION.md). The AI plan now includes the actual file map and distinguishes historical proposals from implemented prototype choices. No live gateway requests, new backend resources, or resumption of the deferred full-app/device acceptance are part of this checkpoint.
+
+## October 1 update — AI implementation authorized
+
+The user authorized all five handoff features using the existing Azure gateway. All five iOS paths are implemented: typed networking and durable consent, confirmed symptom normalization, insight explanations, wellness, completed-cycle summaries and bounded questions. Focused evidence: 62 unit/storage/transport tests, four UI scenarios passed across reruns, and Debug/unsigned iOS Release builds; see PHASE_8_VALIDATION.md. No new backend, phase estimator or chat history. Validation and prototype release gates will be recorded in PHASE_8_VALIDATION.md. This supersedes the earlier wait-for-review instructions; historical baseline/device gates remain deferred, not waived.
+
+## October 1 update — local prerequisites before AI
+
+The user authorized implementation of missing local tracking/preferences before AI integration. Digestive-change symptom tracking and optional wellness profile preferences are implemented with passing focused validation (45 unit/storage tests, three UI flows verified across reruns, and Debug/unsigned Release builds); see [LOCAL_WELLNESS_PREREQUISITES.md](LOCAL_WELLNESS_PREREQUISITES.md). That local-only milestone is complete; the user subsequently authorized all AI features, as recorded above. Estimated phase remains deferred pending a defensible calculation policy; it is optional in the API. Existing regression/device gates remain open.
+
 Native, privacy-first iOS menstrual cycle tracker.
 
 Created: September 29, 2026
@@ -10,10 +22,11 @@ This document tracks the phased implementation plan derived from the product bri
 
 - Mark a task `[x]` only after its implementation and relevant validation are complete.
 - Update the phase status and record decisions, blockers, and validation results below.
+- Whenever work starts, changes scope, or is deferred, update this plan in the same change. Distinguish planning, implementation, validation, and deferral; never mark deferred work complete.
 - Complete each phase's acceptance criteria before expanding scope.
 - Optional integrations may be reordered or deferred based on product validation.
 
-Authorized remaining sequence: **6 → 9A → 9B → 8 → 7**. See [phase order](PHASE_ORDER.md).
+Current user-directed priority: **Implement and validate all five AI handoff features, now authorized by the user.** The five iOS paths are implemented; 62 focused unit/storage/transport tests and all four AI UI scenarios passed together in the continuation run. Live contract and release acceptance remain open. See [AI validation](PHASE_8_VALIDATION.md), [AI implementation plan](PHASE_8_AI_IMPLEMENTATION_PLAN.md) and [phase order](PHASE_ORDER.md). Regression resolution and baseline/Phase 6 acceptance remain deferred, not waived; cloud sync/sharing remain deferred and subscriptions last.
 
 ### Progress overview
 
@@ -28,9 +41,21 @@ Authorized remaining sequence: **6 → 9A → 9B → 8 → 7**. See [phase order
 | Pre-6 | Four-period onboarding, local profile, Apple identity | Implemented; validation and device gates in ONBOARDING_MILESTONE.md |
 | 6 | Optional HealthKit integration | Implemented; 13 Phase 6 unit / 3 focused UI checks and Release passed; full-suite/device gates open |
 | 7 | Subscriptions | Deferred |
-| 8 | Optional AI explanations | Deferred |
+| Pre-8 | Local tracking/preferences needed by AI | Implemented; 45 focused unit/storage tests, three UI flows across reruns, Debug and unsigned iOS Release builds passed. Manual/baseline gates remain open; see LOCAL_WELLNESS_PREREQUISITES.md |
+| 8 | Optional AI enhancements | All five iOS paths implemented; 62 focused tests and four AI UI scenarios passed together, plus Debug and a fresh unsigned Release build. See PHASE_8_VALIDATION.md; live contract/prototype/device gates open |
 | 9A | Optional personal cloud synchronization | Deferred |
 | 9B | Optional partner sharing | Deferred |
+
+### Deferred regression and acceptance milestone — September 30, 2026
+
+The user deferred the proposed regression-resolution/acceptance milestone to plan AI before cloud sync and partner sharing. No regression fixes or fresh baseline runs were performed as part of this deferral. Historical evidence in [PHASE_6_VALIDATION.md](PHASE_6_VALIDATION.md) remains: 113/114 unit tests and 19/30 full-suite UI tests passed; focused Phase 6 checks and Release build passed. This is not a passing full suite or release sign-off.
+
+- [ ] Reproduce and resolve the protection-attribute unit failure and eleven UI regression failures; run a fresh full baseline and retain result bundles.
+- [ ] Complete signed-device privacy, Apple identity, HealthKit, backup/deletion, offline and reminder acceptance.
+- [ ] Complete minimum-OS and accessibility/layout acceptance and required privacy disclosures.
+- [ ] Resume this milestone at an explicitly recorded checkpoint before release; no resume date has been agreed.
+
+Existing acceptance checkboxes remain open. Deferral does not waive safety, privacy, testing or release requirements. The later October 1 authorization covers all five AI integrations, with explicit in-app consent before any health-data request. Regression/device acceptance is still deferred.
 
 ## Product and architecture guardrails
 
@@ -41,7 +66,7 @@ Authorized remaining sequence: **6 → 9A → 9B → 8 → 7**. See [phase order
 - Dependency flow: views → feature state/view models → use cases/domain services → repositories → persistence and system integrations.
 - Keep business logic out of views, predictions out of persistence models, and domain calculations independent of SwiftUI and SwiftData where practical.
 - Derive cycles, statistics, predictions, and insights from raw observations rather than duplicating persisted calculations.
-- Use deterministic software for facts; reserve AI for explanation.
+- Use deterministic software for facts. The October 1 AI handoff expands AI to natural-language symptom understanding, explanation, summarization, personalization, general wellness suggestions and bounded questions over locally derived facts; never replace local calculations or silently save AI output.
 - Observe, do not diagnose. Never imply predictions are reliable contraception.
 - Present uncertainty honestly and distinguish confirmed observations from predictions.
 - No advertising SDKs or reproductive-health events sent to generic analytics providers.
@@ -51,7 +76,7 @@ Authorized remaining sequence: **6 → 9A → 9B → 8 → 7**. See [phase order
 
 ### Authorized detour before Phase 6
 
-See [Onboarding milestone](ONBOARDING_MILESTONE.md). The revised handoff requires four period starts, an editable local profile and Apple identity while retaining the existing prediction engine. The onboarding detour is implemented. Phase 6 read-only Health import is now underway; cloud sync remains deferred. Local records/profile and preferences are excluded from future system backups; earlier backups are not erased. Apple sign-in alone provides neither health-data backup nor cross-device recovery.
+See [Onboarding milestone](ONBOARDING_MILESTONE.md). The revised handoff requires four period starts, an editable local profile and Apple identity while retaining the existing prediction engine. The onboarding detour is implemented. Phase 6 read-only Health import is implemented; its outstanding acceptance is deferred and cloud sync remains deferred. Local records/profile and preferences are excluded from future system backups; earlier backups are not erased. Apple sign-in alone provides neither health-data backup nor cross-device recovery.
 
 ## Phase 0 — Confirm foundations and product rules
 
@@ -315,30 +340,55 @@ Implementation and acceptance details: [design](PHASE_6_DESIGN.md), [validation]
 - [ ] Verified entitlements, not local toggles, control premium access.
 - [ ] Purchase flows pass lifecycle testing.
 
-## Phase 8 — Add optional AI explanations
+## Phase 8 — Integrate optional AI enhancements
 
-**Goal:** Explain deterministic findings without replacing them.
+**Goal:** Enhance tracking with the five tasks in the October 1 handoff while keeping local data/calculations authoritative and AI optional.
 
-### Tasks
+**Original-intent review — September 30, 2026:** Reviewed the initial plan at commit `5784dd8`, foundations and subsequent phase documents. The original proposal was a bounded, opt-in explanation/summary of deterministic findings, with minimized local context, a thin preferably stateless Azure Function relay, server-held OpenAI credentials, validated structured responses and offline-safe core tracking. It did not specify an exact model, AI screen, conversation history, prompts, context schema or AI pricing. No separate product-brief file was found in the workspace or initial commit. Recent GPT UX/model suggestions remain proposals, not original requirements or approved scope. Research is complete; requirements clarification is next. No app changes, API calls or tests were performed for this review.
 
-- [ ] Begin with a bounded explanation or summary feature, not an unrestricted chatbot.
-- [ ] Add explicit opt-in and clear disclosure of external processing.
-- [ ] Build a local AI context builder that selects only relevant summarized information.
-- [ ] Exclude identifying information, private notes, and unrelated history by default.
-- [ ] Create a thin, preferably stateless Azure Function relay; never embed the OpenAI API key in the app.
-- [ ] Add server-side secrets, request validation, payload/token limits, rate/spending limits, and appropriate abuse protection.
-- [ ] Disable sensitive-payload logging, including infrastructure diagnostics that could capture requests.
-- [ ] Verify provider retention and processing policies before release.
-- [ ] Validate structured responses before displaying them.
-- [ ] Separate recorded observations from general educational information.
-- [ ] Provide safe failure states when offline, limited, or unavailable.
-- [ ] Keep the core app usable with AI disabled.
+**Status — October 1, 2026:** The user authorized all five integrations after local prerequisites. Networking, consent, confirmed normalization, explanations, wellness, summaries and bounded questions are implemented. [PHASE_8_VALIDATION.md](PHASE_8_VALIDATION.md) records focused evidence and unresolved contract/prototype/device checks. No backend resources or live requests were made.
+
+### Supplied gateway — reuse, do not recreate
+
+Function App: `cecyaiendpoints`. POST `https://cecyaiendpoints-gqdahecce6g7dufv.westus3-01.azurewebsites.net/api/ai`. Anonymous prototype; no function key/bearer token. The handoff reports stateless processing, validation, 14 backend tests and five deployment smoke-test passes; these were not independently verified here. Model selection, prompts, secrets and retries are server-owned. No new backend, Function App, Firebase, health-data cloud store, custom AI authentication, App Attest or DeviceCheck in this integration.
+
+Rate limiting, quotas and attestation are absent. Treat the endpoint as prototype infrastructure; separately review abuse protection and Azure/OpenAI retention/logging before distribution. Do not mark those missing controls complete or implement them as unrelated iOS scope.
+
+### Planning and review
+
+- [x] Inspect current persistence, symptom taxonomy/ratings, atomic saves, profile fields, facts, UI and privacy lifecycle against the handoff.
+- [x] Draft a concrete iOS-only integration plan; backend creation tasks superseded by reuse of the supplied endpoint, not newly implemented here.
+- [x] User authorized all five AI features after local prerequisites; implement explicit review, note choice and consent/cancellation policies.
+- [ ] Obtain authoritative wire fixtures/schema for constraints not specified in the handoff; confirm normalization limits/status behavior before coding and task-specific enums/facts before later slices.
+
+### Implementation sequence — focused evidence in PHASE_8_VALIDATION.md; live/release gates remain open
+
+- [x] 8.1: Typed five-task `AIService`, DTOs, errors, injected URLSession transport, bounded timeouts/payloads and mock-only automated tests.
+- [x] 8.2: Backward-compatible protected AI consent, just-in-time disclosure/settings and cancellation/access-generation gates.
+- [x] 8.3: `normalize_symptoms` end-to-end in existing logging: text → explicit request → editable suggestions → user-confirmed atomic `addSymptoms`; preserve manual fallback and optional original note. Later slices are also authorized by the subsequent user request.
+- [x] 8.4: Minimal `AIContextBuilder` and on-demand `explain_insight` over existing deterministic evidence.
+- [x] 8.5: Only necessary local wellness preferences and Today `daily_wellness_recommendation`; omit unsupported optional estimated phase.
+- [x] 8.6: Deterministic completed-cycle facts and `cycle_summary`; no invented duration when end date is unknown.
+- [x] 8.7: Bounded question intents/local evidence and `answer_cycle_question` in Insights; no full-history upload or persisted conversation.
+- [ ] 8.8: Cross-feature acceptance and separately authorized synthetic manual gateway checks; record actual results in `PHASE_8_VALIDATION.md` when testing begins.
+
+### Explicit adaptations / deferred additions
+
+- Keep SwiftData V6 and repository interfaces; handoff references to Core Data mean local storage, not a migration back to template Core Data.
+- First slice needs no new health entity/schema; existing symptom strings/notes and protected preferences suffice. A proposed digestive-change case extends the existing taxonomy, not a second one.
+- Local wellness prerequisites are already implemented and validated. AI reuses those preferences; existing tracking goals are not assumed to equal API wellness goals.
+- Estimated phase engine, persistent AI summaries/cache and conversation history are not part of the initial integration. Client output stays ephemeral except user-confirmed symptom records/notes.
+- Gateway statelessness is not a guarantee of provider zero retention. Minimize context; identifiers/private notes/full history are not automatically sent. User-submitted description/question text itself is sensitive and requires disclosure.
 
 ### Completion criteria
 
-- [ ] No AI request occurs without consent.
-- [ ] Transmitted data is minimized for the specific feature or question.
-- [ ] Responses do not diagnose or contradict locally calculated facts.
+- [ ] No request without valid consent and access; disable, background, lock, logout/reset and stale replies cannot expose results or modify data.
+- [ ] No AI-proposed symptom persists without review and confirmation; failures/cancel never partially save.
+- [ ] All five tasks use only relevant typed inputs; raw history/identifiers and private notes are excluded unless explicitly entered for the current consented request.
+- [ ] Deterministic calculations remain authoritative; no AI prediction, diagnosis, silent fact changes or generic chatbot.
+- [ ] AI responses are validated and safetyMessage rendered when present; severe symptoms with nil safetyMessage are handled safely without duplicating server prompts.
+- [ ] Offline/error/manual fallback, protected preference compatibility, minimal context and each feature's lifecycle are tested.
+- [ ] Provider/privacy/prototype hardening and outstanding baseline/device gates reviewed before release; supplied backend tests are not iOS sign-off.
 
 ## Phase 9 — Add optional cloud capabilities
 
@@ -406,6 +456,8 @@ Record important choices and their rationale as implementation proceeds.
 | September 29, 2026 | 0 | Validated Gregorian date-only values | Dates remain stable across travel; duration is inclusive and cycle day starts at 1. |
 | September 29, 2026 | 0 | Baseline V1 prediction policy | Minimum three completed intervals, at most six recent lengths, median center and padded observed range. Explicit provisional Low/Moderate confidence; see foundations for exact rules. |
 | September 29, 2026 | 0 | Keep canvas fixtures separate | Real domain results replace mock values in Phase 1; no production seeding. |
+| September 30, 2026 | 8 / acceptance | Defer regression resolution and acceptance; prioritize GPT feature planning | User-directed change on `planning/phase-8-gpt`. Existing failures/device gates remain open. Model/hosting and feature scope await agreement; cloud/sharing remain deferred and subscriptions last. |
+| October 1, 2026 | 8 | Adopt deployed AI gateway handoff; draft iOS-only integration plan | Reuse `cecyaiendpoints`; SwiftData remains authoritative. Five bounded tasks, normalization first after plan review. No backend recreation or app implementation in this planning change. |
 
 ## Blockers and open questions
 
@@ -427,7 +479,7 @@ Record important choices and their rationale as implementation proceeds.
 
 ## Next authorized implementation scope
 
-Phase 5 is implemented on `phase-5`, but its protection test and manual release gates remain open. Do not label the full test suite green or begin Phase 6 without authorization. Local authentication and notifications remain optional; HealthKit, cloud, subscriptions and AI are deferred.
+Review [PHASE_8_AI_IMPLEMENTATION_PLAN.md](PHASE_8_AI_IMPLEMENTATION_PLAN.md) on `planning/phase-8-gpt`. After approval, implement only foundation, consent and the natural-language symptom logging vertical slice using the existing deployed gateway. No backend creation or live sensitive-data testing. Phase 6 import is implemented; baseline regression and signed-device acceptance remain deferred, not complete. No new cloud sync, partner sharing or subscription work. Update this plan for each implemented, revised or deferred milestone.
 
 ### Phase 1 verification record
 

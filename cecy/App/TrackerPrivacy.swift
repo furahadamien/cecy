@@ -17,6 +17,8 @@ struct PreparedExport: Identifiable {
     var preparedExport: PreparedExport?
     let reminders: ReminderCoordinator
     var canAccess: Bool { isReady && !isLocked }
+    private(set) var aiBlocked = false
+    var aiEnabled: Bool { !aiBlocked && preferences.aiConsent?.isCurrent == true }
 
     @ObservationIgnored private let storage: any PrivacyPreferenceStoring
     @ObservationIgnored private let authentication: any DeviceAuthenticating
@@ -109,6 +111,23 @@ struct PreparedExport: Identifiable {
         } catch { return "Appearance couldn’t be saved. Your previous setting is unchanged." }
     }
 
+    func setAIEnabled(_ enabled: Bool, now: Date = Date()) -> String? {
+        guard canAccess else { return "Unlock Cecy before changing AI consent." }
+        if !enabled { aiBlocked = true }
+        var candidate = preferences
+        candidate.aiConsent = enabled ? AIConsentRecord(noticeVersion: AIConsentRecord.currentVersion, grantedAt: now) : nil
+        guard !enabled || candidate.aiConsent?.isCurrent == true else { return "AI consent could not be saved." }
+        do {
+            try storage.save(candidate)
+            preferences = candidate
+            aiBlocked = !enabled
+            return nil
+        } catch {
+            return enabled ? "AI was not enabled because consent couldn’t be saved. Try again."
+                : "AI is blocked for this session, but the change couldn’t be saved. Retry before closing Cecy."
+        }
+    }
+
     func trackingChanged(prediction: CyclePrediction?, now: Date, timeZone: TimeZone) {
         self.prediction = prediction
         self.now = now
@@ -177,7 +196,9 @@ struct PreparedExport: Identifiable {
     /// Ancillary cleanup precedes record deletion. A failure preserves records but may already disable reminders.
     func prepareForReset() throws {
         guard canAccess, !isAuthenticating, !isChangingReminders else { throw TrackingError.invalidData }
+        aiBlocked = true
         var candidate = preferences
+        candidate.aiConsent = nil
         candidate.dailyReminder = false
         candidate.windowReminder = false
         candidate.reminderHour = 20
