@@ -1,41 +1,34 @@
 import SwiftUI
 
-/// Distinct symbols for predictions: never reuse the filled recorded-period drop.
-struct ForecastDayIcons: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let forecast: CycleForecast
-    let day: LocalDay
-
-    var body: some View {
-        let palette = TrackerPalette(scheme: colorScheme)
-        HStack(spacing: 4) {
-            if forecast.bleeding(on: day) != nil {
-                Image(systemName: "drop").foregroundStyle(palette.recorded)
-            }
-            if forecast.fertile(on: day) != nil {
-                Image(systemName: "leaf").foregroundStyle(palette.accent)
-            }
-        }
-        .font(.system(size: 10, weight: .semibold))
-        .accessibilityHidden(true)
-    }
-}
-
 struct DayActivityIcons: View {
     @Environment(\.colorScheme) private var colorScheme
     let markers: [DayActivityMarker]
+    var minimumRows = 1
+    private var rows: Int { max(minimumRows, max(1, (markers.count + 2) / 3)) }
+
     var body: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 3), spacing: 4) {
-            ForEach(markers) { marker in
-                Image(systemName: marker.symbol).font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(marker.id == "period"
-                                     ? TrackerPalette(scheme: colorScheme).recorded
-                                     : marker.id == "sexualActivity"
-                                        ? TrackerPalette(scheme: colorScheme).sexualActivity
-                                        : TrackerPalette(scheme: colorScheme).accent)
+        let palette = TrackerPalette(scheme: colorScheme)
+        // Eager rows give the horizontal lazy date strip a stable, complete height.
+        Grid(horizontalSpacing: 2, verticalSpacing: 2) {
+            ForEach(0..<rows, id: \.self) { row in
+                GridRow {
+                    ForEach(0..<3, id: \.self) { column in
+                        let index = row * 3 + column
+                        if index < markers.count {
+                            let marker = markers[index]
+                            Image(systemName: marker.symbol).font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(marker.id == "period" || marker.id == "forecast.bleeding"
+                                                 ? palette.recorded
+                                                 : marker.id == "sexualActivity" ? palette.sexualActivity : palette.accent)
+                                .frame(maxWidth: .infinity).frame(height: 12)
+                        } else {
+                            Color.clear.frame(height: 12)
+                        }
+                    }
+                }
             }
         }
-        .frame(minHeight: 10)
+        .frame(height: CGFloat(rows * 14 - 2))
         // The containing date button reads the full list, not unlabeled tiny images.
         .accessibilityHidden(true)
     }
@@ -54,9 +47,16 @@ struct ActivityCalendarStrip: View {
     @State private var expanded = false
 
     private var days: [LocalDay] { (lower...upper).compactMap { try? today.adding(days: $0) } }
+    private var markerRows: Int {
+        let maximum = days.map {
+            DayActivityMarker.calendar(recorded: activityIndex.markers(on: $0), forecast: forecast, day: $0).count
+        }.max() ?? 0
+        return max(1, (maximum + 2) / 3)
+    }
     private var visibleDay: LocalDay { centeredDay.flatMap { try? LocalDay(key: $0) } ?? selection }
     var body: some View {
         let palette = TrackerPalette(scheme: colorScheme)
+        let iconRows = markerRows
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Button { expanded.toggle() } label: {
@@ -108,8 +108,8 @@ struct ActivityCalendarStrip: View {
                                                 .padding(predicted ? 1 : -3)
                                         }
                                     }
-                                DayActivityIcons(markers: markers)
-                                ForecastDayIcons(forecast: forecast, day: day)
+                                DayActivityIcons(markers: DayActivityMarker.calendar(recorded: markers, forecast: forecast, day: day),
+                                                 minimumRows: iconRows)
                             }
                             .padding(.vertical, 4)
                             .frame(width: max(44, dayWidth), alignment: .top)
@@ -154,21 +154,15 @@ struct ActivityCalendarStrip: View {
 struct TodayCalendarLegend: View {
     @Environment(\.colorScheme) private var colorScheme
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            legendItems
-            ScrollView(.horizontal) {
-                legendItems
-            }
-            .scrollIndicators(.hidden)
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
+        legendItems
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("todayCalendarLegend")
     }
 
     private var legendItems: some View {
         let palette = TrackerPalette(scheme: colorScheme)
-        return HStack(spacing: 10) {
+        return SelectionFlowLayout {
             Label("Period", systemImage: "drop.fill").foregroundStyle(palette.recorded)
                 .accessibilityLabel("Recorded period")
             Label("Estimate", systemImage: "circle.dashed").foregroundStyle(palette.recorded)
@@ -185,6 +179,5 @@ struct TodayCalendarLegend: View {
         }
         .font(.caption2)
         .lineLimit(1)
-        .fixedSize(horizontal: true, vertical: false)
     }
 }

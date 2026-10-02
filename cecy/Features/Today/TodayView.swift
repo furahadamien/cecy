@@ -158,7 +158,7 @@ struct PredictionSummary: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Estimated next start").font(.headline).accessibilityAddTraits(.isHeader)
+            Text("Estimated next period start").font(.headline).accessibilityAddTraits(.isHeader)
             switch outcome {
             case .available(let estimate):
                 Text(DayText.range(estimate.earliest, estimate.latest))
@@ -168,10 +168,6 @@ struct PredictionSummary: View {
                 if estimate.basis == .usualCycle {
                     Text("Starter estimate · based on your usual \(estimate.reportedCycleDays ?? 28)-day cycle, not measured cycle history.")
                         .font(.subheadline).accessibilityIdentifier("starterPrediction")
-                    if let days = estimate.reportedPeriodDays {
-                        Text("Usual bleeding duration: \(days) days. This is your estimate, not confirmed bleeding.")
-                            .font(.footnote).foregroundStyle(.secondary)
-                    }
                 }
                 if today > estimate.latest {
                     Text("Estimated window passed. No new start has been recorded.")
@@ -179,16 +175,10 @@ struct PredictionSummary: View {
                 } else if estimate.contains(today) {
                     Text("You’re within the estimated start window.")
                 }
-                Text("These are possible start dates—not predicted bleeding days.")
-                    .font(.footnote).foregroundStyle(.secondary)
             case .insufficientHistory:
                 Text("More history is needed for an estimate.").font(.title3)
-                Text("Record a period start and set your typical cycle length in Profile, or record two starts to supply a measured interval.")
-                    .foregroundStyle(.secondary)
             case .wideVariation:
                 Text("Your recorded intervals vary more than this simple estimate can support.")
-                Text("Review your recorded starts in Insights. A long gap may include an unrecorded period, but Cecy won’t assume one.")
-                    .font(.footnote).foregroundStyle(.secondary)
             case .unavailable(let reason):
                 Text(reason.localizedDescription)
             }
