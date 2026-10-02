@@ -5,6 +5,18 @@ nonisolated struct DayActivityMarker: Identifiable, Equatable, Sendable {
     let symbol: String
     let title: String
 
+    /// Presentation only: predictions never become recorded activities.
+    static func calendar(recorded: [Self], forecast: CycleForecast, day: LocalDay) -> [Self] {
+        var estimates: [Self] = []
+        if forecast.bleeding(on: day) != nil {
+            estimates.append(Self(id: "forecast.bleeding", symbol: "drop", title: "Expected bleeding, not recorded"))
+        }
+        if forecast.fertile(on: day) != nil {
+            estimates.append(Self(id: "forecast.fertile", symbol: "leaf", title: "Estimated fertile window"))
+        }
+        return estimates + recorded
+    }
+
     static func recorded(on day: LocalDay, in snapshot: TrackerSnapshot) -> [Self] {
         var markers: [Self] = []
         if let period = snapshot.periods.first(where: { $0.contains(day) }) {

@@ -164,7 +164,7 @@ All three presentations—Calendar, Today strip, and Today expanded calendar—c
 - Estimated fertile days: green **leaf markers**, not multiple ovulation outlines.
 - Actual activity markers remain intact; an estimate never replaces a logged event.
 
-Selecting any marked date opens its paired forecast with central dates, separate intervals, duration source, caution text and timing envelopes. Overlapping windows retain all relevant information. VoiceOver names expected versus recorded information, fertile dates, context limitations and future-cycle assumptions. Color alone is not the only distinction. Today retains a single-row legend with horizontal scrolling when necessary.
+Selecting any marked date opens its paired forecast with central dates, separate intervals, duration source, caution text and timing envelopes. Overlapping windows retain all relevant information. VoiceOver names expected versus recorded information, fertile dates, context limitations and future-cycle assumptions. Color alone is not the only distinction. Forecast and recorded icons share one eager grid; Today reserves sufficient row height for loaded dates. Today’s legend wraps to additional lines instead of scrolling horizontally. Calendar’s legend contains symbol labels only; explanatory cautions remain in forecast details.
 
 ## 11. Implementation map and persistence
 

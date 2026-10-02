@@ -1,5 +1,15 @@
 # Cecy — Implementation Plan
 
+## October 2 — concise Today period-start card
+
+Renamed the card to “Estimated next period start” and removed its gray secondary explanatory paragraphs. Date range, confidence, starter basis, current/overdue status and primary unavailable messages remain; the existing detail link retains the full explanation. No prediction or storage changes. Swift syntax and diff checks passed; no build or simulator rerun for this copy-only follow-up. Previous validation does not establish device acceptance of this edit. Nothing committed or pushed.
+
+## October 2 — shared calendar icon rows and wrapping legend
+
+Merged forecast bleeding/fertile symbols with recorded period, symptom and sexual-activity icons in one eager grid across calendars. The Today strip reserves enough rows for its loaded date range, preventing lazy horizontal sizing from clipping denser dates. Forecast symbols retain distinct identities, colors and accessibility descriptions; prediction logic and saved records are unchanged. Today’s seven legend items now wrap using the shared flow layout instead of horizontal scrolling. Removed the explanatory paragraphs below Calendar’s icon legend; forecast details retain uncertainty and safety information.
+
+Validation: all 20 focused unit/layout/domain tests passed; all four targeted UI checks passed across focused runs (forecast markers in all calendar presentations, normal-size wrapping legend and date bounds, largest-text wrapping, and symbol-only Calendar legend). Debug app/test compilation and unsigned iOS Release build passed (45.4 seconds). The first run also included an older logging test, which failed its unchanged label-height assertion (44-point accessibility frame versus expected 24); this remains an unresolved regression/automation check, not a full-suite pass. No related assertion was weakened or button code changed. Evidence: /tmp/cecy-marker-layout.xcresult, /tmp/cecy-marker-legend.xcresult and /tmp/cecy-marker-layout-release.log. Device visual/VoiceOver and prior full-regression/clinical gates remain open. No commits or pushes.
+
 ## October 2 — adaptive four-output calendar forecast
 
 Implemented next-start estimates and uncertainty, expected bleeding dates, a single possible ovulation date, and a distinct six-day estimated fertile window. Retains the existing rolling-six median primary engine and evidence replay; confirmed end dates independently refine bleeding duration. Later-cycle uncertainty now accumulates, with explicitly approximate 10–16-day ovulation offsets. All calendars share markers, date details and context cautions. No fabricated records, biomarkers, automatic AI requests, storage migration or reminder roll-forward. See [ADAPTIVE_CYCLE_FORECAST.md](ADAPTIVE_CYCLE_FORECAST.md) for formulas, example, sources and limitations, superseding the older forecast formulas.

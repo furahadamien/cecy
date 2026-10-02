@@ -93,8 +93,7 @@ struct ExpandableMonthCalendar: View {
                                 .padding(predicted ? 3 : 0)
                         }
                     }
-                DayActivityIcons(markers: markers)
-                ForecastDayIcons(forecast: forecast, day: day)
+                DayActivityIcons(markers: DayActivityMarker.calendar(recorded: markers, forecast: forecast, day: day))
             }
             .contentShape(Rectangle())
         }

@@ -45,13 +45,13 @@ final class DeviceFeedbackRoundFiveUITests: XCTestCase {
         let legend = app.otherElements["todayCalendarLegend"]
         XCTAssertTrue(legend.waitForExistence(timeout: 5))
         let items = legend.staticTexts.allElementsBoundByIndex
-        XCTAssertEqual(items.count, 5)
-        if let first = items.first {
-            for item in items {
-                XCTAssertEqual(item.frame.midY, first.frame.midY, accuracy: 2)
-                XCTAssertGreaterThanOrEqual(item.frame.minX, app.frame.minX)
-                XCTAssertLessThanOrEqual(item.frame.maxX, app.frame.maxX)
-            }
+        XCTAssertEqual(items.count, 7)
+        XCTAssertEqual(legend.scrollViews.count, 0)
+        XCTAssertGreaterThan((items.map(\.frame.minY).max() ?? 0) - (items.map(\.frame.minY).min() ?? 0), 5)
+        for item in items {
+            XCTAssertGreaterThanOrEqual(item.frame.minX, legend.frame.minX - 1)
+            XCTAssertLessThanOrEqual(item.frame.maxX, legend.frame.maxX + 1)
+            XCTAssertLessThanOrEqual(item.frame.maxY, legend.frame.maxY + 1)
         }
         XCTAssertFalse(app.staticTexts["Dashed dates are possible starts, not recorded bleeding. Symptoms use their individual icons."].exists)
         XCTAssertFalse(app.staticTexts["todayStripSelectedDate"].exists)
@@ -61,6 +61,22 @@ final class DeviceFeedbackRoundFiveUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(date.frame.width, 44)
         XCTAssertLessThan(date.frame.width, 56)
         XCTAssertGreaterThanOrEqual(date.frame.height, 44)
+        XCTAssertLessThanOrEqual(date.frame.maxY, app.scrollViews["todayDateStrip"].frame.maxY + 1)
+    }
+
+    @MainActor func testTodayLegendWrapsAtLargestTextSize() {
+        let app = launch(largeText: true)
+        let legend = app.otherElements["todayCalendarLegend"]
+        reveal(legend, app: app)
+        let items = legend.staticTexts.allElementsBoundByIndex
+        XCTAssertEqual(items.count, 7)
+        XCTAssertEqual(legend.scrollViews.count, 0)
+        for item in items {
+            XCTAssertGreaterThanOrEqual(item.frame.minX, legend.frame.minX - 1)
+            XCTAssertLessThanOrEqual(item.frame.maxX, legend.frame.maxX + 1)
+            XCTAssertLessThanOrEqual(item.frame.maxY, legend.frame.maxY + 1)
+        }
+        XCTAssertGreaterThan((items.map(\.frame.minY).max() ?? 0) - (items.map(\.frame.minY).min() ?? 0), 5)
     }
 
     @MainActor func testTodayCompactLoggingKeepsEntryActions() {
@@ -80,6 +96,19 @@ final class DeviceFeedbackRoundFiveUITests: XCTestCase {
             XCTAssertTrue(app.navigationBars[sheet].waitForExistence(timeout: 5))
             app.navigationBars.buttons["Cancel"].tap()
         }
+    }
+
+    @MainActor func testCalendarLegendContainsOnlySymbolDescriptions() {
+        let app = launch()
+        app.tabBars.buttons["Calendar"].tap()
+        let legend = app.otherElements["calendarLegend"]
+        reveal(legend, app: app)
+        XCTAssertEqual(legend.staticTexts.count, 7)
+        XCTAssertTrue(legend.staticTexts["Estimated fertile window"].exists)
+        XCTAssertTrue(legend.staticTexts["Expected bleeding · Not recorded"].exists)
+        XCTAssertFalse(app.staticTexts["A dot beside the date marks today. Tap a date for all records."].exists)
+        XCTAssertFalse(app.staticTexts["An underlined date is selected. Estimates are not recorded bleeding days."].exists)
+        XCTAssertFalse(app.staticTexts["Later cycles assume estimated periods occur. Only three cycles are projected from your last recorded start."].exists)
     }
 
     @MainActor func testCalendarLoggingIsBelowDatesBeforeLegendAndKeepsSelectionGuards() {

@@ -90,10 +90,6 @@ struct TrackerCalendarView: View {
                                     Image(systemName: "heart.fill").foregroundStyle(palette.sexualActivity)
                                 }
                                 Label("Symptoms use their individual icons", systemImage: "waveform.path.ecg")
-                                Text("A dot beside the date marks today. Tap a date for all records.")
-                                Text("An underlined date is selected. Estimates are not recorded bleeding days.")
-                                Text("One dotted date estimates ovulation. Leaves mark the six-day estimated fertile window—not six days of ovulation. Actual timing may differ, and unmarked days are not safe days. Not for contraception or diagnosis.")
-                                Text("Later cycles assume estimated periods occur. Only three cycles are projected from your last recorded start.")
                             }
                             .font(.footnote).foregroundStyle(.secondary).padding(8)
                             .accessibilityElement(children: .contain)
@@ -190,8 +186,9 @@ struct TrackerCalendarView: View {
                 if asList {
                     Text(status(day)).font(.footnote)
                 } else {
-                    DayActivityIcons(markers: DayActivityMarker.recorded(on: day, in: session.snapshot))
-                    ForecastDayIcons(forecast: session.cycleForecast, day: day)
+                    DayActivityIcons(markers: DayActivityMarker.calendar(
+                        recorded: DayActivityMarker.recorded(on: day, in: session.snapshot),
+                        forecast: session.cycleForecast, day: day))
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 44, alignment: asList ? .leading : .center)
