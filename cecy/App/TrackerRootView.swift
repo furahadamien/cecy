@@ -162,9 +162,21 @@ private struct TrackerTabs: View {
         }
         .modifier(TrackerTabBarStyle())
         .sheet(item: $loggingDay) { day in
-            PeriodEntryView(period: Period(start: day), today: session.today ?? today,
-                            existing: session.snapshot.periods) { period in
-                await session.withPredictionUpdate { session.save([period]) }
+            let currentDay = session.today ?? today
+            if day <= currentDay {
+                let existing = PeriodLogSelection.existing(on: day, periods: session.snapshot.periods)
+                PeriodEntryView(period: existing ?? Period(start: day, end: day), today: currentDay,
+                                existing: session.snapshot.periods, isEditing: existing != nil,
+                                continuation: existing == nil ? PeriodLogSelection.continuation(on: day, periods: session.snapshot.periods) : nil) { period in
+                    await session.withPredictionUpdate {
+                        if session.snapshot.periods.contains(where: { $0.id == period.id }) {
+                            return session.update(period)
+                        }
+                        return session.save([period])
+                    }
+                }
+            } else {
+                Text("Future dates are for viewing only.").padding()
             }
         }
         .sheet(isPresented: $showHistory) {

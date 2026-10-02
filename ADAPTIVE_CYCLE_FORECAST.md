@@ -1,6 +1,6 @@
 # Cecy adaptive period, bleeding, ovulation and fertile-window forecast
 
-October 2, 2026 · Calendar forecast V3 · `testing/on-device-fixes`
+October 2, 2026 · Calendar forecast V4 · `testing/on-device-fixes`
 
 ## Status and scope
 
@@ -45,7 +45,7 @@ Let `x` be up to six recent lengths:
 
 Measured lengths replace, rather than silently mix with, the entered typical length. There is no four-period eligibility threshold. The short rolling history can adapt when cycle timing changes, while a median is less sensitive than a mean to an isolated extreme value. A long gap is never divided into invented cycles.
 
-If `max(x) − min(x) > 14`, the existing engine withholds the forecast and asks the user to review records. It does not fall back to an apparently precise profile-based estimate when recorded history contradicts it.
+If `max(x) − min(x) > 14`, the primary history engine withholds its prediction and asks for review. The calendar layer can retain a clearly labelled Low-confidence reference using a saved typical cycle length, also when a measured center implies a length outside the existing 10–120-day setup range. This reference is not history-supported evidence and never replaces the primary outcome, statistics or backtesting. Without a saved typical length, no default is invented. See [HISTORICAL_LOGGING_FIX.md](HISTORICAL_LOGGING_FIX.md).
 
 The 2/3-day padding, six-interval limit and variation thresholds are transparent product policies—not clinically established error bounds. This update does not claim a new validated statistical model for period starts.
 
@@ -124,7 +124,7 @@ These answers provide no validated adjustment factor. Mathematical outputs are n
 
 ## 8. Future cycles and cumulative uncertainty
 
-At most three paired cycles are projected from the last **recorded** start. Let `L = P − S`, `a = A − S`, `b = B − S`. For projection number `j = 1, 2, 3`:
+Projections remain anchored to the last **recorded** start, but the display now includes three upcoming centers relative to the actual current day. Let `L = P − S`, `a = A − S`, `b = B − S`. For each selected one-based projection number `j`:
 
 - Central period start: `Pj = S + j × L`.
 - Start bounds: `[Aj, Bj] = [S + j × a, S + j × b]`.
@@ -134,7 +134,9 @@ This carries uncertainty from each assumed intervening cycle forward. It replace
 
 Later cycles explicitly say **Projection** and assume intervening estimated periods occur. They are not inserted into storage or historical calculations. The primary next start never rolls forward because it is overdue. Reminders and historical evaluation still use the primary prediction, not hypothetical future records.
 
-The upcoming card keeps the primary period forecast visible even when its ovulation date has passed, with the next future ovulation projection available separately. After three projected cycles, request updated actual records rather than extend indefinitely.
+Compute zero-based `i = max(0, ceil((today − P) / L))`. Retain indices 0, 1 and 2, plus indices `max(0, i − 1)` through `i + 2`; use `j = index + 1` in the formulas above. This sorted union contains at most seven cycles, including three centers on/after today and the preceding cycle for potentially ongoing bleeding. It does not iterate across or create every missing cycle.
+
+Today and Upcoming choose the first center on/after today, label later cycles as provisional, and use Low confidence for later/reference forecasts. The visible upcoming start range begins at `max(today, earliest)`; this is a presentation filter, not a narrowing of model uncertainty. Historical details retain full dates. Earlier assumed periods remain explicitly unconfirmed. Uncertainty can become very broad after long gaps; calendar references do not establish ovulation or that a missed period occurred. This replaces the earlier fixed three-cycle cutoff while preserving primary record-based evidence and reminders.
 
 ## 9. Worked example
 
@@ -171,7 +173,7 @@ Selecting any marked date opens its paired forecast with central dates, separate
 - `Domain/CycleAnalysis.swift`: existing primary median period-start engine and profile fallback.
 - `Domain/PredictionEvaluation.swift`: unchanged evidence policy and no-future-leakage replay.
 - `Domain/PossibleOvulation.swift`: `ForecastInterval`, `BleedingDurationEstimate`, expanded `ProjectedCycle`, shared `CycleForecast` and context cautions.
-- `App/TrackerSession.swift`: passes actual periods into the cached forecast after committed changes.
+- `App/TrackerSession.swift`: passes actual periods and the actual current day into the cached forecast after committed changes. Selected logging dates never become the forecast clock.
 - `Shared/CycleForecastView.swift`: four outputs, source information and uncertainty disclosures.
 - `Shared/ActivityCalendarStrip.swift`, `Shared/ExpandableMonthCalendar.swift`, `Features/Calendar/TrackerCalendarView.swift`, `Features/Today/TodayView.swift`: shared calendar semantics and markers.
 
@@ -186,6 +188,8 @@ No SwiftData schema migration, profile field, health record, remote payload, aut
 Reviewed October 2, 2026. Clinical sources support the distinctions and limitations, not validation of Cecy's statistical padding, exact dates or cumulative bounds.
 
 ## 13. Validation and remaining gates
+
+V4 historical-logging follow-up: **53 unit/persistence tests and all three new UI scenarios passed together**, plus the unsigned iOS Release build (47.3 seconds). See [HISTORICAL_LOGGING_FIX.md](HISTORICAL_LOGGING_FIX.md) for evidence. The following V3 results are retained as historical evidence, not a claim of a full-app regression pass.
 
 The final focused run passed **52 unit/persistence tests in eight suites and all three selected calendar UI scenarios together**, including the final bleeding outlines. It completed in 97.7 seconds. Tests cover distinct outputs, inclusive date arithmetic, six fertile days versus one ovulation marker, confirmed-duration learning, missing ends, six-record bounds, widening uncertainty, short cycles, context warnings, leap-day transitions, session edits/deletion, existing setup/evidence policy and consistent calendars. Debug app/test compilation and a separate **unsigned iOS Release build passed** (36.7 seconds). Runs had hard limits; no simulator retry loop was needed.
 

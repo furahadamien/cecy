@@ -242,7 +242,7 @@ struct TrackerCalendarView: View {
         .buttonStyle(TrackerCompactLogButtonStyle(prominent: true))
         .accessibilityLabel("Record a period")
         .accessibilityIdentifier("calendarLogPeriod")
-        .disabled(record(on: selection) != nil)
+        .accessibilityHint(record(on: selection) == nil ? "Record actual bleeding days." : "Edit this period or its confirmed bleeding dates.")
         SymptomLogButton(session: session, day: selection, title: "Symptoms", compact: true)
         SexualActivityLogButton(session: session, day: selection, compact: true)
     }

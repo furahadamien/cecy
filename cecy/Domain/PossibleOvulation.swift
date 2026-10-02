@@ -47,6 +47,7 @@ nonisolated struct ProjectedCycle: Identifiable, Equatable, Sendable {
     var fertileEnvelope: ForecastInterval?
     var ovulationWarnings: [String] = []
     var ovulationBasis: String = "Calendar estimate only; ovulation is not confirmed."
+    var referenceNotice: String?
     var id: Int { index }
     var isLaterProjection: Bool { index > 0 }
     var assumption: String {
@@ -66,6 +67,10 @@ nonisolated struct ProjectedCycle: Identifiable, Equatable, Sendable {
 nonisolated struct CycleForecast: Equatable, Sendable {
     var cycles: [ProjectedCycle] = []
     var ovulationUnavailableReason: String?
+
+    func nextPeriod(onOrAfter day: LocalDay) -> ProjectedCycle? {
+        cycles.first { $0.period.center >= day }
+    }
 
     func period(on day: LocalDay) -> ProjectedCycle? { cycles.first { $0.period.contains(day) } }
     // An uncertainty envelope is not a series of ovulation days or a fertile window.
@@ -91,10 +96,26 @@ nonisolated struct CycleForecast: Equatable, Sendable {
         }
     }
 
-    static func calculate(overview: CycleOverview, profile: LocalProfile?, periods: [Period] = []) -> CycleForecast {
-        guard let estimate = overview.estimate, let start = overview.latestStart else {
+    static func calculate(overview: CycleOverview, profile: LocalProfile?, periods: [Period] = [],
+                          asOf today: LocalDay? = nil) -> CycleForecast {
+        guard let start = overview.latestStart else {
             return CycleForecast(ovulationUnavailableReason: "A usable period estimate is needed to project ovulation.")
         }
+        var estimate = overview.estimate
+        var referenceNotice: String?
+        // Conflicting/implausible intervals must not silently erase the saved usual-cycle
+        // reference. This fallback is explicitly NOT a history-supported prediction.
+        let usable = estimate.map { CycleSetupPolicy.cycleDays.contains(start.days(until: $0.center)) } ?? false
+        if !usable {
+            if let fallback = try? BaselinePredictionEngine().predict(intervals: [], latestStart: start, profile: profile),
+               case .available(let value) = fallback {
+                estimate = value
+                referenceNotice = "Provisional reference from your saved typical cycle length. Recorded starts are too variable or incomplete for a history-based estimate; review whether nearby starts belong to one period."
+            } else {
+                return CycleForecast(ovulationUnavailableReason: "Review your period starts or add a typical cycle length in Profile to show a provisional forecast.")
+            }
+        }
+        guard let estimate else { return CycleForecast() }
         // Exactly the same rounded median (or entered usual length) as the period engine.
         let length = start.days(until: estimate.center)
         guard length > 0 else { return CycleForecast() }
@@ -104,14 +125,19 @@ nonisolated struct CycleForecast: Equatable, Sendable {
             ? "Based on your entered \(length)-day typical cycle, not measured cycle history."
             : "Based on \(estimate.sourceLengths.count) measured start-to-start interval(s). Period dates alone cannot reliably identify ovulation."
         var result = CycleForecast()
-        for index in 0..<3 {
+        // Retain the original three for calendar history, plus the cycle preceding
+        // today's next center and three upcoming centers. Bounded work even after years.
+        let elapsed = today.map { estimate.center.days(until: $0) } ?? 0
+        let nextIndex = elapsed > 0 ? (elapsed + length - 1) / length : 0
+        let indices = Set(0..<3).union(max(0, nextIndex - 1)...(nextIndex + 2)).sorted()
+        for index in indices {
             // Propagate each cycle's start-offset uncertainty; never claim independent
             // errors or statistical coverage. The primary period window stays unchanged.
             guard let center = try? estimate.center.adding(days: index * length),
                   let earliest = try? start.adding(days: (index + 1) * start.days(until: estimate.earliest)),
                   let latest = try? start.adding(days: (index + 1) * start.days(until: estimate.latest)) else { break }
             let period = ForecastWindow(center: center, earliest: earliest, latest: latest)
-            let previousStart = index == 0 ? start : result.cycles[index - 1].period.center
+            guard let previousStart = try? start.adding(days: index * length) else { break }
             var ovulation: ForecastWindow?
             // NHS describes roughly 10–16 days between ovulation and the next period.
             // This is not an individually measured luteal phase or a guaranteed bound.
@@ -124,6 +150,7 @@ nonisolated struct CycleForecast: Equatable, Sendable {
             }
             var cycle = ProjectedCycle(index: index, period: period, ovulation: ovulation,
                                        ovulationWarnings: warnings, ovulationBasis: basis)
+            cycle.referenceNotice = referenceNotice
             if let duration, duration.maximum < length,
                let end = try? center.adding(days: duration.days - 1),
                let envelopeEnd = try? latest.adding(days: duration.maximum - 1) {

@@ -74,8 +74,8 @@ struct TodayView: View {
                 }
             }
             TrackerCard {
-                PredictionSummary(outcome: overview.prediction, today: today)
-                if overview.estimate != nil {
+                PredictionSummary(outcome: overview.prediction, today: today, forecast: session.cycleForecast)
+                if session.cycleForecast.nextPeriod(onOrAfter: today) != nil {
                     Button("How this estimate works") { showExplanation = true }
                         .frame(minHeight: 44)
                 }
@@ -88,7 +88,7 @@ struct TodayView: View {
                         Label("Log period", systemImage: "drop")
                     }
                     .buttonStyle(TrackerCompactLogButtonStyle(prominent: true))
-                    .accessibilityLabel("Log period start")
+                    .accessibilityLabel("Log period and bleeding days")
                     .accessibilityIdentifier("logPeriod")
                     SymptomLogButton(session: session, day: selection, title: "Symptoms", compact: true)
                     SexualActivityLogButton(session: session, day: selection, compact: true)
@@ -138,7 +138,13 @@ struct TodayView: View {
         }
         .onChange(of: today) { old, new in if selection == old { selection = new } }
         .sheet(isPresented: $showExplanation) {
-            if let estimate = overview.estimate {
+            if let cycle = session.cycleForecast.nextPeriod(onOrAfter: today),
+               cycle.isLaterProjection || cycle.referenceNotice != nil {
+                NavigationStack {
+                    TrackerPage(title: "About this projection") { TrackerCard { ProjectedCycleDetails(cycle: cycle, notBefore: today) } }
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showExplanation = false } } }
+                }
+            } else if let estimate = overview.estimate {
                 PredictionExplanation(estimate: estimate, sources: Array(overview.intervals.suffix(6)), replay: session.predictionReplay)
             }
         }
@@ -155,26 +161,33 @@ struct TodayView: View {
 struct PredictionSummary: View {
     let outcome: PredictionOutcome
     let today: LocalDay
+    let forecast: CycleForecast
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Estimated next period start").font(.headline).accessibilityAddTraits(.isHeader)
-            switch outcome {
-            case .available(let estimate):
-                Text(DayText.range(estimate.earliest, estimate.latest))
+            if let cycle = forecast.nextPeriod(onOrAfter: today) {
+                Text(DayText.range(max(today, cycle.period.earliest), cycle.period.latest))
                     .font(TrackerTypography.sectionTitle).accessibilityIdentifier("predictionWindow")
-                Label("\(estimate.confidence.rawValue) confidence · Rough estimate", systemImage: "circle.dashed")
+                Text("Around \(DayText.short(cycle.period.center))").font(.subheadline)
+                    .accessibilityIdentifier("nextPeriodCenter")
+                let confidence = primaryConfidence(cycle)
+                Label("\(confidence.rawValue) confidence · Rough estimate", systemImage: "circle.dashed")
                     .font(.subheadline)
-                if estimate.basis == .usualCycle {
+                if cycle.referenceNotice != nil {
+                    Text("Typical-cycle reference · Review recorded starts")
+                        .font(.subheadline).accessibilityIdentifier("referencePrediction")
+                } else if cycle.isLaterProjection {
+                    Text("Provisional projection · Earlier periods are not confirmed")
+                        .font(.subheadline).accessibilityIdentifier("projectedPrediction")
+                } else if case .available(let estimate) = outcome, estimate.basis == .usualCycle {
                     Text("Starter estimate · based on your usual \(estimate.reportedCycleDays ?? 28)-day cycle, not measured cycle history.")
                         .font(.subheadline).accessibilityIdentifier("starterPrediction")
                 }
-                if today > estimate.latest {
-                    Text("Estimated window passed. No new start has been recorded.")
-                        .accessibilityIdentifier("passedWindow")
-                } else if estimate.contains(today) {
-                    Text("You’re within the estimated start window.")
-                }
+            } else {
+            switch outcome {
+            case .available:
+                Text("No upcoming date can be estimated. Review your recorded starts.")
             case .insufficientHistory:
                 Text("More history is needed for an estimate.").font(.title3)
             case .wideVariation:
@@ -182,7 +195,15 @@ struct PredictionSummary: View {
             case .unavailable(let reason):
                 Text(reason.localizedDescription)
             }
+            }
         }
+    }
+
+    private func primaryConfidence(_ cycle: ProjectedCycle) -> PredictionConfidence {
+        if !cycle.isLaterProjection, cycle.referenceNotice == nil, case .available(let estimate) = outcome {
+            return estimate.confidence
+        }
+        return .low
     }
 }
 
