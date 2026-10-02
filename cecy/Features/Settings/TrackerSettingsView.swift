@@ -95,16 +95,12 @@ struct TrackerSettingsView: View {
 
 /// Native grouped rows keep controls familiar and accommodate larger text.
 struct SettingsForm<Content: View>: View {
-    @Environment(\.colorScheme) private var colorScheme
     let title: String
     @ViewBuilder var content: Content
 
     var body: some View {
         Form { content }
-            .formStyle(.grouped)
-            .environment(\.defaultMinListRowHeight, 44)
-            .scrollContentBackground(.hidden)
-            .background(TrackerPalette(scheme: colorScheme).background)
+            .trackerFormStyle()
             .navigationTitle(title)
     }
 }
@@ -115,20 +111,7 @@ private struct SettingsRow: View {
     let detail: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: systemImage)
-                .foregroundStyle(.tint)
-                .frame(width: 24, height: 24)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).foregroundStyle(.primary)
-                Text(detail).font(.subheadline).foregroundStyle(.secondary)
-            }
-            .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.vertical, 6)
-        .frame(minHeight: 44, alignment: .leading)
-        .accessibilityElement(children: .combine)
+        TrackerNavigationLabel(title: title, symbol: systemImage, detail: detail, showsChevron: false)
     }
 }
 
@@ -175,7 +158,7 @@ private struct AboutCecyView: View {
                 Text("Use synthetic records for now. Device privacy and accessibility verification are still pending before public release.")
             }
             Section("On your device") {
-                Text("Apple sign-in establishes your identity. Cecy records and pattern calculations stay local. Optional Apple Health import is read-only and requires review. Optional AI sends selected information to Azure and OpenAI after separate consent and an explicit request. No health-data cloud sync or analytics.")
+                Text("Records and calculations stay on-device. Apple Health import is optional and read-only. Optional insights send selected information to Azure and OpenAI only with consent and a request. No health-data cloud sync or analytics.")
                 Text("Health records and preferences are excluded from future system backups. Earlier backups and exported copies are not erased. Apple sign-in cannot restore records on another device yet.")
             }
         }
@@ -197,14 +180,14 @@ struct DeleteAllDataView: View {
                 Section("What’s removed") {
                     Label("All periods, flow, symptoms, ratings, sexual activity and notes", systemImage: "trash")
                     Label("Your profile and local Apple identity", systemImage: "person.crop.circle.badge.minus")
-                    Label("Reminders, AI consent and temporary exports", systemImage: "bell.slash")
+                    Label("Reminders, insight consent and temporary exports", systemImage: "bell.slash")
                     Text("Saved onboarding and old template database files are also removed. You’ll return to onboarding.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section {
                     Text("App lock stays on if enabled.")
                     Text("Device backups and copies saved outside Cecy are not deleted.")
-                    Text("AI requests already sent cannot be recalled. Deletion stops new requests until you enable AI again.")
+                    Text("Requests already sent cannot be recalled. Deletion stops new requests until you enable optional insights again.")
                     Text("Records in Apple Health are not deleted. Local import review history is cleared.")
                     Text("Your Apple Account and Apple’s sign-in authorization are not deleted. Manage that authorization in your Apple Account settings.")
                 } header: {

@@ -37,13 +37,12 @@ struct TrackerCalendarView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let contentWidth = min(geometry.size.width - 32, 640)
+            let contentWidth = min(geometry.size.width - 32, TrackerLayout.readableWidth)
             let listLayout = contentWidth - 16 < 320 || dynamicTypeSize.isAccessibilitySize
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                        Text("Calendar").font(.largeTitle.weight(.semibold)).accessibilityAddTraits(.isHeader)
-                        Text("Your records and estimates, clearly apart.").foregroundStyle(.secondary)
+                        TrackerPageHeading(title: "Calendar", subtitle: "Your records and estimates, clearly apart.")
                         if let confirmation = session.confirmation {
                             TrackerCard {
                                 Label(confirmation, systemImage: "checkmark.circle")
@@ -77,16 +76,20 @@ struct TrackerCalendarView: View {
                             }
                             VStack(alignment: .leading, spacing: 8) {
                                 Label("Recorded start or confirmed bleeding day", systemImage: "drop.fill")
+                                    .foregroundStyle(palette.recorded)
                                 Label("Estimated start window · Dashed border", systemImage: "circle.dashed")
-                                Label("Recorded symptom or activity · Square marker", systemImage: "square.fill")
+                                    .foregroundStyle(palette.accent)
+                                Label("Sexual activity", systemImage: "heart.fill")
+                                Label("Symptoms use their individual icons", systemImage: "waveform.path.ecg")
+                                Text("A dot beside the date marks today. Tap a date for all records.")
                                 Text("An underlined date is selected. Estimates are not recorded bleeding days.")
                             }
-                            .font(.footnote).padding(8)
+                            .font(.footnote).foregroundStyle(.secondary).padding(8)
                         }
                         if !listLayout { TrackerCard { selectedDetails } }
                     }
                     .frame(width: max(0, contentWidth), alignment: .leading)
-                    .padding(.vertical, 24)
+                    .padding(.vertical, TrackerLayout.pageInset)
                     .frame(maxWidth: .infinity)
                 }
                 .onChange(of: selection) { _, value in
@@ -107,7 +110,7 @@ struct TrackerCalendarView: View {
 
     private var monthControls: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(DayText.month(selection)).font(.title2.weight(.semibold))
+            Text(DayText.month(selection)).font(TrackerTypography.sectionTitle)
                 .accessibilityAddTraits(.isHeader).accessibilityIdentifier("calendarMonth")
             HStack {
                 Button { moveMonth(-1) } label: { Image(systemName: "chevron.backward").frame(width: 44, height: 44) }
@@ -145,6 +148,7 @@ struct TrackerCalendarView: View {
         } else { parts.append("No recorded period") }
         let count = observationCount(on: day)
         if count > 0 { parts.append("\(count) recorded observations") }
+        parts += DayActivityMarker.recorded(on: day, in: session.snapshot).filter { $0.id != "period" }.map(\.title)
         if overview.estimate?.contains(day) == true { parts.append("Possible next period start; estimate") }
         return parts.joined(separator: ". ")
     }
@@ -154,26 +158,29 @@ struct TrackerCalendarView: View {
         let predicted = overview.estimate?.contains(day) == true
         return Button { selection = day } label: {
             VStack(alignment: asList ? .leading : .center, spacing: 4) {
-                Text(asList ? DayText.full(day) : day.day.formatted())
-                    .fontWeight(selection == day ? .bold : .regular)
-                    .underline(selection == day)
+                HStack(spacing: 2) {
+                    Text(asList ? DayText.full(day) : day.day.formatted())
+                        .fontWeight(selection == day ? .bold : .regular)
+                        .underline(selection == day)
+                    if day == today { Image(systemName: "circle.fill").font(.system(size: 4)).accessibilityHidden(true) }
+                }
                 if asList {
                     Text(status(day)).font(.footnote)
                 } else {
-                    HStack(spacing: 4) {
-                        Image(systemName: "drop.fill").opacity(recorded ? 1 : 0)
-                        Image(systemName: "circle.fill").opacity(day == today ? 1 : 0)
-                        Image(systemName: "square.fill").opacity(observationCount(on: day) > 0 ? 1 : 0)
-                    }
-                    .font(.system(size: 8)).accessibilityHidden(true)
+                    DayActivityIcons(markers: DayActivityMarker.recorded(on: day, in: session.snapshot))
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 44, alignment: asList ? .leading : .center)
             .padding(.horizontal, asList ? 8 : 0)
-            .background(recorded ? palette.sage : .clear, in: RoundedRectangle(cornerRadius: 10))
+            .background(recorded ? palette.recordedSurface : (selection == day ? palette.sage : .clear),
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
                 if predicted {
-                    RoundedRectangle(cornerRadius: 10).strokeBorder(palette.accent, style: StrokeStyle(lineWidth: 2, dash: [3, 3]))
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(palette.accent, style: StrokeStyle(lineWidth: 2, dash: [3, 3]))
+                } else if selection == day {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(palette.accent, lineWidth: 1.5)
                 }
             }
             .contentShape(Rectangle())
@@ -213,7 +220,7 @@ struct TrackerCalendarView: View {
                 Button { onLog(selection) } label: {
                     Label("Record a period", systemImage: "plus").frame(minHeight: 44)
                 }
-                .buttonStyle(.borderedProminent).accessibilityIdentifier("calendarLogPeriod")
+                .buttonStyle(TrackerPrimaryButtonStyle()).accessibilityIdentifier("calendarLogPeriod")
             }
             if selection <= today {
                 SymptomLogButton(session: session, day: selection)
@@ -245,6 +252,7 @@ private struct CalendarDateSheet: View {
     var body: some View {
         NavigationStack {
             Form { DatePicker("Go to date", selection: $date, displayedComponents: .date) }
+                .trackerFormStyle()
                 .environment(\.calendar, LocalDay.calendar)
                 .environment(\.timeZone, LocalDay.calendar.timeZone)
                 .navigationTitle("Choose a date")

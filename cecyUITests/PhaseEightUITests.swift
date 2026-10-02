@@ -42,9 +42,9 @@ final class PhaseEightUITests: XCTestCase {
     }
     @MainActor private func consent(_ app: XCUIApplication) {
         tap("reviewAIConsent", app: app)
-        XCTAssertTrue(app.navigationBars["Optional AI"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Optional insights"].waitForExistence(timeout: 5))
         tap("enableAI", app: app)
-        XCTAssertTrue(app.navigationBars["Optional AI"].waitForNonExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(app.navigationBars["Optional insights"].waitForNonExistence(timeout: 5), app.debugDescription)
     }
     @MainActor private func describe(_ app: XCUIApplication) {
         tap("logSymptoms", app: app)
@@ -69,7 +69,7 @@ final class PhaseEightUITests: XCTestCase {
         XCTAssertFalse(app.buttons["normalizeSymptoms"].isEnabled)
         consent(app)
         tap("normalizeSymptoms", app: app)
-        XCTAssertTrue(app.staticTexts["Review AI suggestions before saving"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.staticTexts["Review symptoms before saving"].waitForExistence(timeout: 10), app.debugDescription)
         tap("saveAISymptoms", app: app)
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["logPeriod"].waitForExistence(timeout: 15))
@@ -94,7 +94,7 @@ final class PhaseEightUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["localSevereSymptomNotice"].exists || app.otherElements["localSevereSymptomNotice"].exists)
         consent(app)
         tap("generateAI", app: app)
-        output("• Synthetic gentle movement", app: app)
+        output("Synthetic gentle movement", app: app)
         back(app)
         app.tabBars.buttons["Insights"].tap()
         tap("askCecy", app: app)

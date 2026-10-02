@@ -19,9 +19,9 @@ nonisolated enum AIServiceError: Error, LocalizedError, Equatable {
     case invalidRequest, unsupportedTask, unavailable, invalidResponse, serverError, networkError, cancelled, consentRequired
     var errorDescription: String? {
         switch self {
-        case .consentRequired: "Enable AI before sending this request. Manual tracking still works."
+        case .consentRequired: "Enable optional insights before sending. Manual tracking still works."
         case .cancelled: "Request cancelled. Your records have not been changed."
-        default: "Cecy couldn’t process that right now. Your data has not been changed. Try again or continue without AI."
+        default: "Cecy couldn’t process that right now. Your records haven’t changed. Try again or continue manually."
         }
     }
     static func server(_ code: String) -> Self {

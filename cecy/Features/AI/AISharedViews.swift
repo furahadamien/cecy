@@ -6,24 +6,22 @@ struct AIConsentView: View {
     @State private var error: String?
     var body: some View {
         NavigationStack {
-            SettingsForm(title: "Optional AI") {
-                Section("Before you enable AI") {
-                    Text("AI features send selected information from your request to Cecy’s Azure service and OpenAI for processing. Your full health history is not uploaded.")
-                    Text("Descriptions and questions send the text you type. Other requests send limited locally calculated facts; wellness also sends your selected preferences and food allergies. Avoid names or other identifying details in free text.")
-                    Text("Your records stay on this device. The gateway is designed to be stateless; external processing is subject to the providers’ data policies. Turning AI off cannot recall a request already sent.")
-                    Text("AI can make mistakes. It does not diagnose conditions, predict fertility, or replace medical care. Check suggestions against your records and personal needs.")
-                    Text("This is a prototype service. Requests may be unavailable. Manual tracking works without AI.")
+            SettingsForm(title: "Optional insights") {
+                Section("Your choice") {
+                    Text("Cecy uses AI through its Azure service and OpenAI. When you make a request, selected text, cycle facts or wellness preferences—including allergies—are sent for processing, not your full history.")
+                    Text("Records stay stored on this device. External processing follows provider data policies. Avoid identifying details in your text; a sent request cannot be recalled.")
+                    Text("Suggestions can be wrong and are not medical advice. Manual tracking always works without this optional prototype service.")
                 }
                 Section {
                     if let error { InlineError(message: error) }
-                    Button("Enable AI") {
+                    Button("Enable insights") {
                         error = session.setAIEnabled(true)
                         if error == nil { dismiss() }
                     }
                     .accessibilityIdentifier("enableAI")
                     Button("Not now") { dismiss() }.accessibilityIdentifier("declineAI")
                 } footer: {
-                    Text("Enabling does not send a request. Review the selected information and tap the request button afterward. Change this choice in Settings → Privacy and export. Notice v\(AIConsentRecord.currentVersion).")
+                    Text("Enabling sends nothing. You choose when to submit. Turn off in Settings → Privacy and export.")
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -36,7 +34,7 @@ struct AIConsentControl: View {
     @State private var showConsent = false
     var body: some View {
         if !session.privacy.aiEnabled {
-            Button("Review AI privacy and enable") { showConsent = true }
+            Button("Enable optional insights") { showConsent = true }
                 .frame(minHeight: 44).accessibilityIdentifier("reviewAIConsent")
                 .sheet(isPresented: $showConsent) { AIConsentView(session: session) }
         }
@@ -45,11 +43,12 @@ struct AIConsentControl: View {
 
 struct AIRequestStatus: View {
     let coordinator: AIRequestCoordinator
+    var label = "Generating insights"
     var body: some View {
         if coordinator.isLoading {
-            ProgressView("Waiting for AI…")
+            ProgressView(label)
                 .accessibilityIdentifier("aiLoading")
-            Text("This may take up to 75 seconds. No records will change while you wait.")
+            Text("Up to 75 seconds. Your records won’t change.")
                 .font(.footnote).foregroundStyle(.secondary)
             Button("Cancel request") { coordinator.cancel() }.accessibilityIdentifier("cancelAIRequest")
         }
@@ -64,7 +63,10 @@ struct AISafetyNotice: View {
     var body: some View {
         if let message {
             Label { Text(verbatim: message) } icon: { Image(systemName: "exclamationmark.triangle") }
-                .font(.headline).accessibilityIdentifier("aiSafetyMessage")
+                .font(.callout.weight(.medium)).padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.yellow.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
+                .accessibilityIdentifier("aiSafetyMessage")
         }
     }
 }
@@ -73,16 +75,16 @@ struct AIPrivacySection: View {
     let session: TrackerSession
     @State private var error: String?
     var body: some View {
-        Section("Optional AI") {
-            LabeledContent("AI processing", value: session.privacy.aiEnabled ? "Enabled" : "Off")
+        Section("Optional insights") {
+            LabeledContent("External processing", value: session.privacy.aiEnabled ? "Enabled" : "Off")
                 .accessibilityIdentifier("aiConsentStatus")
             if session.privacy.aiEnabled || session.privacy.preferences.aiConsent != nil {
-                Button("Turn off AI", role: .destructive) { error = session.setAIEnabled(false) }
+                Button("Turn off insights", role: .destructive) { error = session.setAIEnabled(false) }
                     .accessibilityIdentifier("disableAI")
             }
             AIConsentControl(session: session)
             if let error { InlineError(message: error) }
-            Text("Only explicit requests use the existing Azure/OpenAI service. Turning off clears pending AI results, not confirmed records. AI prose and conversations are not saved or exported.")
+            Text("Only requests you submit use external processing. Turning off clears pending results, not confirmed records. Generated text is not saved or exported.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
     }
@@ -92,42 +94,52 @@ struct AIPrivacySection: View {
 struct AIOutputView: View {
     let output: AIOutput
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Label("AI-generated · Check against your records", systemImage: "sparkles").font(.headline)
+        VStack(alignment: .leading, spacing: 20) {
+            Label("Key insights", systemImage: "sparkles")
+                .font(.system(.title2, design: .rounded, weight: .semibold))
+                .accessibilityAddTraits(.isHeader)
             switch output {
             case .symptoms:
                 EmptyView() // Only the editable, confirmed symptom review may render these.
             case .insight(let value):
-                Text(verbatim: value.title).font(.headline)
-                Text(verbatim: value.explanation)
-                Text(verbatim: value.supportingObservation)
+                TrackerCard(highlighted: true) {
+                    Text(verbatim: value.title).font(.title3.weight(.semibold))
+                    Text(verbatim: value.explanation)
+                }
+                TrackerCard { Text("In your records").font(.headline); Text(verbatim: value.supportingObservation) }
                 AISafetyNotice(message: value.safetyMessage)
             case .wellness(let value):
-                list("Movement", value.movementSuggestions)
-                list("Food", value.foodSuggestions)
-                Text("Hydration").font(.headline)
-                Text(verbatim: value.hydrationSuggestion)
-                list("Recovery", value.recoverySuggestions)
-                DisclosureGroup("Why these?") { Text(verbatim: value.explanation) }
+                list("Movement", value.movementSuggestions, symbol: "figure.walk")
+                list("Food", value.foodSuggestions, symbol: "fork.knife")
+                TrackerCard { Label("Hydration", systemImage: "drop").font(.headline); Text(verbatim: value.hydrationSuggestion) }
+                list("Recovery", value.recoverySuggestions, symbol: "leaf")
+                TrackerCard { DisclosureGroup("Why these?") { Text(verbatim: value.explanation).padding(.top, 8) } }
                 AISafetyNotice(message: value.safetyMessage)
             case .summary(let value):
-                Text(verbatim: value.summary)
-                list("Highlights", value.highlights)
+                TrackerCard(highlighted: true) { Text(verbatim: value.summary) }
+                list("Highlights", value.highlights, symbol: "list.bullet")
                 AISafetyNotice(message: value.safetyMessage)
             case .question(let value):
-                Text(verbatim: value.answer)
-                list("AI supporting observations", value.supportingFacts)
+                TrackerCard(highlighted: true) { Text(verbatim: value.answer) }
+                list("Supporting observations", value.supportingFacts, symbol: "chart.bar")
                 AISafetyNotice(message: value.safetyMessage)
             }
-            Text("Not medical advice. This result is temporary and is cleared when you leave or your records change.")
+            Text("Check against your records. Not medical advice. Results are not saved.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
+        .font(.body).lineSpacing(4)
+        .fixedSize(horizontal: false, vertical: true)
         .accessibilityIdentifier("aiOutput")
     }
-    private func list(_ title: String, _ items: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.headline)
-            ForEach(Array(items.enumerated()), id: \.offset) { _, item in Text(verbatim: "• " + item) }
+    private func list(_ title: String, _ items: [String], symbol: String) -> some View {
+        TrackerCard {
+            Label(title, systemImage: symbol).font(.headline).accessibilityAddTraits(.isHeader)
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Image(systemName: "circle.fill").font(.system(size: 5)).accessibilityHidden(true)
+                    Text(verbatim: item).frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
         }
     }
 }

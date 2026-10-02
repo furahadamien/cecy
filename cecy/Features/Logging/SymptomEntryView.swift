@@ -48,13 +48,15 @@ struct SymptomEntryView: View {
             Form {
                 if original == nil {
                     Section {
+                        Text("Pick your symptoms below, or describe how you feel.")
+                            .font(.subheadline).foregroundStyle(.secondary)
                         NavigationLink {
                             AISymptomEntryView(session: session, day: day)
                         } label: {
                             Label("Describe how you feel", systemImage: "sparkles")
                         }
                         .accessibilityIdentifier("describeSymptoms")
-                    } footer: { Text("Optional AI with review before saving. Manual selection remains below.") }
+                    } footer: { Text("Review your symptoms before saving.") }
                 }
                 Section {
                     SelectionFlowLayout {
@@ -101,6 +103,7 @@ struct SymptomEntryView: View {
                     InlineError(message: message).accessibilityFocused($errorFocused)
                 }
             }
+            .trackerFormStyle()
             .environment(\.calendar, LocalDay.calendar)
             .environment(\.timeZone, LocalDay.calendar.timeZone)
             .navigationTitle(original == nil ? "Log symptoms" : "Edit observation")
@@ -160,7 +163,7 @@ struct SymptomLogButton: View {
     @State private var showEntry = false
     var body: some View {
         Button { showEntry = true } label: {
-            Label("Log symptoms", systemImage: "plus.circle").frame(minHeight: 44)
+            Label("Log symptoms", systemImage: "plus.circle").frame(maxWidth: .infinity, minHeight: TrackerLayout.minimumTarget)
         }
         .buttonStyle(.bordered).accessibilityIdentifier("logSymptoms")
         .sheet(isPresented: $showEntry) { SymptomEntryView(session: session, day: day) }

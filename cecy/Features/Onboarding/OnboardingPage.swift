@@ -2,11 +2,13 @@ import SwiftUI
 
 struct OnboardingPage<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
+    @ScaledMetric(relativeTo: .title) private var symbolSize = 28.0
     @AccessibilityFocusState private var headingFocused: Bool
     let title: String
     let subtitle: String?
     let symbol: String
     let step: Int
+    let totalSteps: Int
     let optional: Bool
     @ViewBuilder var content: Content
 
@@ -16,12 +18,12 @@ struct OnboardingPage<Content: View>: View {
             Section {
                 VStack(alignment: .leading, spacing: 12) {
                     Image(systemName: symbol)
-                        .font(.system(size: 28, weight: .medium))
+                        .font(.system(size: symbolSize, weight: .medium))
                         .foregroundStyle(palette.accent)
-                        .frame(width: 64, height: 64)
-                        .background(palette.sage, in: RoundedRectangle(cornerRadius: 22))
+                        .padding(18)
+                        .background(palette.sage, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                         .accessibilityHidden(true)
-                    Text(title).font(.largeTitle.weight(.semibold))
+                    Text(title).font(TrackerTypography.pageTitle)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityAddTraits(.isHeader)
                         .accessibilityFocused($headingFocused)
@@ -36,21 +38,17 @@ struct OnboardingPage<Content: View>: View {
             .listRowInsets(EdgeInsets(top: 8, leading: 4, bottom: 8, trailing: 4))
             content
         }
-        .formStyle(.grouped)
-        .environment(\.defaultMinListRowHeight, 48)
-        .scrollContentBackground(.hidden)
-        .scrollDismissesKeyboard(.interactively)
-        .background(palette.background)
+        .trackerFormStyle()
         .safeAreaInset(edge: .top, spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("Step \(step) of 12").fontWeight(.medium)
+                    Text("Step \(step) of \(totalSteps)").fontWeight(.medium)
                     Spacer()
                     if optional { Text("Optional") }
                 }.font(.caption).foregroundStyle(.secondary)
-                ProgressView(value: Double(step), total: 12)
+                ProgressView(value: Double(step), total: Double(totalSteps))
                     .accessibilityLabel("Onboarding progress")
-                    .accessibilityValue("Step \(step) of 12")
+                    .accessibilityValue("Step \(step) of \(totalSteps)")
             }
             .padding(.horizontal, 24).padding(.vertical, 12)
             .background(palette.background)

@@ -7,9 +7,38 @@ struct TodayView: View {
     let onLog: (LocalDay) -> Void
     let onHistory: () -> Void
     @State private var showExplanation = false
+    @State private var selection: LocalDay
+
+    init(session: TrackerSession, today: LocalDay, overview: CycleOverview, onLog: @escaping (LocalDay) -> Void, onHistory: @escaping () -> Void) {
+        self.session = session
+        self.today = today
+        self.overview = overview
+        self.onLog = onLog
+        self.onHistory = onHistory
+        _selection = State(initialValue: today)
+    }
 
     var body: some View {
         TrackerPage(title: "Today", subtitle: DayText.full(today)) {
+            ActivityCalendarStrip(today: today, snapshot: session.snapshot, selection: $selection)
+            if selection != today {
+                TrackerCard {
+                    Text(DayText.full(selection)).font(.headline).accessibilityIdentifier("selectedTodayDate")
+                    if selection > today { Text("Future dates are for viewing only.").font(.subheadline) }
+                    let markers = DayActivityMarker.recorded(on: selection, in: session.snapshot)
+                    if markers.isEmpty { Text("No records for this date.").foregroundStyle(.secondary) }
+                    ForEach(session.snapshot.periods.filter { $0.contains(selection) }) { period in
+                        Label("Period started \(DayText.full(period.start))", systemImage: "drop.fill")
+                        PeriodRecordActions(session: session, period: period)
+                    }
+                    ForEach(session.snapshot.symptoms.filter { $0.day == selection }) { entry in
+                        SymptomRecordView(session: session, entry: entry)
+                    }
+                    ForEach(session.snapshot.sexualActivities.filter { $0.day == selection }) { entry in
+                        SexualActivityRecordView(session: session, entry: entry)
+                    }
+                }
+            }
             if let confirmation = session.confirmation {
                 TrackerCard {
                     Label(confirmation, systemImage: "checkmark.circle")
@@ -22,14 +51,14 @@ struct TodayView: View {
                 Label("Your recorded cycle", systemImage: "leaf").font(.subheadline.weight(.medium))
                 if let day = overview.currentDay, let start = overview.latestStart {
                     Text("Day \(day)")
-                        .font(.system(.largeTitle, design: .rounded, weight: .semibold))
+                        .font(TrackerTypography.metric).monospacedDigit()
                         .accessibilityIdentifier("cycleDay")
                     Text("Since your recorded start on \(DayText.full(start)).")
                         .font(.subheadline).foregroundStyle(.secondary)
                 } else if case .unavailable(let reason) = overview.prediction {
                     InlineError(message: reason.localizedDescription)
                 } else {
-                    Text("Your cycle history starts here.").font(.title2.weight(.semibold))
+                    Text("Your cycle history starts here.").font(TrackerTypography.sectionTitle)
                     Text("Record a period start or add dates you remember.").foregroundStyle(.secondary)
                 }
             }
@@ -40,14 +69,17 @@ struct TodayView: View {
                         .frame(minHeight: 44)
                 }
             }
-            VStack(spacing: 12) {
-                Button { onLog(today) } label: {
+            TrackerCard {
+                Text(selection == today ? "Log for today" : "Log for \(DayText.short(selection))")
+                    .font(.headline).accessibilityAddTraits(.isHeader)
+                Button { onLog(selection) } label: {
                     Label("Log period start", systemImage: "drop")
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
-                .buttonStyle(.borderedProminent).accessibilityIdentifier("logPeriod")
-                SymptomLogButton(session: session, day: today)
-                SexualActivityLogButton(session: session, day: today)
+                .buttonStyle(TrackerPrimaryButtonStyle()).accessibilityIdentifier("logPeriod")
+                .disabled(selection > today)
+                SymptomLogButton(session: session, day: selection).disabled(selection > today)
+                SexualActivityLogButton(session: session, day: selection).disabled(selection > today)
                 NavigationLink("Sexual activity history") { SexualActivityHistoryView(session: session) }
                     .frame(minHeight: 44).accessibilityIdentifier("sexualActivityHistory")
                 Button("Add previous periods", action: onHistory)
@@ -79,6 +111,7 @@ struct TodayView: View {
                 }
             }
         }
+        .onChange(of: today) { old, new in if selection == old { selection = new } }
         .sheet(isPresented: $showExplanation) {
             if let estimate = overview.estimate {
                 PredictionExplanation(estimate: estimate, sources: Array(overview.intervals.suffix(6)), replay: session.predictionReplay)
@@ -97,7 +130,7 @@ struct PredictionSummary: View {
             switch outcome {
             case .available(let estimate):
                 Text(DayText.range(estimate.earliest, estimate.latest))
-                    .font(.title2.weight(.semibold)).accessibilityIdentifier("predictionWindow")
+                    .font(TrackerTypography.sectionTitle).accessibilityIdentifier("predictionWindow")
                 Label("\(estimate.confidence.rawValue) confidence · Rough estimate", systemImage: "circle.dashed")
                     .font(.subheadline)
                 if today > estimate.latest {
@@ -134,7 +167,7 @@ struct PredictionExplanation: View {
         NavigationStack {
             TrackerPage(title: "About this estimate") {
                 TrackerCard(highlighted: true) {
-                    Text(DayText.range(estimate.earliest, estimate.latest)).font(.title2.weight(.semibold))
+                    Text(DayText.range(estimate.earliest, estimate.latest)).font(TrackerTypography.sectionTitle)
                     Text("Possible next start dates, not a predicted bleeding duration.")
                     Text("\(estimate.confidence.rawValue) confidence · Provisional")
                 }

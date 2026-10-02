@@ -146,4 +146,15 @@ nonisolated private final class AIHTTPStub: URLProtocol, @unchecked Sendable {
         await #expect(throws: AIServiceError.invalidRequest) { try await remote.normalizeSymptoms(text: " ") }
         #expect(AIHTTPStub.state.captured.0.isEmpty)
     }
+
+    @Test func questionLengthIsCheckedBeforeDispatch() async throws {
+        let remote = service(AIFixtures.question)
+        let facts = AIQuestionFacts(scope: "cycleLengths", caveat: "Synthetic")
+        await #expect(throws: AIServiceError.invalidRequest) {
+            try await remote.answerCycleQuestion(context: CycleQuestionContext(question: String(repeating: "x", count: 101), facts: facts))
+        }
+        #expect(AIHTTPStub.state.captured.0.isEmpty)
+        _ = try await remote.answerCycleQuestion(context: CycleQuestionContext(question: String(repeating: "é", count: 100), facts: facts))
+        #expect(AIHTTPStub.state.captured.0.count == 1)
+    }
 }

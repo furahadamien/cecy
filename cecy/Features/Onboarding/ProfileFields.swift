@@ -40,6 +40,7 @@ private struct BirthdaySheet: View {
                 DatePicker("Date of birth", selection: $date, in: ...today.formattingDate, displayedComponents: .date)
                     .datePickerStyle(.wheel).labelsHidden()
             }
+            .trackerFormStyle()
             .environment(\.calendar, LocalDay.calendar)
             .environment(\.timeZone, LocalDay.calendar.timeZone)
             .navigationTitle("Date of birth").navigationBarTitleDisplayMode(.inline)
@@ -216,7 +217,7 @@ private struct ProfileChoiceRow: View {
             .padding(.horizontal, 12).padding(.vertical, 6)
             .frame(minHeight: 44)
             .background(selected ? TrackerPalette(scheme: colorScheme).sage : Color.clear,
-                        in: RoundedRectangle(cornerRadius: 14))
+                        in: RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? [.isSelected] : [])

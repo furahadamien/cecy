@@ -3,12 +3,14 @@ import SwiftUI
 struct OnboardingFlowView: View {
     @Environment(\.colorScheme) private var colorScheme
     enum Step: Int, CaseIterable {
-        case welcome, about, measurements, cycle, history, symptoms, context, goals, notifications, review, apple
+        case welcome, about, measurements, gender, partners, cycle, history, symptoms, context, goals, notifications, review, apple
         var title: String {
             switch self {
             case .welcome: "Understand your cycle."
             case .about: "About you"
             case .measurements: "Height and weight"
+            case .gender: "Your gender"
+            case .partners: "Who do you have sex with?"
             case .cycle: "Cycle basics"
             case .history: "Add your last 4 periods"
             case .symptoms: "Common symptoms"
@@ -19,12 +21,14 @@ struct OnboardingFlowView: View {
             case .apple: "Start tracking"
             }
         }
-        var optional: Bool { [.measurements, .symptoms, .context, .goals, .notifications].contains(self) }
+        var optional: Bool { [.measurements, .gender, .partners, .symptoms, .context, .goals, .notifications].contains(self) }
         var subtitle: String? {
             switch self {
             case .welcome: "A little understanding, day by day."
             case .about: "Let’s make Cecy feel like yours."
             case .measurements: "Optional details. Always yours to change."
+            case .gender: "How do you describe your gender? You can skip this."
+            case .partners: "Choose all that apply, or skip. This doesn’t define your orientation."
             case .cycle: "Tell us what’s usual for you."
             case .history: "Start with the most recent. Estimates are okay."
             case .symptoms: "What do you usually experience? Choose any that apply."
@@ -40,6 +44,8 @@ struct OnboardingFlowView: View {
             case .welcome: "leaf"
             case .about: "person.crop.circle"
             case .measurements: "ruler"
+            case .gender: "person.crop.circle"
+            case .partners: "person.2"
             case .cycle: "drop"
             case .history: "calendar"
             case .symptoms: "heart.text.square"
@@ -83,7 +89,7 @@ struct OnboardingFlowView: View {
                     ProgressView().controlSize(.large)
                         .accessibilityLabel("Creating your account")
                         .accessibilityIdentifier("setupStatus")
-                    Text("Creating your account…").font(.title2.weight(.semibold))
+                    Text("Creating your account…").font(TrackerTypography.sectionTitle)
                         .multilineTextAlignment(.center)
                         .accessibilityIdentifier("creatingAccountMessage")
                 }
@@ -91,7 +97,7 @@ struct OnboardingFlowView: View {
                 .background(TrackerPalette(scheme: colorScheme).background)
             } else {
                 OnboardingPage(title: step.title, subtitle: step.subtitle, symbol: step.symbol,
-                               step: step.rawValue + 1, optional: step.optional) {
+                               step: step.rawValue + 1, totalSteps: Step.allCases.count, optional: step.optional) {
                     fields
                 }
                 .id(step)
@@ -112,11 +118,12 @@ struct OnboardingFlowView: View {
                                      Text(editingReview ? "Back to review" : "Continue")
                                         .frame(maxWidth: .infinity, minHeight: 44)
                                 }
-                                    .buttonStyle(.borderedProminent).accessibilityIdentifier("onboardingContinue")
+                                    .buttonStyle(TrackerPrimaryButtonStyle()).accessibilityIdentifier("onboardingContinue")
                             }
                         }
                     }
-                    .padding(.horizontal).padding(.vertical, 8).background(.regularMaterial)
+                    .padding(.horizontal, TrackerLayout.pageInset).padding(.vertical, 12)
+                    .background(TrackerPalette(scheme: colorScheme).background)
                 }
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -156,6 +163,14 @@ struct OnboardingFlowView: View {
         case .measurements:
             Section { ProfileMeasurementFields(profile: $draft.profile) } footer: {
                 Text("Both are optional. Neither is used to predict your next period.")
+            }
+        case .gender:
+            Section { ProfileGenderFields(profile: $draft.profile) } footer: {
+                Text("Stored only in your local profile. Not used for predictions or sent for insights.")
+            }
+        case .partners:
+            Section { ProfilePartnerFields(profile: $draft.profile) } footer: {
+                Text("Private profile information, not an activity log. Not used for predictions or sent for insights.")
             }
         case .cycle:
             Section { ProfileCycleFields(profile: $draft.profile) } footer: {
@@ -246,13 +261,15 @@ struct OnboardingFlowView: View {
                 .font(.footnote).foregroundStyle(.secondary)
         }
         Section("Your preferences") {
+            LabeledContent("Gender", value: draft.profile.genderIdentity?.title ?? "Not answered")
+            LabeledContent("Partners", value: summary(SexualPartnerPreference.allCases.filter { draft.profile.sexualPartners?.contains($0) == true }.map(\.title)))
             Text("Symptoms: " + summary(CommonSymptom.allCases.filter { draft.profile.commonSymptoms.contains($0) }.map(\.title)))
             Text("Goals: " + summary(TrackingGoal.allCases.filter { draft.profile.goals.contains($0) }.map(\.title)))
             Text("Reminder choices can be changed later in Settings.").font(.footnote).foregroundStyle(.secondary)
         }
         Section("Edit answers") {
             DisclosureGroup("Review or change an answer") {
-            ForEach([Step.about, .measurements, .cycle, .history, .symptoms, .context, .goals, .notifications], id: \.rawValue) { target in
+            ForEach([Step.about, .measurements, .gender, .partners, .cycle, .history, .symptoms, .context, .goals, .notifications], id: \.rawValue) { target in
                 Button(target.title) { editingReview = true; step = target; error = nil }
                     .frame(minHeight: 44)
             }
@@ -288,6 +305,8 @@ struct OnboardingFlowView: View {
     private func skip() {
         switch step {
         case .measurements: draft.profile.heightCentimeters = nil; draft.profile.weightKilograms = nil
+        case .gender: draft.profile.genderIdentity = nil
+        case .partners: draft.profile.sexualPartners = nil
         case .symptoms: draft.profile.commonSymptoms = []
         case .context: draft.profile.cycleContext = []
         case .goals: draft.profile.goals = []

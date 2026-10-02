@@ -1,13 +1,14 @@
 import Foundation
 
 nonisolated enum AIContextError: Error, LocalizedError {
-    case preferences, insufficientRecords, unsupportedQuestion, invalidText
+    case preferences, insufficientRecords, unsupportedQuestion, invalidText, invalidQuestion
     var errorDescription: String? {
         switch self {
         case .preferences: "Complete activity, exercise, diet, allergy status and wellness goals in Settings → Profile → Wellness preferences. Explicitly choosing none is OK; unanswered choices are not assumed."
         case .insufficientRecords: "There aren’t enough confirmed records for this request. No dates or missing observations will be guessed."
-        case .unsupportedQuestion: "Choose a supported scope and ask about those records. Cecy can explain recorded cycle lengths, a symptom’s recorded-day count, or its timing near period starts—not diagnoses, causes, pregnancy or fertility."
-        case .invalidText: "Enter a question or description using 1–2,000 characters."
+        case .unsupportedQuestion: "Ask about the selected records, or use the suggested question."
+        case .invalidText: "Enter a description using 1–2,000 characters."
+        case .invalidQuestion: "Enter a question using 1–100 characters."
         }
     }
 }
@@ -36,6 +37,7 @@ nonisolated enum CycleQuestionScope: String, CaseIterable, Identifiable, Sendabl
 /// Only allowlisted aggregates leave this layer. Never encode TrackerSnapshot, profile,
 /// record IDs, civil dates, private notes, sexual activity, or HealthKit metadata as context.
 nonisolated enum AIContextBuilder {
+    static let maximumQuestionLength = 100
     static let caveat = "Missing logs do not mean a symptom was absent. Recorded intervals can be longer when period starts are missing. These are descriptive records, not diagnoses or predictions."
 
     static func normalization(_ text: String) throws -> AIRequest {
@@ -44,6 +46,11 @@ nonisolated enum AIContextBuilder {
     }
     static func validateText(_ text: String) throws {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.count <= 2_000 else { throw AIContextError.invalidText }
+    }
+
+    static func validateQuestion(_ text: String) throws {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              text.count <= maximumQuestionLength else { throw AIContextError.invalidQuestion }
     }
 
     static func insight(_ insight: CycleInsight) throws -> AIRequest {
@@ -132,7 +139,7 @@ nonisolated enum AIContextBuilder {
 
     static func question(_ question: String, scope: CycleQuestionScope, kind: SymptomKind,
                          snapshot: TrackerSnapshot, today: LocalDay) throws -> AIRequest {
-        try validateText(question)
+        try validateQuestion(question)
         // Deliberately bounded local routing, not a broad chatbot intent classifier.
         // Other wording stays local and asks for clarification rather than uploading a whole history.
         guard supports(question, scope: scope, kind: kind) else { throw AIContextError.unsupportedQuestion }

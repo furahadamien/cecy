@@ -42,7 +42,7 @@ struct AISymptomEntryView: View {
                     .lineLimit(3...8).focused($typing).accessibilityIdentifier("aiSymptomText")
                     .disabled(session.ai.isLoading || reviewed)
                 Text("\(text.count) / 2,000 characters").font(.footnote)
-                Text("Only this description is sent. Your date, notes from other records, profile and history are not sent. Avoid identifying details.")
+                Text("Only this description is sent. Leave out identifying details.")
                     .font(.footnote).foregroundStyle(.secondary)
                 DatePicker("Date", selection: Binding(get: { day.formattingDate }, set: {
                     if let value = try? LocalDay(date: $0, timeZone: .gmt) { day = value }
@@ -59,7 +59,7 @@ struct AISymptomEntryView: View {
                     .disabled(!validText || !session.canUseAI || session.ai.isLoading)
                     .accessibilityIdentifier("normalizeSymptoms")
                 }
-                AIRequestStatus(coordinator: session.ai)
+                AIRequestStatus(coordinator: session.ai, label: "Mapping your symptoms")
                 if !reviewed {
                     Button("Choose symptoms manually instead") {
                         session.ai.cancel(); typing = false; manual = true; reviewed = true
@@ -67,8 +67,8 @@ struct AISymptomEntryView: View {
                 }
             }
             if reviewed {
-                Section(manual ? "Choose symptoms" : "Review AI suggestions before saving") {
-                    Text("Nothing has been saved. Select or remove types and check each rating. AI may miss or misunderstand symptoms.")
+                Section(manual ? "Choose symptoms" : "Review symptoms before saving") {
+                    Text("Nothing saved yet. Check the symptoms and ratings, then save when you’re ready.")
                     SelectionFlowLayout {
                         ForEach(SymptomKind.allCases, id: \.self) { kind in
                             SelectionChip(title: kind.title, symbol: kind.symbol, selected: selected.contains(kind)) {
@@ -89,10 +89,10 @@ struct AISymptomEntryView: View {
                         }
                     }
                     if selected.contains(.sleepQuality) || selected.contains(.energyLevel) {
-                        Text("AI severity is not a sleep or energy rating. Choose Poor/Fair/Good or Low/Typical/High yourself, or leave Not rated.")
+                        Text("Choose your sleep or energy rating, or leave Not rated.")
                     }
                     Toggle("Keep description as a private note", isOn: $keepNote)
-                    Text("If enabled, the description is saved with each selected observation. It is not added to future AI requests automatically.")
+                    Text("Saves your description with each selected symptom. It won’t be sent again automatically.")
                         .font(.footnote).foregroundStyle(.secondary)
                     Button("Edit description") {
                         session.ai.cancel(); selected = []; ratings = [:]; reviewed = false; manual = false
@@ -110,6 +110,7 @@ struct AISymptomEntryView: View {
             }
             if let error { InlineError(message: error) }
         }
+        .trackerFormStyle()
         .environment(\.calendar, LocalDay.calendar)
         .environment(\.timeZone, LocalDay.calendar.timeZone)
         .navigationTitle("Describe symptoms")

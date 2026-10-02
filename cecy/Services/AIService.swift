@@ -50,7 +50,8 @@ actor RemoteAIService: AIService {
         try await send(.cycleSummary, context: context)
     }
     func answerCycleQuestion(context: CycleQuestionContext) async throws -> CycleQuestionResult {
-        guard !context.question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, context.question.count <= 2_000 else {
+        guard !context.question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              context.question.count <= AIContextBuilder.maximumQuestionLength else {
             throw AIServiceError.invalidRequest
         }
         return try await send(.answerCycleQuestion, context: context)

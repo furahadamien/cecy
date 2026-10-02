@@ -4,7 +4,6 @@ import AuthenticationServices
 
 struct TrackerRootView: View {
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.colorScheme) private var colorScheme
     @State private var session: TrackerSession
 
     init(session: TrackerSession) {
@@ -37,7 +36,7 @@ struct TrackerRootView: View {
                     TrackerCard {
                         InlineError(message: session.failureMessage ?? "Your data has not been reset.")
                         Button("Try again") { session.load() }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(TrackerPrimaryButtonStyle())
                             .frame(minHeight: 44)
                             .accessibilityIdentifier("retryLoading")
                     }
@@ -53,7 +52,9 @@ struct TrackerRootView: View {
             }
             }
         }
-        .tint(TrackerPalette(scheme: colorScheme).accent)
+        .tint(Color.accentColor)
+        .fontDesign(.rounded)
+        .buttonBorderShape(.capsule)
         .preferredColorScheme(session.privacy.preferences.appearance.map { $0 == .dark ? ColorScheme.dark : .light })
         .background(PrivacyShield(isActive: scenePhase == .active))
         .task {
@@ -124,12 +125,27 @@ private struct TrackerTabs: View {
             NavigationStack { TrackerSettingsView(session: session) }
                 .tabItem { Label("Settings", systemImage: "slider.horizontal.3") }.tag(3)
         }
+        .modifier(TrackerTabBarStyle())
         .sheet(item: $loggingDay) { day in
             PeriodEntryView(period: Period(start: day), today: session.today ?? today,
                             existing: session.snapshot.periods) { period in session.save([period]) }
         }
         .sheet(isPresented: $showHistory) {
             NavigationStack { HistoryEntryView(session: session, today: session.today ?? today, isOnboarding: false) }
+        }
+    }
+}
+
+private struct TrackerTabBarStyle: ViewModifier {
+    @ViewBuilder func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            // TabView owns the rounded Liquid Glass surface, scroll-edge treatment,
+            // selection, VoiceOver and Reduce Transparency/Motion adaptations.
+            // Do not add a material/background over the native glass tab bar.
+            content.tabViewStyle(.tabBarOnly).tabBarMinimizeBehavior(.never)
+        } else {
+            // Preserve native navigation and accessibility on iOS 17/18.
+            content
         }
     }
 }

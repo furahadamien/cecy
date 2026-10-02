@@ -19,6 +19,12 @@ struct WellnessPreferencesView: View {
     }
 
     private var normalized: WellnessPreferences? { draft.isUnanswered ? nil : draft }
+    private let commonAllergies = ["Milk", "Eggs", "Peanuts", "Tree nuts", "Wheat", "Soy", "Fish", "Shellfish", "Sesame"]
+    private var allergyChoices: [String] {
+        commonAllergies + draft.foodAllergies.filter { name in
+            !commonAllergies.contains { $0.caseInsensitiveCompare(name) == .orderedSame }
+        }
+    }
     private var hasChanges: Bool { normalized != initial || !allergyText.isEmpty }
     private var validation: String? {
         do { try draft.validate(); return nil }
@@ -28,17 +34,20 @@ struct WellnessPreferencesView: View {
     var body: some View {
         SettingsForm(title: "Wellness preferences") {
             Section {
-                Text("Optional choices saved on this device. They do not change cycle predictions or record exercise, meals or symptoms.")
-                Text("If you enable AI and request wellness suggestions, these choices—including food allergies—are sent with that request. Saving preferences alone sends nothing.")
+                Text("Your preferences stay stored on this device. AI suggestions use selected details sent only when you request them.")
                 Text("Tap Done to return to Profile, then Save to keep your changes.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
-            Section("Activity") {
-                Picker("Activity level", selection: $draft.activityLevel) {
-                    Text("Not answered").tag(ActivityLevel?.none)
-                    ForEach(ActivityLevel.allCases, id: \.self) { Text($0.title).tag(Optional($0)) }
+            Section("Activity level") {
+                SelectionFlowLayout {
+                    SelectionChip(title: "Not answered", selected: draft.activityLevel == nil) { draft.activityLevel = nil }
+                        .accessibilityIdentifier("wellnessActivity_unanswered")
+                    ForEach(ActivityLevel.allCases, id: \.self) { level in
+                        SelectionChip(title: level.title, symbol: "figure.walk", selected: draft.activityLevel == level) {
+                            draft.activityLevel = level
+                        }.accessibilityIdentifier("wellnessActivity_\(level.rawValue)")
+                    }
                 }
-                .accessibilityIdentifier("wellnessActivity")
             }
             Section {
                 SelectionFlowLayout {
@@ -58,36 +67,42 @@ struct WellnessPreferencesView: View {
                     .accessibilityIdentifier("wellnessExercisesNone")
                 Button("Leave exercise preferences unanswered") { draft.preferredExercises = nil }
             } header: { Text("Preferred exercises") }
-            Section("Food preferences") {
-                Picker("Dietary preference", selection: $draft.dietaryPreference) {
-                    Text("Not answered").tag(DietaryPreference?.none)
-                    ForEach(DietaryPreference.allCases, id: \.self) { Text($0.title).tag(Optional($0)) }
+            Section("Dietary preference") {
+                SelectionFlowLayout {
+                    SelectionChip(title: "Not answered", selected: draft.dietaryPreference == nil) { draft.dietaryPreference = nil }
+                        .accessibilityIdentifier("wellnessDiet_unanswered")
+                    ForEach(DietaryPreference.allCases, id: \.self) { diet in
+                        SelectionChip(title: diet.title, symbol: "fork.knife", selected: draft.dietaryPreference == diet) {
+                            draft.dietaryPreference = diet
+                        }.accessibilityIdentifier("wellnessDiet_\(diet.rawValue)")
+                    }
                 }
-                .accessibilityIdentifier("wellnessDiet")
             }
             Section {
-                Picker("Food allergies", selection: Binding(get: { draft.foodAllergyStatus }, set: {
-                    draft.setAllergyStatus($0)
-                    allergyText = ""
-                    error = nil
-                })) {
-                    ForEach(FoodAllergyStatus.allCases, id: \.self) { Text($0.title).tag($0) }
+                SelectionFlowLayout {
+                    ForEach(FoodAllergyStatus.allCases, id: \.self) { status in
+                        SelectionChip(title: status.title, selected: draft.foodAllergyStatus == status) {
+                            draft.setAllergyStatus(status)
+                            allergyText = ""
+                            error = nil
+                        }.accessibilityIdentifier("wellnessAllergyStatus_\(status.rawValue)")
+                    }
                 }
-                .accessibilityIdentifier("wellnessAllergyStatus")
                 if draft.foodAllergyStatus == .listed {
-                    ForEach(Array(draft.foodAllergies.enumerated()), id: \.offset) { index, name in
-                        HStack {
-                            Text(name)
-                            Spacer()
-                            Button(role: .destructive) { draft.foodAllergies.remove(at: index) } label: {
-                                Image(systemName: "minus.circle").frame(minWidth: 44, minHeight: 44)
+                    SelectionFlowLayout {
+                        ForEach(allergyChoices, id: \.self) { name in
+                            SelectionChip(title: name, selected: draft.foodAllergies.contains { $0.caseInsensitiveCompare(name) == .orderedSame }) {
+                                error = nil
+                                if let index = draft.foodAllergies.firstIndex(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) {
+                                    draft.foodAllergies.remove(at: index)
+                                } else {
+                                    do { try draft.addAllergy(name) } catch { self.error = error.localizedDescription }
+                                }
                             }
-                            .buttonStyle(.borderless)
-                            .accessibilityLabel("Remove food allergy")
-                            .accessibilityIdentifier("removeFoodAllergy_\(index)")
+                            .accessibilityIdentifier("foodAllergy_\(name)")
                         }
                     }
-                    TextField("Food allergy", text: $allergyText)
+                    TextField("Another food allergy", text: $allergyText)
                         .focused($allergyFocused)
                         .submitLabel(.done)
                         .accessibilityIdentifier("foodAllergyName")
@@ -99,7 +114,7 @@ struct WellnessPreferencesView: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
             } header: { Text("Food allergies") } footer: {
-                Text("Not answered is different from no known allergies. Changing away from a list clears its entries from this draft. These are your reported preferences, not a medical assessment.")
+                Text("Choose all that apply, or add another. Switching away from the list clears its selections.")
             }
             Section {
                 SelectionFlowLayout {
@@ -118,7 +133,7 @@ struct WellnessPreferencesView: View {
                 Button("No wellness goals") { draft.goals = [] }
                 Button("Leave wellness goals unanswered") { draft.goals = nil }
             } header: { Text("Wellness goals") } footer: {
-                Text("These are separate from your existing tracking goals. Saving preferences does not enable AI or send them anywhere.")
+                Text("Saving preferences does not send them anywhere.")
             }
             if let message = error ?? validation {
                 Section { InlineError(message: message) }

@@ -1,12 +1,36 @@
 import XCTest
 
 @MainActor enum OnboardingUITestSupport {
+    static func skipIdentity(in app: XCUIApplication) {
+        for title in ["Your gender", "Who do you have sex with?"] {
+            XCTAssertTrue(app.staticTexts["onboardingHeading"].waitForExistence(timeout: 5))
+            XCTAssertEqual(app.staticTexts["onboardingHeading"].label, title)
+            XCTAssertTrue(app.buttons["onboardingSkip"].isEnabled)
+            app.buttons["onboardingSkip"].tap()
+        }
+    }
     static func reveal(_ element: XCUIElement, in app: XCUIApplication) {
         for _ in 0..<12 {
-            if element.isHittable { return }
-            app.swipeUp()
+            if element.isHittable && ["onboardingContinue", "onboardingSkip"].contains(element.identifier) { return }
+            if element.exists && element.elementType == .pickerWheel && element.isHittable { return }
+            let navigationBottom = app.navigationBars.firstMatch.exists ? app.navigationBars.firstMatch.frame.maxY : app.frame.minY
+            let progress = app.progressIndicators["Onboarding progress"]
+            let top = progress.exists ? max(navigationBottom, progress.frame.maxY + 12) : navigationBottom
+            let next = app.buttons["onboardingContinue"]
+            let bottom = app.keyboards.firstMatch.exists ? app.keyboards.firstMatch.frame.minY
+                : next.exists ? next.frame.minY - 12 : app.frame.maxY - 24
+            if element.exists && element.isHittable && element.frame.minY >= top && element.frame.maxY <= bottom { return }
+            if element.exists && element.frame.maxY > top && element.frame.minY < bottom {
+                let delta = element.frame.minY < top ? top + 12 - element.frame.minY : bottom - 12 - element.frame.maxY
+                let distance = min(abs(delta), (bottom - top) / 2)
+                let startY = delta > 0 ? top + 24 : bottom - 24
+                let start = app.coordinate(withNormalizedOffset: .zero)
+                    .withOffset(CGVector(dx: 12, dy: startY))
+                let end = start.withOffset(CGVector(dx: 0, dy: delta > 0 ? distance : -distance))
+                start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
+            } else if element.exists && element.frame.minY < top { app.swipeDown() } else { app.swipeUp() }
         }
-        XCTAssertTrue(element.isHittable)
+        XCTFail("Could not fully reveal \(element)\n\(app.debugDescription)")
     }
 
     static func next(in app: XCUIApplication) {
@@ -40,8 +64,9 @@ import XCTest
         reveal(list, in: app)
         XCTAssertTrue(choice.waitForExistence(timeout: 5))
         for _ in 0..<15 {
-            if choice.isHittable { break }
-            let moveRight = choice.frame.midX < list.frame.minX
+            let viewport = list.frame.intersection(app.frame).insetBy(dx: 22, dy: 0)
+            if choice.isHittable && viewport.contains(CGPoint(x: choice.frame.midX, y: choice.frame.midY)) { break }
+            let moveRight = choice.frame.midX < viewport.midX
             let start = list.coordinate(withNormalizedOffset: CGVector(dx: moveRight ? 0.25 : 0.75, dy: 0.5))
             let end = list.coordinate(withNormalizedOffset: CGVector(dx: moveRight ? 0.75 : 0.25, dy: 0.5))
             start.press(forDuration: 0.1, thenDragTo: end)
@@ -60,6 +85,7 @@ import XCTest
         birthday(in: app)
         next(in: app)
         app.buttons["onboardingSkip"].tap()
+        skipIdentity(in: app)
         choose("profileDuration_5", inRow: "profileDuration", app: app)
         next(in: app)
         // Exactly four starts, most recent first, with no invented end dates.
@@ -190,6 +216,7 @@ final class OnboardingUITests: XCTestCase {
         app.buttons["profileWeightClear"].tap()
         XCTAssertEqual(app.staticTexts["profileWeightValue"].label, "Not added")
         app.buttons["onboardingSkip"].tap()
+        OnboardingUITestSupport.skipIdentity(in: app)
         XCTAssertEqual(app.staticTexts["onboardingHeading"].label, "Cycle basics")
     }
 
@@ -205,6 +232,7 @@ final class OnboardingUITests: XCTestCase {
         OnboardingUITestSupport.reveal(app.pickerWheels.firstMatch, in: app)
         app.pickerWheels.firstMatch.adjust(toPickerWheelValue: "175 cm")
         app.buttons["onboardingSkip"].tap()
+        OnboardingUITestSupport.skipIdentity(in: app)
         OnboardingUITestSupport.choose("profilePredictability_sometimes", inRow: "profilePredictability", app: app)
         XCTAssertEqual(app.buttons["profilePredictability_sometimes"].value as? String, "Selected")
         let duration = app.scrollViews["profileDuration"]

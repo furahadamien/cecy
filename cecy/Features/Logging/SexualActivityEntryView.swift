@@ -73,6 +73,7 @@ struct SexualActivityEntryView: View {
                     InlineError(message: message).accessibilityFocused($errorFocused)
                 }
             }
+            .trackerFormStyle()
             .environment(\.calendar, LocalDay.calendar)
             .environment(\.timeZone, LocalDay.calendar.timeZone)
             .navigationTitle(original == nil ? "Log sex" : "Edit sexual activity")
@@ -110,7 +111,7 @@ struct SexualActivityLogButton: View {
 
     var body: some View {
         Button { showEntry = true } label: {
-            Label("Log sex", systemImage: "heart").frame(minHeight: 44)
+            Label("Log sex", systemImage: "heart").frame(maxWidth: .infinity, minHeight: TrackerLayout.minimumTarget)
         }
         .buttonStyle(.bordered).accessibilityIdentifier("logSexualActivity")
         .sheet(isPresented: $showEntry) {
