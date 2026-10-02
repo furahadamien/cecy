@@ -79,12 +79,17 @@ nonisolated struct CycleDomainTests {
         #expect(skew.prediction == .unavailable(.futureDate))
     }
 
-    @Test func insufficientHistoryNeverUsesDefaults() throws {
+    @Test func availableMeasuredIntervalsNeverRequireFourStarts() throws {
         for count in 0...3 {
             let periods = Array(try history([28, 29]).prefix(count))
             let overview = CycleCalculator.overview(periods: periods, today: try day(20210101))
-            #expect(overview.estimate == nil)
-            #expect(overview.prediction == .insufficientHistory(completedIntervals: max(0, count - 1)))
+            if count < 2 {
+                #expect(overview.estimate == nil)
+                #expect(overview.prediction == .insufficientHistory(completedIntervals: 0))
+            } else {
+                #expect(overview.estimate?.sourceLengths.count == count - 1)
+                #expect(overview.estimate?.confidence == .low)
+            }
         }
     }
 

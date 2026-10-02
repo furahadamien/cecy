@@ -20,3 +20,43 @@ nonisolated struct DayActivityMarker: Identifiable, Equatable, Sendable {
         return markers
     }
 }
+
+/// Bounded lookups for calendar cells. Confirmed spans are not expanded into stored days.
+nonisolated struct DayActivityIndex: Equatable, Sendable {
+    private let periods: [Period]
+    private let observations: [LocalDay: [DayActivityMarker]]
+
+    init(snapshot: TrackerSnapshot = TrackerSnapshot()) {
+        periods = snapshot.periods.sorted { $0.start < $1.start }
+        var values: [LocalDay: [DayActivityMarker]] = [:]
+        for (day, entries) in Dictionary(grouping: snapshot.symptoms, by: \.day) {
+            let kinds = Set(entries.map(\.kind))
+            values[day] = SymptomKind.allCases.filter { kinds.contains($0) }.map {
+                DayActivityMarker(id: "symptom.\($0.rawValue)", symbol: $0.symbol, title: $0.title)
+            }
+        }
+        for (day, entries) in Dictionary(grouping: snapshot.sexualActivities, by: \.day) {
+            if let activity = entries.first {
+                values[day, default: []].append(DayActivityMarker(id: "sexualActivity", symbol: "heart.fill",
+                    title: "Sexual activity: \(activity.summary)"))
+            }
+        }
+        observations = values
+    }
+
+    func markers(on day: LocalDay) -> [DayActivityMarker] {
+        var lower = 0
+        var upper = periods.count
+        while lower < upper {
+            let middle = (lower + upper) / 2
+            if periods[middle].start <= day { lower = middle + 1 } else { upper = middle }
+        }
+        var result = observations[day] ?? []
+        if lower > 0, periods[lower - 1].contains(day) {
+            let period = periods[lower - 1]
+            result.insert(DayActivityMarker(id: "period", symbol: "drop.fill",
+                title: period.start == day ? "Period start" : "Confirmed bleeding"), at: 0)
+        }
+        return result
+    }
+}

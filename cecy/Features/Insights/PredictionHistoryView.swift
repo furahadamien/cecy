@@ -17,8 +17,8 @@ struct PredictionHistoryView: View {
             if let replay {
                 ReplayMetrics(replay: replay)
                 if replay.scored.isEmpty {
-                    Text(replay.rows.count < 4
-                         ? "Five recorded starts are needed for the first historical check. A starter estimate can be available sooner from your last start and typical cycle length."
+                    Text(replay.rows.count < 2
+                         ? "Three recorded starts allow the first historical check: one measured interval followed by a start to compare. An estimate can be available sooner from your last start and typical cycle length."
                          : "No estimate was available for these historical checks. Withheld estimates are listed below, not counted as accurate or inaccurate.")
                         .accessibilityIdentifier("replayEmpty")
                 }
@@ -39,7 +39,7 @@ struct PredictionHistoryView: View {
                                 Text("Window span: \(row.windowSpan ?? 0) days between its boundaries.")
                             } else {
                                 switch row.outcome {
-                                case .insufficientHistory(let count): Text("Warm-up: \(count) of 3 earlier intervals available.")
+                                case .insufficientHistory: Text("Warm-up: no earlier measured interval. Today’s profile assumption is not used retrospectively.")
                                 case .wideVariation: Text("Withheld: earlier intervals varied by more than 14 days.")
                                 case .unavailable: Text("Withheld: date arithmetic could not produce this estimate.")
                                 case .available: EmptyView()

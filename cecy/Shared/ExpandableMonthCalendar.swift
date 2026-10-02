@@ -6,13 +6,15 @@ struct ExpandableMonthCalendar: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.colorScheme) private var colorScheme
     let today: LocalDay
-    let snapshot: TrackerSnapshot
+    let activityIndex: DayActivityIndex
+    let prediction: CyclePrediction?
     @Binding var selection: LocalDay
     @State private var month: LocalDay
 
-    init(today: LocalDay, snapshot: TrackerSnapshot, selection: Binding<LocalDay>) {
+    init(today: LocalDay, activityIndex: DayActivityIndex, prediction: CyclePrediction?, selection: Binding<LocalDay>) {
         self.today = today
-        self.snapshot = snapshot
+        self.activityIndex = activityIndex
+        self.prediction = prediction
         _selection = selection
         _month = State(initialValue: selection.wrappedValue.monthStart)
     }
@@ -68,7 +70,8 @@ struct ExpandableMonthCalendar: View {
     }
     private func dateButton(_ day: LocalDay, asList: Bool) -> some View {
         let palette = TrackerPalette(scheme: colorScheme)
-        let markers = DayActivityMarker.recorded(on: day, in: snapshot)
+        let markers = activityIndex.markers(on: day)
+        let predicted = prediction?.contains(day) == true
         return Button { selection = day } label: {
             VStack(spacing: 4) {
                 Text(asList ? DayText.full(day) : day.day.formatted())
@@ -76,12 +79,19 @@ struct ExpandableMonthCalendar: View {
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .foregroundStyle(day == selection ? palette.background : day == today ? palette.accent : .primary)
                     .background(day == selection ? palette.accent : .clear, in: RoundedRectangle(cornerRadius: 22))
+                    .overlay {
+                        if predicted {
+                            RoundedRectangle(cornerRadius: 22)
+                                .strokeBorder(day == selection ? palette.background : palette.accent,
+                                              style: StrokeStyle(lineWidth: 2, dash: [3, 3]))
+                        }
+                    }
                 DayActivityIcons(markers: markers)
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(DayText.full(day)). \(day == today ? "Today. " : "")\(markers.isEmpty ? "No recorded activities" : markers.map(\.title).joined(separator: ", "))")
+        .accessibilityLabel("\(DayText.full(day)). \(day == today ? "Today. " : "")\(markers.isEmpty ? "No recorded activities" : markers.map(\.title).joined(separator: ", "))\(predicted ? ". Estimated start window" : "")")
         .accessibilityAddTraits(day == selection ? .isSelected : [])
         .accessibilityIdentifier("todayMonthDate_\(day.key)")
     }

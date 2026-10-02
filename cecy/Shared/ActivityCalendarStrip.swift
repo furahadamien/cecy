@@ -22,9 +22,10 @@ struct DayActivityIcons: View {
 
 struct ActivityCalendarStrip: View {
     @Environment(\.colorScheme) private var colorScheme
-    @ScaledMetric(relativeTo: .body) private var dayWidth = 56.0
+    @ScaledMetric(relativeTo: .body) private var dayWidth = 48.0
     let today: LocalDay
-    let snapshot: TrackerSnapshot
+    let activityIndex: DayActivityIndex
+    let prediction: CyclePrediction?
     @Binding var selection: LocalDay
     @State private var lower = -30
     @State private var upper = 30
@@ -57,29 +58,36 @@ struct ActivityCalendarStrip: View {
                 }.frame(minHeight: 44).accessibilityIdentifier("stripReturnToToday")
             }
             if expanded {
-                ExpandableMonthCalendar(today: today, snapshot: snapshot, selection: $selection)
+                ExpandableMonthCalendar(today: today, activityIndex: activityIndex, prediction: prediction, selection: $selection)
             } else {
             ScrollView(.horizontal) {
-                HStack(alignment: .top, spacing: 8) {
+                LazyHStack(alignment: .top, spacing: 6) {
                     ForEach(days) { day in
-                        let markers = DayActivityMarker.recorded(on: day, in: snapshot)
+                        let markers = activityIndex.markers(on: day)
+                        let predicted = prediction?.contains(day) == true
                         Button { selection = day; centeredDay = day.key } label: {
-                            VStack(spacing: 6) {
+                            VStack(spacing: 4) {
                                 Text(day.formattingDate, format: .dateTime.weekday(.narrow))
                                     .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                                Text(day.day.formatted()).font(.system(.title2, design: .rounded, weight: day == selection ? .semibold : .regular))
+                                Text(day.day.formatted()).font(.system(.headline, design: .rounded, weight: day == selection ? .semibold : .regular))
                                     .monospacedDigit()
-                                    .frame(width: max(44, dayWidth - 8), height: max(44, dayWidth - 8))
+                                    .frame(width: max(36, dayWidth - 12), height: max(36, dayWidth - 12))
                                     .foregroundStyle(day == selection ? palette.background : day == today ? palette.accent : .primary)
                                     .background(day == selection ? palette.accent : .clear, in: Circle())
+                                    .overlay {
+                                        if predicted {
+                                            Circle().strokeBorder(palette.accent, style: StrokeStyle(lineWidth: 2, dash: [3, 3]))
+                                                .padding(-3)
+                                        }
+                                    }
                                 DayActivityIcons(markers: markers)
                             }
                             .padding(.vertical, 4)
-                            .frame(width: dayWidth, alignment: .top)
+                            .frame(width: max(44, dayWidth), alignment: .top)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain).id(day.key)
-                        .accessibilityLabel("\(DayText.full(day)). \(day == today ? "Today. " : "")\(markers.isEmpty ? "No recorded activities" : markers.map(\.title).joined(separator: ", "))")
+                        .accessibilityLabel("\(DayText.full(day)). \(day == today ? "Today. " : "")\(markers.isEmpty ? "No recorded activities" : markers.map(\.title).joined(separator: ", "))\(predicted ? ". Estimated start window" : "")")
                         .accessibilityAddTraits(day == selection ? .isSelected : [])
                         .accessibilityIdentifier("todayDate_\(day.key)")
                     }
@@ -96,13 +104,13 @@ struct ActivityCalendarStrip: View {
                 if offset > upper - 7 { upper += 30 }
             }
             }
-            Text(DayText.full(selection)).font(.subheadline).frame(maxWidth: .infinity)
-                .accessibilityIdentifier("todayStripSelectedDate")
             Divider()
         }
             .onChange(of: selection) { _, day in
                 let offset = today.days(until: day)
-                lower = offset - 30; upper = offset + 30
+                if offset < lower || offset > upper {
+                    lower = offset - 30; upper = offset + 30
+                }
                 centeredDay = day.key
             }
             .onChange(of: today) { old, new in
@@ -110,5 +118,37 @@ struct ActivityCalendarStrip: View {
             }
         .environment(\.calendar, LocalDay.calendar)
         .environment(\.timeZone, LocalDay.calendar.timeZone)
+    }
+}
+
+struct TodayCalendarLegend: View {
+    @Environment(\.colorScheme) private var colorScheme
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            legendItems
+            ScrollView(.horizontal) {
+                legendItems
+            }
+            .scrollIndicators(.hidden)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("todayCalendarLegend")
+    }
+
+    private var legendItems: some View {
+        let palette = TrackerPalette(scheme: colorScheme)
+        return HStack(spacing: 10) {
+            Label("Period", systemImage: "drop.fill").foregroundStyle(palette.recorded)
+                .accessibilityLabel("Recorded period")
+            Label("Estimate", systemImage: "circle.dashed").foregroundStyle(palette.accent)
+                .accessibilityLabel("Estimated start window, shown with dashed dates")
+            Label("Symptoms", systemImage: "waveform.path.ecg")
+            Label("Sex", systemImage: "heart.fill").foregroundStyle(palette.sexualActivity)
+                .accessibilityLabel("Sexual activity")
+        }
+        .font(.caption2)
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
     }
 }

@@ -7,25 +7,45 @@ struct InsightChartsView: View {
     let intervals: [CycleInterval]
     let symptoms: [SymptomEntry]
     let today: LocalDay
+    var periods: [Period] = []
 
     private var cycles: [CycleInterval] { InsightChartData.recentIntervals(intervals, today: today) }
+    private var starts: [Period] { InsightChartData.recordedStarts(periods, today: today) }
     private var counts: [InsightChartData.ObservationCount] {
         Array(InsightChartData.observationCounts(symptoms, today: today).prefix(6))
     }
 
     var body: some View {
         TrackerCard {
-            Label("Your cycle lengths", systemImage: "chart.xyaxis.line")
+            Label(cycles.isEmpty && !starts.isEmpty ? "Your recorded starts" : "Your cycle lengths", systemImage: "chart.xyaxis.line")
                 .font(.headline).accessibilityAddTraits(.isHeader)
             if cycles.isEmpty {
-                Text("Record two period starts to see your first completed interval.")
+                if let first = starts.first, let last = starts.last {
+                    Chart(starts) { period in
+                        PointMark(x: .value("Recorded start", period.start.formattingDate), y: .value("Record", "Period start"))
+                            .foregroundStyle(TrackerPalette(scheme: colorScheme).recorded)
+                            .symbolSize(65)
+                            .accessibilityLabel("Period start: \(DayText.full(period.start))")
+                            .accessibilityValue("Recorded start; cycle length not yet known")
+                    }
+                    .chartXScale(domain: ((try? first.start.adding(days: -1)) ?? first.start).formattingDate...((try? last.start.adding(days: 1)) ?? last.start).formattingDate)
+                    .chartYAxis(.hidden)
+                    .frame(height: 140)
+                    .environment(\.calendar, LocalDay.calendar)
+                    .environment(\.timeZone, LocalDay.calendar.timeZone)
+                    .accessibilityIdentifier("periodStartChart")
+                    ForEach(starts) { Text("Recorded start: \(DayText.full($0.start))").font(.subheadline) }
+                }
+                Text("A start is a data point, not a measured cycle length. A second start completes the first interval.")
                     .font(.subheadline).foregroundStyle(.secondary)
             } else {
                 Chart {
                     ForEach(Array(cycles.enumerated()), id: \.element.id) { index, interval in
-                        LineMark(x: .value("Recorded interval", index + 1), y: .value("Days", interval.length))
-                            .foregroundStyle(TrackerPalette(scheme: colorScheme).accent)
-                            .accessibilityHidden(true)
+                        if cycles.count > 1 {
+                            LineMark(x: .value("Recorded interval", index + 1), y: .value("Days", interval.length))
+                                .foregroundStyle(TrackerPalette(scheme: colorScheme).accent)
+                                .accessibilityHidden(true)
+                        }
                         PointMark(x: .value("Recorded interval", index + 1), y: .value("Days", interval.length))
                             .foregroundStyle(TrackerPalette(scheme: colorScheme).accent)
                             .symbolSize(45)
@@ -34,13 +54,14 @@ struct InsightChartsView: View {
                     }
                 }
                 .chartXScale(domain: 0.5...(Double(cycles.count) + 0.5))
-                .chartYScale(domain: 0...max(5, cycles.map(\.length).max() ?? 5))
+                .chartYScale(domain: 0...max(5, (cycles.map(\.length).max() ?? 5) + 2))
                 .chartXAxis { AxisMarks(values: Array(1...cycles.count)) }
                 .chartYAxisLabel("Days")
                 .frame(height: dynamicTypeSize.isAccessibilitySize ? 260 : 180)
                 .accessibilityIdentifier("cycleLengthChart")
                 Text("\(cycles.count) latest completed intervals · oldest to newest. Missing starts can lengthen an interval; this is not a forecast.")
                     .font(.footnote).foregroundStyle(.secondary)
+                if cycles.count == 1 { Text("One interval is a single measurement, not an established pattern.").font(.footnote) }
                 DisclosureGroup("Chart values") {
                     ForEach(cycles) { interval in
                         Text("\(DayText.short(interval.start)): \(interval.length) days")

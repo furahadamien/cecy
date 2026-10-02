@@ -25,13 +25,14 @@ struct TodayView: View {
     }
 
     var body: some View {
-        TrackerPage(title: "Today", subtitle: DayText.full(today)) {
-            ActivityCalendarStrip(today: today, snapshot: session.snapshot, selection: $selection)
+        TrackerPage(title: "Today") {
+            ActivityCalendarStrip(today: today, activityIndex: session.activityIndex, prediction: overview.estimate, selection: $selection)
+            TodayCalendarLegend()
             if selection != today {
                 TrackerCard {
                     Text(DayText.full(selection)).font(.headline).accessibilityIdentifier("selectedTodayDate")
                     if selection > today { Text("Future dates are for viewing only.").font(.subheadline) }
-                    let markers = DayActivityMarker.recorded(on: selection, in: session.snapshot)
+                    let markers = session.activityIndex.markers(on: selection)
                     if markers.isEmpty { Text("No records for this date.").foregroundStyle(.secondary) }
                     ForEach(session.snapshot.periods.filter { $0.contains(selection) }) { period in
                         Label("Period started \(DayText.full(period.start))", systemImage: "drop.fill")
@@ -78,14 +79,17 @@ struct TodayView: View {
             TrackerCard {
                 Text(selection == today ? "Log for today" : "Log for \(DayText.short(selection))")
                     .font(.headline).accessibilityAddTraits(.isHeader)
-                Button { onLog(selection) } label: {
-                    Label("Log period start", systemImage: "drop")
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                TrackerCompactLogActions {
+                    Button { onLog(selection) } label: {
+                        Label("Log period", systemImage: "drop")
+                    }
+                    .buttonStyle(TrackerCompactLogButtonStyle(prominent: true))
+                    .accessibilityLabel("Log period start")
+                    .accessibilityIdentifier("logPeriod")
+                    SymptomLogButton(session: session, day: selection, title: "Symptoms", compact: true)
+                    SexualActivityLogButton(session: session, day: selection, compact: true)
                 }
-                .buttonStyle(TrackerPrimaryButtonStyle()).accessibilityIdentifier("logPeriod")
                 .disabled(selection > today)
-                SymptomLogButton(session: session, day: selection).disabled(selection > today)
-                SexualActivityLogButton(session: session, day: selection).disabled(selection > today)
                 NavigationLink("Sexual activity history") { SexualActivityHistoryView(session: session) }
                     .frame(minHeight: 44).accessibilityIdentifier("sexualActivityHistory")
                 Button("Add previous periods", action: onHistory)
@@ -172,10 +176,9 @@ struct PredictionSummary: View {
                 }
                 Text("These are possible start dates—not predicted bleeding days.")
                     .font(.footnote).foregroundStyle(.secondary)
-            case .insufficientHistory(let count):
+            case .insufficientHistory:
                 Text("More history is needed for an estimate.").font(.title3)
-                Text(count == 0 ? "Record your last period start and set a typical cycle length in Profile for a starter estimate."
-                     : "\(count) of 3 completed intervals available for a history-based estimate. You can set your usual cycle length in Profile for a starter estimate.")
+                Text("Record a period start and set your typical cycle length in Profile, or record two starts to supply a measured interval.")
                     .foregroundStyle(.secondary)
             case .wideVariation:
                 Text("Your recorded intervals vary more than this simple estimate can support.")
@@ -206,14 +209,14 @@ struct PredictionExplanation: View {
                     TrackerCard {
                         Text("A starting point, not measured history").font(.headline)
                         Text("We add your usual cycle length (\(estimate.reportedCycleDays ?? 28) days) to your latest recorded start. The range adds three days on either side as a provisional display rule, not a measured probability or Apple’s algorithm.")
-                        Text("After three completed start-to-start intervals, the recorded-history engine takes over. Until then, this estimate stays low confidence. If the window passes, we don’t invent another period or roll the estimate forward.")
+                        Text("The same calculation uses measured intervals as soon as they are available—there is no four-period threshold. With no completed interval, your usual length supplies the starting point and confidence stays low. If the window passes, we don’t invent another period or roll the estimate forward.")
                         Text("Your typical bleeding duration does not create an end date. Add confirmed ends separately.")
                     }
                 } else {
                 TrackerCard {
                     Text("The recorded intervals behind it").font(.headline)
                     Text(estimate.sourceLengths.map { "\($0)" }.joined(separator: ", ") + " days")
-                    Text("This early model uses up to six recent completed intervals. It uses the median for the center and adds two days around the shortest and longest intervals.")
+                    Text("The same calculation works from the first recorded start onward. With measured intervals available, it uses up to six recent intervals: the median for the center and two days around the shortest and longest. One interval is limited evidence, not an established pattern.")
                     Text(PredictionEvidence.policy).font(.caption)
                     if let replay {
                         Text(PredictionEvidence.assess(sourceLengths: estimate.sourceLengths, replay: replay).reason)

@@ -172,7 +172,8 @@ struct PhaseTwoPersistenceTests {
         #expect(session.overview?.estimate != initialEstimate)
         #expect(session.statistics?.bleeding?.mean == 4)
         #expect(session.delete(id: periods[0].id) == nil)
-        #expect(session.overview?.estimate == nil)
+        #expect(session.overview?.estimate?.sourceLengths == [30, 30])
+        #expect(session.overview?.estimate?.confidence == .low)
         for period in session.snapshot.periods { #expect(session.delete(id: period.id) == nil) }
         #expect(session.snapshot.onboardingCompletedAt != nil)
         #expect(session.statistics?.cycles == nil)

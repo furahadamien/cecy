@@ -4,6 +4,7 @@ struct TrackerSettingsView: View {
     @Environment(\.colorScheme) private var colorScheme
     let session: TrackerSession
     @State private var showReset = false
+    @State private var confirmDeleteData = false
     @State private var appearanceError: String?
 
     private var reminderSummary: String {
@@ -79,15 +80,23 @@ struct TrackerSettingsView: View {
                 .accessibilityIdentifier("aboutCecy")
             }
             Section {
-                Button(role: .destructive) { showReset = true } label: {
+                Button(role: .destructive) { confirmDeleteData = true } label: {
                     Label("Delete all data", systemImage: "trash").frame(minHeight: 44)
                 }
                 .accessibilityIdentifier("deleteAllData")
+                .disabled(session.isSaving)
             } header: {
                 Text("Your records")
             } footer: {
                 Text("To edit or delete a single record, use Calendar or Insights.")
             }
+        }
+        .alert("Delete all data?", isPresented: $confirmDeleteData) {
+            Button("Cancel", role: .cancel) {}
+            Button("Continue", role: .destructive) { showReset = true }
+                .accessibilityIdentifier("reviewDataDeletion")
+        } message: {
+            Text("Are you sure? Your data stored in Cecy will be permanently deleted. This cannot be undone. Continue to review what will be removed and confirm deletion.")
         }
         .sheet(isPresented: $showReset) { DeleteAllDataView(session: session) }
     }
@@ -123,13 +132,13 @@ private struct PredictionSettingsInfoView: View {
     var body: some View {
         SettingsForm(title: "How predictions work") {
             Section("At a glance") {
-                Label("Start with four recorded periods", systemImage: "calendar.badge.plus")
+                Label("Start with one recorded period", systemImage: "calendar.badge.plus")
                 Text("Estimates use up to six recent cycle intervals. A window shows possible start dates—not bleeding duration.")
                 Text("If your intervals vary too much, Cecy won’t show an estimate.")
             }
             Section {
                 DisclosureGroup("Calculation details") {
-                    Text("Four recorded starts provide the three completed intervals needed for a first estimate. Up to six recent intervals are used.")
+                    Text("The same calculation works at every history size. With one start, your entered typical cycle length supplies the input and the provisional window adds three days on either side. As soon as a completed interval exists, up to six measured intervals supply the inputs instead. Profile assumptions never become observed history.")
                     Text("The center uses the median. The window extends two days around the shortest and longest intervals, beginning at least one day after the latest start.")
                     Text("A spread above 14 days means this simple model cannot provide a window. Unusual intervals are not discarded.")
                 }

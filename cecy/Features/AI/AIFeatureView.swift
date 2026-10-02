@@ -1,13 +1,14 @@
 import SwiftUI
 
 nonisolated enum AIFeature {
-    case wellness, insight(CycleInsight), summary(LocalDay), question
+    case wellness, insight(CycleInsight), summary(LocalDay), question, records
     var title: String {
         switch self {
         case .wellness: "For today"
         case .insight: "Explain this observation"
         case .summary: "Your cycle summary"
         case .question: "Ask about your records"
+        case .records: "Insights from your records"
         }
     }
 }
@@ -33,6 +34,7 @@ struct AIFeatureView: View {
                 return try AIContextBuilder.insight(insight)
             case .summary(let start): return try AIContextBuilder.summary(snapshot: session.snapshot, start: start, today: today)
             case .question: return try AIContextBuilder.question(question, scope: scope, kinds: kinds, snapshot: session.snapshot, today: today)
+            case .records: return try AIContextBuilder.recordInsights(snapshot: session.snapshot, today: today)
             }
         }
     }
@@ -55,7 +57,11 @@ struct AIFeatureView: View {
                     .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
             }
             Section {
-                if !isWellness { Text("A little clarity, based on your records.").font(.title3.weight(.medium)) }
+                if !isWellness {
+                    Text("A little clarity, based on your records.").font(.title3.weight(.medium))
+                    Text("Even one record can be described. Small samples do not establish patterns; missing lengths and end dates stay unknown.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 if isWellness {
                     NavigationLink("Edit wellness preferences") { ProfileSettingsView(session: session) }
                         .accessibilityIdentifier("wellnessPreferencesLink")

@@ -80,7 +80,7 @@ final class PhaseTwoUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.staticTexts["cycleDay"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.staticTexts["cycleDay"].label, "Day 57")
-        XCTAssertFalse(app.staticTexts["predictionWindow"].exists)
+        XCTAssertTrue(app.staticTexts["predictionWindow"].exists)
         app.tabBars.buttons["Insights"].tap()
         XCTAssertEqual(app.staticTexts["intervalCount"].label, "2 completed intervals")
     }
@@ -91,15 +91,21 @@ final class PhaseTwoUITests: XCTestCase {
         let reset = app.buttons["deleteAllData"]
         reveal(reset, in: app)
         reset.tap()
-        XCTAssertFalse(app.buttons["confirmReset"].isEnabled)
-        app.buttons["Cancel"].tap()
+        let warning = app.alerts["Delete all data?"]
+        XCTAssertTrue(warning.waitForExistence(timeout: 5))
+        XCTAssertTrue(warning.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "permanently deleted")).firstMatch.exists)
+        XCTAssertFalse(app.textFields["resetConfirmation"].exists)
+        warning.buttons["Cancel"].tap()
         app.tabBars.buttons["Today"].tap()
         XCTAssertEqual(app.staticTexts["cycleDay"].label, "Day 28")
         app.tabBars.buttons["Settings"].tap()
         reveal(reset, in: app)
         reset.tap()
+        XCTAssertTrue(warning.waitForExistence(timeout: 5))
+        warning.buttons["reviewDataDeletion"].firstMatch.tap()
         let confirmation = app.textFields["resetConfirmation"]
         reveal(confirmation, in: app)
+        XCTAssertFalse(app.buttons["confirmReset"].isEnabled)
         confirmation.tap()
         confirmation.typeText("DELETE")
         let commit = app.buttons["confirmReset"]

@@ -52,7 +52,7 @@ nonisolated struct StarterPredictionTests {
         #expect(CycleCalculator.overview(periods: [], today: today, profile: profile()).estimate == nil)
     }
 
-    @Test func matureRecordedHistoryAlwaysTakesOverAndCanWithhold() throws {
+    @Test func measuredHistorySuppliesInputsAndCanWithhold() throws {
         let periods = try [20260607, 20260705, 20260804, 20260902].map { Period(start: try LocalDay(key: $0)) }
         let historical = CycleCalculator.overview(periods: periods, today: today, engine: EvidencePredictionEngine())
         #expect(CycleCalculator.overview(periods: periods, today: today, engine: EvidencePredictionEngine(), profile: profile(cycle: 60)) == historical)
@@ -72,9 +72,11 @@ nonisolated struct StarterPredictionTests {
     }
 
     @Test func starterDateArithmeticHandlesLeapAndMonthBoundaries() throws {
-        let leap = try CycleSetupPolicy.starter(lastStart: LocalDay(key: 20240201), cycleDays: 28, periodDays: 5)
+        let leap = try #require(CycleCalculator.overview(periods: [Period(start: LocalDay(key: 20240201))],
+            today: LocalDay(key: 20240201), profile: profile()).estimate)
         #expect(try leap.center == LocalDay(key: 20240229))
-        let rollover = try CycleSetupPolicy.starter(lastStart: LocalDay(key: 20261220), cycleDays: 28, periodDays: 5)
+        let rollover = try #require(CycleCalculator.overview(periods: [Period(start: LocalDay(key: 20261220))],
+            today: LocalDay(key: 20261220), profile: profile()).estimate)
         #expect(try rollover.center == LocalDay(key: 20270117))
     }
 
@@ -90,9 +92,11 @@ nonisolated struct StarterPredictionTests {
     @Test func profileAssumptionsNeverEnterHistoricalReplayOrStatistics() throws {
         let periods = try [20260705, 20260804, 20260902].map { Period(start: try LocalDay(key: $0)) }
         let overview = CycleCalculator.overview(periods: periods, today: today, profile: profile())
-        #expect(overview.estimate?.basis == .usualCycle)
+        #expect(overview.estimate?.basis == .recordedHistory)
+        #expect(overview.estimate?.sourceLengths == [30, 29])
         let replay = try PredictionBacktester.evaluate(periods: periods, today: today)
-        #expect(replay.scored.isEmpty && replay.warmUpCount == 2)
+        #expect(replay.scored.count == 1 && replay.warmUpCount == 1)
+        #expect(replay.scored.first?.estimate?.sourceLengths == [30])
         #expect(try CycleStatistics.calculate(periods: periods, today: today).cycles?.count == 2)
     }
 

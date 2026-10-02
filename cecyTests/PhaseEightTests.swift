@@ -101,16 +101,20 @@ nonisolated struct AIContextTests {
         snapshot.profile?.wellnessPreferences?.preferredExercises = nil
         #expect(throws: AIContextError.self) { try AIContextBuilder.wellness(snapshot: snapshot, today: aiDay(20260929)) }
     }
-    @Test func summaryRequiresConsecutiveStartsAndConfirmedEnd() throws {
+    @Test func summaryUsesAvailableFactsWithoutInventingMissingMeasurements() throws {
         var snapshot = try aiSnapshot()
         let today = try aiDay(20260929)
-        #expect(throws: AIContextError.self) { try AIContextBuilder.summary(snapshot: snapshot, start: aiDay(20260902), today: today) }
+        guard case .question(let open) = try AIContextBuilder.summary(snapshot: snapshot, start: aiDay(20260902), today: today) else { Issue.record(); return }
+        #expect(open.facts.cyclesAnalyzed == 0 && open.facts.averageCycleLength == nil)
+        #expect(open.facts.caveat.contains("Confirmed bleeding durations (days): 5"))
         guard case .summary(let value) = try AIContextBuilder.summary(snapshot: snapshot, start: aiDay(20260804), today: today) else { Issue.record(); return }
         #expect(value.cycleLength == 29 && value.periodLength == 5)
         #expect(value.commonSymptoms == [.headache])
         #expect(value.observations.contains { $0.contains("1 recorded days") })
         snapshot.periods[4].end = nil
-        #expect(throws: AIContextError.self) { try AIContextBuilder.summary(snapshot: snapshot, start: aiDay(20260804), today: today) }
+        guard case .question(let partial) = try AIContextBuilder.summary(snapshot: snapshot, start: aiDay(20260804), today: today) else { Issue.record(); return }
+        #expect(partial.facts.averageCycleLength == 29 && partial.facts.cyclesAnalyzed == 1)
+        #expect(partial.facts.caveat.contains("bleeding duration unknown"))
     }
     @Test func summariesDoNotLeakLaterCyclesOrPrivateFields() throws {
         let snapshot = try aiSnapshot()

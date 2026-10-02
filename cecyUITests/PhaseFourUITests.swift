@@ -21,17 +21,16 @@ final class PhaseFourUITests: XCTestCase {
         XCTAssertTrue(element.isHittable)
     }
 
-    @MainActor func testSparseReplayExplainsWarmupWithoutInventedAccuracy() {
+    @MainActor func testSparseReplayChecksAvailableIntervalsWithoutInventedAccuracy() {
         let app = launch(fixture: "history")
         app.tabBars.buttons["Insights"].tap()
         app.buttons["predictionReplayLink"].tap()
         XCTAssertTrue(app.staticTexts["replayDisclosure"].waitForExistence(timeout: 5))
         let coverage = app.staticTexts["replayCoverage"]
         reveal(coverage, in: app)
-        XCTAssertEqual(coverage.label, "0 of 0 checked starts inside their windows")
+        XCTAssertEqual(coverage.label, "2 of 2 checked starts inside their windows")
         let empty = app.staticTexts["replayEmpty"]
-        reveal(empty, in: app)
-        XCTAssertTrue(empty.exists)
+        XCTAssertFalse(empty.exists)
     }
 
     @MainActor func testSourceDatesConfidenceAndReconstructedEvidence() {
@@ -49,7 +48,7 @@ final class PhaseFourUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["replayDisclosure"].waitForExistence(timeout: 5))
         let coverage = app.staticTexts["replayCoverage"]
         reveal(coverage, in: app)
-        XCTAssertEqual(coverage.label, "2 of 2 checked starts inside their windows")
+        XCTAssertEqual(coverage.label, "4 of 4 checked starts inside their windows")
         let sources = app.buttons["Source intervals"].firstMatch
         reveal(sources, in: app); sources.tap()
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Recorded next start:")).firstMatch.exists)
