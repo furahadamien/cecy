@@ -75,6 +75,7 @@ nonisolated enum TrackerExport {
         let weightKilograms: Double?
         let cyclePredictability: String
         let typicalPeriodDays: Int?
+        let typicalCycleDays: Int?
         let commonSymptoms: [String]
         let cycleContext: [String]
         let goals: [String]
@@ -91,6 +92,7 @@ nonisolated enum TrackerExport {
             weightKilograms = profile.weightKilograms
             cyclePredictability = profile.predictability.rawValue
             typicalPeriodDays = profile.typicalPeriodDays
+            typicalCycleDays = profile.typicalCycleDays
             commonSymptoms = profile.commonSymptoms.map(\.rawValue).sorted()
             cycleContext = profile.cycleContext.map(\.rawValue).sorted()
             goals = profile.goals.map(\.rawValue).sorted()
@@ -153,7 +155,8 @@ nonisolated enum TrackerExport {
         try SexualActivityValidation.validate(snapshot.sexualActivities)
         guard generatedAt.timeIntervalSinceReferenceDate.isFinite else { throw TrackingError.invalidData }
         let includesIdentity = includeProfile && (snapshot.profile?.genderIdentity != nil || (includeSexualActivity && snapshot.profile?.sexualPartners != nil))
-        let version = includesIdentity ? 5 : (includeProfile && snapshot.profile?.wellnessPreferences != nil ? 4 : (includeSexualActivity ? 3 : (includeProfile ? 2 : 1)))
+        let version = includeProfile && snapshot.profile?.typicalCycleDays != nil ? 6
+            : includesIdentity ? 5 : (includeProfile && snapshot.profile?.wellnessPreferences != nil ? 4 : (includeSexualActivity ? 3 : (includeProfile ? 2 : 1)))
         let document = Document(formatVersion: version, generatedAt: generatedAt, includesPrivateNotes: includeNotes,
             periods: snapshot.periods.sorted { $0.start < $1.start }.map {
                 PeriodRecord(id: $0.id, start: civilDate($0.start), end: $0.end.map(civilDate), flow: $0.flow?.rawValue,

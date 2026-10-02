@@ -66,7 +66,7 @@ final class DeviceFeedbackUITests: XCTestCase {
         XCTAssertTrue(monthDay.label.contains("Cramps") && monthDay.label.contains("Vaginal sex"))
     }
 
-    @MainActor func testQuestionInputCapsAt100AndCanRestoreSuggestion() {
+    @MainActor func testQuestionInputCapsAt100AndScopeChangeResetsDraft() {
         let app = launch()
         app.tabBars.buttons["Insights"].tap()
         tap("askCecy", app: app)
@@ -76,8 +76,13 @@ final class DeviceFeedbackUITests: XCTestCase {
         XCTAssertEqual((field.value as? String)?.count, 100)
         XCTAssertEqual(app.staticTexts["questionCharacterCount"].label, "100 / 100")
         app.buttons["Hide keyboard"].tap()
-        tap("Use suggested question", app: app)
+        let scope = app.buttons["aiQuestionScope_symptomFrequency"]
+        reveal(app.scrollViews["aiQuestionScope"], app: app)
+        for _ in 0..<4 { if scope.isHittable { break }; app.scrollViews["aiQuestionScope"].swipeLeft() }
+        scope.tap()
+        reveal(field, app: app)
         XCTAssertLessThan((field.value as? String)?.count ?? 101, 100)
+        XCTAssertFalse(app.buttons["Use suggested question"].exists)
         XCTAssertFalse(app.staticTexts["Waiting for AI…"].exists)
     }
 
@@ -132,6 +137,6 @@ final class DeviceFeedbackUITests: XCTestCase {
         app.buttons["onboardingBack"].tap()
         XCTAssertEqual(app.buttons["profileGender_nonbinary"].value as? String, "Selected")
         OnboardingUITestSupport.skipIdentity(in: app)
-        XCTAssertEqual(app.staticTexts["onboardingHeading"].label, "Cycle basics")
+        XCTAssertEqual(app.staticTexts["onboardingHeading"].label, "When did your last period start?")
     }
 }

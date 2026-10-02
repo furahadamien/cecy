@@ -156,6 +156,14 @@ struct PredictionSummary: View {
                     .font(TrackerTypography.sectionTitle).accessibilityIdentifier("predictionWindow")
                 Label("\(estimate.confidence.rawValue) confidence · Rough estimate", systemImage: "circle.dashed")
                     .font(.subheadline)
+                if estimate.basis == .usualCycle {
+                    Text("Starter estimate · based on your usual \(estimate.reportedCycleDays ?? 28)-day cycle, not measured cycle history.")
+                        .font(.subheadline).accessibilityIdentifier("starterPrediction")
+                    if let days = estimate.reportedPeriodDays {
+                        Text("Usual bleeding duration: \(days) days. This is your estimate, not confirmed bleeding.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
                 if today > estimate.latest {
                     Text("Estimated window passed. No new start has been recorded.")
                         .accessibilityIdentifier("passedWindow")
@@ -166,8 +174,8 @@ struct PredictionSummary: View {
                     .font(.footnote).foregroundStyle(.secondary)
             case .insufficientHistory(let count):
                 Text("More history is needed for an estimate.").font(.title3)
-                Text(count == 0 ? "Four recorded starts are needed. You can begin with fewer."
-                     : "\(count) of 3 completed intervals available. Four recorded starts are needed for an initial estimate.")
+                Text(count == 0 ? "Record your last period start and set a typical cycle length in Profile for a starter estimate."
+                     : "\(count) of 3 completed intervals available for a history-based estimate. You can set your usual cycle length in Profile for a starter estimate.")
                     .foregroundStyle(.secondary)
             case .wideVariation:
                 Text("Your recorded intervals vary more than this simple estimate can support.")
@@ -194,6 +202,14 @@ struct PredictionExplanation: View {
                     Text("Possible next start dates, not a predicted bleeding duration.")
                     Text("\(estimate.confidence.rawValue) confidence · Provisional")
                 }
+                if estimate.basis == .usualCycle {
+                    TrackerCard {
+                        Text("A starting point, not measured history").font(.headline)
+                        Text("We add your usual cycle length (\(estimate.reportedCycleDays ?? 28) days) to your latest recorded start. The range adds three days on either side as a provisional display rule, not a measured probability or Apple’s algorithm.")
+                        Text("After three completed start-to-start intervals, the recorded-history engine takes over. Until then, this estimate stays low confidence. If the window passes, we don’t invent another period or roll the estimate forward.")
+                        Text("Your typical bleeding duration does not create an end date. Add confirmed ends separately.")
+                    }
+                } else {
                 TrackerCard {
                     Text("The recorded intervals behind it").font(.headline)
                     Text(estimate.sourceLengths.map { "\($0)" }.joined(separator: ", ") + " days")
@@ -216,6 +232,7 @@ struct PredictionExplanation: View {
                 }
                 NavigationLink("Prediction history check") { PredictionHistoryView(replay: replay) }
                     .frame(minHeight: 44).accessibilityIdentifier("predictionReplayLink")
+                }
                 Text("This is an uncalibrated estimate, not medical advice. Missing records affect it. Do not use it for contraception or diagnosis.")
                     .font(.footnote).foregroundStyle(.secondary)
             }

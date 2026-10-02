@@ -1,12 +1,13 @@
 import Foundation
 
 nonisolated enum AIContextError: Error, LocalizedError {
-    case preferences, insufficientRecords, unsupportedQuestion, invalidText, invalidQuestion
+    case preferences, insufficientRecords, unsupportedQuestion, invalidText, invalidQuestion, selectSymptoms
     var errorDescription: String? {
         switch self {
         case .preferences: "Complete activity, exercise, diet, allergy status and wellness goals in Settings → Profile → Wellness preferences. Explicitly choosing none is OK; unanswered choices are not assumed."
         case .insufficientRecords: "There aren’t enough confirmed records for this request. No dates or missing observations will be guessed."
-        case .unsupportedQuestion: "Ask about the selected records, or use the suggested question."
+        case .unsupportedQuestion: "Ask about the selected symptoms and time window. Questions about diagnoses or unrelated records aren’t supported."
+        case .selectSymptoms: "Select at least one symptom to discuss."
         case .invalidText: "Enter a description using 1–2,000 characters."
         case .invalidQuestion: "Enter a question using 1–100 characters."
         }
@@ -31,6 +32,19 @@ nonisolated enum CycleQuestionScope: String, CaseIterable, Identifiable, Sendabl
         case .beforePeriod: "Did I log \(kind.timingTitle.lowercased()) in the three days before my periods?"
         case .nearStart: "Did I log \(kind.timingTitle.lowercased()) on my period start day or the next two days?"
         }
+    }
+
+    var selectedSymptomsQuestion: String {
+        switch self {
+        case .cycleLengths: "How long and variable are my recorded cycles?"
+        case .symptomFrequency: "How many days did I log these symptoms in the last 90 days?"
+        case .beforePeriod: "Did I log these symptoms in the three days before my periods?"
+        case .nearStart: "Did I log these symptoms on my period start day or the next two days?"
+        }
+    }
+
+    func initialQuestion(kinds: Set<SymptomKind>) -> String {
+        kinds.count == 1 ? suggestedQuestion(kind: kinds.first!) : selectedSymptomsQuestion
     }
 }
 
@@ -177,11 +191,42 @@ nonisolated enum AIContextBuilder {
         return .question(CycleQuestionContext(question: question, facts: facts))
     }
 
+    static func question(_ text: String, scope: CycleQuestionScope, kinds: Set<SymptomKind>,
+                         snapshot: TrackerSnapshot, today: LocalDay) throws -> AIRequest {
+        if scope == .cycleLengths {
+            return try question(text, scope: scope, kind: .headache, snapshot: snapshot, today: today)
+        }
+        guard !kinds.isEmpty else { throw AIContextError.selectSymptoms }
+        try validateQuestion(text)
+        guard supports(text, scope: scope, kinds: kinds) else { throw AIContextError.unsupportedQuestion }
+        if kinds.count == 1, let kind = kinds.first {
+            return try question(text, scope: scope, kind: kind, snapshot: snapshot, today: today)
+        }
+        let values = try kinds.sorted { $0.rawValue < $1.rawValue }.map { kind -> AIQuestionSymptomFacts in
+            guard case .question(let context) = try question(scope.suggestedQuestion(kind: kind), scope: scope,
+                kind: kind, snapshot: snapshot, today: today) else { throw AIContextError.insufficientRecords }
+            let facts = context.facts
+            return AIQuestionSymptomFacts(symptom: AISymptomType(kind: kind), cyclesAnalyzed: facts.cyclesAnalyzed,
+                daysAnalyzed: facts.daysAnalyzed, recordedDays: facts.recordedDays, matchingStarts: facts.matchingStarts,
+                timingWindow: facts.timingWindow, minimumRecordedOffsetDays: facts.minimumRecordedOffsetDays,
+                maximumRecordedOffsetDays: facts.maximumRecordedOffsetDays)
+        }
+        var facts = AIQuestionFacts(scope: scope.rawValue, caveat: caveat)
+        facts.symptoms = values
+        return .question(CycleQuestionContext(question: text, facts: facts))
+    }
+
     static func supports(_ question: String, scope: CycleQuestionScope, kind: SymptomKind) -> Bool {
+        supports(question, scope: scope, kinds: [kind])
+    }
+
+    static func supports(_ question: String, scope: CycleQuestionScope, kinds: Set<SymptomKind>) -> Bool {
         let text = question.lowercased()
         let blocked = ["pregnan", "fertil", "ovulat", "diagnos", "pcos", "endometri", "medicat", "treatment", "cure", "cause", "why", "normal", "all histor", "all record", "sex", "tomorrow", "next period"]
         guard !blocked.contains(where: { text.contains($0) }) else { return false }
-        if text == scope.suggestedQuestion(kind: kind).lowercased() { return true }
+        if scope != .cycleLengths && kinds.isEmpty { return false }
+        if text == scope.selectedSymptomsQuestion.lowercased() { return true }
+        if kinds.count == 1, let kind = kinds.first, text == scope.suggestedQuestion(kind: kind).lowercased() { return true }
         let tokens = text.split { !$0.isLetter && !$0.isNumber }.map(String.init)
         if scope != .symptomFrequency && tokens.contains("last") { return false }
         let quantities: Set<String> = ["one", "two", "three", "ninety", "1", "2", "3", "90"]
@@ -194,10 +239,14 @@ nonisolated enum AIContextBuilder {
         }
         guard tokens.filter({ quantities.contains($0) }).allSatisfy({ permittedQuantities.contains($0) }) else { return false }
         let allowed: Set<String> = ["do", "does", "did", "i", "my", "me", "get", "have", "usually", "often", "how", "many", "much", "what", "are", "is", "was", "were", "the", "a", "an", "and", "or", "of", "in", "on", "to", "at", "for", "with", "it", "been", "has", "before", "after", "start", "starts", "day", "days", "period", "periods", "cycle", "cycles", "recorded", "record", "records", "log", "logged", "logs", "last", "recent", "three", "two", "ninety", "long", "length", "lengths", "average", "variable", "variability", "consistent", "compare"]
-        let symptomWords = Set((kind.title + " " + kind.timingTitle).lowercased().split(separator: " ").map(String.init))
+        let symptomWords = Set(kinds.flatMap { ($0.title + " " + $0.timingTitle).lowercased().split(separator: " ").map(String.init) })
         guard tokens.allSatisfy({ allowed.contains($0) || permittedQuantities.contains($0) || (scope != .cycleLengths && (symptomWords.contains($0) || symptomWords.contains(String($0.dropLast())))) }) else { return false }
         if scope == .cycleLengths { return text.contains("cycle") && ["long", "length", "variable", "variability", "average", "consistent"].contains(where: { text.contains($0) }) }
-        guard symptomWords.contains(where: { text.contains($0) }) else { return false }
+        guard kinds.allSatisfy({ kind in
+            [kind.title, kind.timingTitle].contains { label in
+                text.range(of: "\\b" + NSRegularExpression.escapedPattern(for: label.lowercased()) + "s?\\b", options: .regularExpression) != nil
+            }
+        }) else { return false }
         switch scope {
         case .beforePeriod: return text.contains("before") && !text.contains("after")
         case .nearStart: return (text.contains("start") || text.contains("after")) && !text.contains("before")

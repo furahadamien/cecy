@@ -143,11 +143,12 @@ final class SwiftDataPeriodRepository: PeriodRepository {
     func completeOnboarding(profileID: UUID, today: LocalDay, now: Date) throws -> TrackerSnapshot {
         var candidate = try load()
         guard candidate.profile?.id == profileID else { throw ProfileError.identity }
+        if candidate.onboardingCompletedAt != nil { return candidate }
         try candidate.profile?.validate(today: today)
         guard candidate.profile?.typicalPeriodDays != nil else { throw ProfileError.duration }
-        guard candidate.periods.count >= 4 else { throw ProfileError.fourPeriods }
+        guard candidate.profile?.typicalCycleDays != nil else { throw ProfileError.cycleLength }
+        guard !candidate.periods.isEmpty else { throw ProfileError.lastPeriod }
         try PeriodValidation.validate(candidate.periods, asOf: today)
-        if candidate.onboardingCompletedAt != nil { return candidate }
         guard now.timeIntervalSinceReferenceDate.isFinite else { throw TrackingError.invalidData }
         do {
             if let state = try context.fetch(FetchDescriptor<TrackerSchemaV2.AppStateRecord>()).first {

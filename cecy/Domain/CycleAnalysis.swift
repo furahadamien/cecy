@@ -3,6 +3,13 @@ import Foundation
 nonisolated enum PeriodFlow: String, CaseIterable, Sendable {
     case light, moderate, heavy
     var title: String { rawValue.capitalized }
+    var symbol: String {
+        switch self {
+        case .light: "drop"
+        case .moderate: "drop.halffull"
+        case .heavy: "drop.fill"
+        }
+    }
 }
 
 nonisolated struct Period: Identifiable, Equatable, Sendable {
@@ -61,12 +68,17 @@ nonisolated enum PredictionConfidence: String, Sendable {
     case low = "Low", moderate = "Moderate"
 }
 
+nonisolated enum PredictionBasis: Equatable, Sendable { case recordedHistory, usualCycle }
+
 nonisolated struct CyclePrediction: Equatable, Sendable {
     let center: LocalDay
     let earliest: LocalDay
     let latest: LocalDay
     let confidence: PredictionConfidence
     let sourceLengths: [Int]
+    var basis: PredictionBasis = .recordedHistory
+    var reportedCycleDays: Int? = nil
+    var reportedPeriodDays: Int? = nil
     func contains(_ day: LocalDay) -> Bool { earliest <= day && day <= latest }
 }
 
@@ -116,7 +128,8 @@ nonisolated struct CycleOverview: Equatable, Sendable {
 }
 
 nonisolated enum CycleCalculator {
-    static func overview(periods: [Period], today: LocalDay, engine: any CyclePredicting = BaselinePredictionEngine()) -> CycleOverview {
+    static func overview(periods: [Period], today: LocalDay, engine: any CyclePredicting = BaselinePredictionEngine(),
+                         profile: LocalProfile? = nil) -> CycleOverview {
         do {
             try PeriodValidation.validate(periods, asOf: today)
             let sorted = periods.sorted { $0.start < $1.start }
@@ -126,8 +139,13 @@ nonisolated enum CycleCalculator {
             guard let last = sorted.last else {
                 return CycleOverview(latestStart: nil, currentDay: nil, intervals: [], prediction: .insufficientHistory(completedIntervals: 0))
             }
+            var prediction = try engine.predict(intervals: intervals, latestStart: last.start)
+            if case .insufficientHistory = prediction, let cycleDays = profile?.typicalCycleDays {
+                prediction = .available(try CycleSetupPolicy.starter(lastStart: last.start, cycleDays: cycleDays,
+                                                                   periodDays: profile?.typicalPeriodDays))
+            }
             return CycleOverview(latestStart: last.start, currentDay: last.start.days(until: today) + 1,
-                                 intervals: intervals, prediction: try engine.predict(intervals: intervals, latestStart: last.start))
+                                 intervals: intervals, prediction: prediction)
         } catch {
             return CycleOverview(latestStart: nil, currentDay: nil, intervals: [], prediction: .unavailable(error as? TrackingError ?? .invalidData))
         }

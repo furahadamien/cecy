@@ -9,6 +9,8 @@ struct PredictionHistoryView: View {
                 Text("Reconstructed, not previously issued predictions").font(.headline)
                     .accessibilityIdentifier("replayDisclosure")
                 Text("Each check uses only intervals before its target start-to-start interval. It is recalculated from your current records, not a record of what Cecy showed at the time. Late logging and corrections can change these results.")
+                Text("Starter estimates based on your entered typical cycle length are not scored here. That preference is not past observed evidence.")
+                    .font(.footnote).foregroundStyle(.secondary)
                 Text("Missing starts can affect every comparison. These results do not establish medical accuracy or the chance of a future start falling in a window.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
@@ -16,7 +18,7 @@ struct PredictionHistoryView: View {
                 ReplayMetrics(replay: replay)
                 if replay.scored.isEmpty {
                     Text(replay.rows.count < 4
-                         ? "Five recorded starts are needed for the first historical check. Four starts can support a current estimate."
+                         ? "Five recorded starts are needed for the first historical check. A starter estimate can be available sooner from your last start and typical cycle length."
                          : "No estimate was available for these historical checks. Withheld estimates are listed below, not counted as accurate or inaccurate.")
                         .accessibilityIdentifier("replayEmpty")
                 }

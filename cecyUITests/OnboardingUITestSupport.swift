@@ -76,6 +76,17 @@ import XCTest
         choice.tap()
     }
 
+    static func lastStart(in app: XCUIApplication) {
+        let add = app.buttons["addOnboardingPeriod"]
+        reveal(add, in: app); add.tap()
+        let wheels = app.pickerWheels
+        XCTAssertTrue(wheels.firstMatch.waitForExistence(timeout: 5))
+        wheels.element(boundBy: 2).adjust(toPickerWheelValue: "2026")
+        wheels.element(boundBy: 0).adjust(toPickerWheelValue: "September")
+        wheels.element(boundBy: 1).adjust(toPickerWheelValue: "2")
+        app.buttons["saveOnboardingPeriod"].tap()
+    }
+
     static func reachApple(in app: XCUIApplication) {
         XCTAssertTrue(app.buttons["onboardingContinue"].waitForExistence(timeout: 10))
         next(in: app)
@@ -86,19 +97,11 @@ import XCTest
         next(in: app)
         app.buttons["onboardingSkip"].tap()
         skipIdentity(in: app)
-        choose("profileDuration_5", inRow: "profileDuration", app: app)
+        lastStart(in: app)
         next(in: app)
-        // Exactly four starts, most recent first, with no invented end dates.
-        for (month, day) in [("September", "2"), ("August", "4"), ("July", "5"), ("June", "7")] {
-            let add = app.buttons["addOnboardingPeriod"]
-            reveal(add, in: app); add.tap()
-            let wheels = app.pickerWheels
-            XCTAssertTrue(wheels.firstMatch.waitForExistence(timeout: 5))
-            wheels.element(boundBy: 2).adjust(toPickerWheelValue: "2026")
-            wheels.element(boundBy: 0).adjust(toPickerWheelValue: month)
-            wheels.element(boundBy: 1).adjust(toPickerWheelValue: day)
-            app.buttons["saveOnboardingPeriod"].tap()
-        }
+        XCTAssertEqual(app.pickerWheels.firstMatch.value as? String, "5 days")
+        next(in: app)
+        XCTAssertEqual(app.pickerWheels.firstMatch.value as? String, "28 days")
         next(in: app)
         XCTAssertFalse(app.scrollViews["commonSymptoms"].exists)
         app.buttons["commonSymptom_cramps"].tap()
@@ -118,10 +121,21 @@ import XCTest
         app.buttons["goal_predictPeriod"].tap()
         next(in: app)
         next(in: app)
-        XCTAssertTrue(app.staticTexts["29.0 days"].exists)
+        reveal(app.staticTexts["starterEstimateNotice"], in: app)
+        XCTAssertTrue(app.staticTexts["starterEstimateNotice"].exists)
         next(in: app)
         XCTAssertTrue(app.buttons["continueWithApple"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.staticTexts["appleSignInPurpose"].label, "Sign in with Apple to save your data and begin cycle tracking.")
+        XCTAssertEqual(app.staticTexts["onboardingHeading"].label, "Let's save your profile")
+        XCTAssertTrue(app.buttons["onboardingBack"].isHittable)
+        XCTAssertTrue(app.progressIndicators["Onboarding progress"].exists)
+        let apple = app.buttons["continueWithApple"]
+        XCTAssertEqual(apple.label, "Sign up with Apple")
+        XCTAssertTrue(apple.isHittable)
+        XCTAssertGreaterThanOrEqual(apple.frame.height, 44)
+        XCTAssertGreaterThan(apple.frame.minY, app.staticTexts["onboardingHeading"].frame.maxY)
+        XCTAssertFalse(app.staticTexts["appleSignInPurpose"].exists)
+        XCTAssertFalse(app.buttons["onboardingContinue"].exists)
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Google")).firstMatch.exists)
         XCTAssertFalse(app.staticTexts["No cloud backup or cross-device restore. Internet is needed for Apple sign-in."].exists)
     }
 
@@ -154,6 +168,7 @@ final class OnboardingUITests: XCTestCase {
         OnboardingUITestSupport.complete(in: app)
         XCTAssertEqual(app.staticTexts["cycleDay"].label, "Day 28")
         XCTAssertTrue(app.staticTexts["predictionWindow"].exists)
+        XCTAssertTrue(app.staticTexts["starterPrediction"].exists)
         app.terminate(); app.launch()
         XCTAssertTrue(app.tabBars.buttons["Settings"].waitForExistence(timeout: 10))
         app.tabBars.buttons["Settings"].tap()
@@ -174,6 +189,11 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Sign-in was cancelled. Your draft is still here."].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["creatingAccountMessage"].exists)
         XCTAssertFalse(app.tabBars.buttons["Today"].exists)
+        app.buttons["onboardingBack"].tap()
+        XCTAssertEqual(app.staticTexts["onboardingHeading"].label, "Review your profile")
+        OnboardingUITestSupport.next(in: app)
+        XCTAssertTrue(app.buttons["continueWithApple"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["onboardingHeading"].label, "Let's save your profile")
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["onboardingContinue"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.staticTexts["onboardingHeading"].label, "Understand your cycle.")
@@ -223,10 +243,10 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["profileWeightValue"].label, "Not added")
         app.buttons["onboardingSkip"].tap()
         OnboardingUITestSupport.skipIdentity(in: app)
-        XCTAssertEqual(app.staticTexts["onboardingHeading"].label, "Cycle basics")
+        XCTAssertEqual(app.staticTexts["onboardingHeading"].label, "When did your last period start?")
     }
 
-    @MainActor func testCycleChoicesAreHorizontalAndAccessibleAtLargestTextSize() {
+    @MainActor func testCycleWheelsAreAccessibleAtLargestTextSize() {
         let app = launch(largeText: true)
         OnboardingUITestSupport.next(in: app)
         let name = app.textFields["profileName"]
@@ -239,14 +259,19 @@ final class OnboardingUITests: XCTestCase {
         app.pickerWheels.firstMatch.adjust(toPickerWheelValue: "175 cm")
         app.buttons["onboardingSkip"].tap()
         OnboardingUITestSupport.skipIdentity(in: app)
-        OnboardingUITestSupport.choose("profilePredictability_sometimes", inRow: "profilePredictability", app: app)
-        XCTAssertEqual(app.buttons["profilePredictability_sometimes"].value as? String, "Selected")
-        let duration = app.scrollViews["profileDuration"]
-        OnboardingUITestSupport.reveal(duration, in: app)
-        OnboardingUITestSupport.choose("profileDuration_5", inRow: "profileDuration", app: app)
-        XCTAssertEqual(app.buttons["profileDuration_5"].value as? String, "Selected")
+        OnboardingUITestSupport.lastStart(in: app)
         OnboardingUITestSupport.next(in: app)
-        XCTAssertEqual(app.staticTexts["onboardingHeading"].label, "Add your last 4 periods")
+        let duration = app.pickerWheels.firstMatch
+        XCTAssertEqual(duration.value as? String, "5 days")
+        OnboardingUITestSupport.reveal(duration, in: app)
+        duration.adjust(toPickerWheelValue: "7 days")
+        OnboardingUITestSupport.next(in: app)
+        let cycle = app.pickerWheels.firstMatch
+        OnboardingUITestSupport.reveal(cycle, in: app)
+        XCTAssertEqual(cycle.value as? String, "28 days")
+        cycle.adjust(toPickerWheelValue: "30 days")
+        OnboardingUITestSupport.next(in: app)
+        XCTAssertEqual(app.staticTexts["onboardingHeading"].label, "Common symptoms")
     }
 
     @MainActor func testLogoutCancelRelaunchAndSameAccountReconnect() {

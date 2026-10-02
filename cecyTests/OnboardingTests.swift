@@ -17,15 +17,21 @@ nonisolated private func onboardingFixture() throws -> OnboardingDraft {
 nonisolated struct OnboardingDomainTests {
     private let today = try! LocalDay(key: 20260929)
 
-    @Test func fourStartsRequiredAndPredictionPolicyUnchanged() throws {
+    @Test func oneStartRequiredAndRecordedPredictionPolicyUnchanged() throws {
         var draft = try onboardingFixture()
         try draft.validate(today: today)
         #expect(draft.overview(today: today).intervals.map(\.length) == [28, 30, 29])
         #expect(draft.statistics(today: today)?.cycles?.mean == 29)
         #expect(draft.overview(today: today).estimate?.confidence == .low)
         draft.periods.removeFirst()
-        #expect(throws: ProfileError.self) { try draft.validate(today: today) }
-        #expect(draft.overview(today: today).estimate == nil)
+        try draft.validate(today: today)
+        #expect(draft.overview(today: today).estimate?.basis == .usualCycle)
+        draft.periods = Array(draft.periods.suffix(1))
+        try draft.validate(today: today)
+        #expect(draft.overview(today: today).estimate?.sourceLengths == [])
+        #expect(draft.statistics(today: today)?.cycles == nil)
+        draft.periods = []
+        #expect(throws: ProfileError.lastPeriod) { try draft.validate(today: today) }
     }
 
     @Test func preferencesNeverBecomePredictionEvidence() throws {
@@ -93,7 +99,8 @@ nonisolated struct OnboardingDomainTests {
         #expect(!String(decoding: excluded, as: UTF8.self).contains("Synthetic Alex"))
         let included = try TrackerExport.encode(snapshot: snapshot, includeNotes: false, generatedAt: today.formattingDate, includeProfile: true)
         let document = try decoder.decode(TrackerExport.Document.self, from: included)
-        #expect(document.formatVersion == 2)
+        #expect(document.formatVersion == 6)
+        #expect(document.profile?.typicalCycleDays == 28)
         #expect(document.profile?.dateOfBirth == "1995-05-12")
         #expect(document.profile?.preferredName == "Synthetic Alex")
         #expect(!String(decoding: included, as: UTF8.self).contains("userID"))

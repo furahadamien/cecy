@@ -22,14 +22,14 @@ struct DayActivityIcons: View {
 
 struct ActivityCalendarStrip: View {
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.colorSchemeContrast) private var contrast
-    @ScaledMetric(relativeTo: .body) private var dayWidth = 64.0
+    @ScaledMetric(relativeTo: .body) private var dayWidth = 56.0
     let today: LocalDay
     let snapshot: TrackerSnapshot
     @Binding var selection: LocalDay
     @State private var lower = -30
     @State private var upper = 30
     @State private var centeredDay: Int?
+    @State private var expanded = false
 
     private var days: [LocalDay] { (lower...upper).compactMap { try? today.adding(days: $0) } }
     private var visibleDay: LocalDay { centeredDay.flatMap { try? LocalDay(key: $0) } ?? selection }
@@ -37,36 +37,46 @@ struct ActivityCalendarStrip: View {
         let palette = TrackerPalette(scheme: colorScheme)
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(DayText.month(visibleDay)).font(.headline).accessibilityIdentifier("todayStripMonth")
+                Button { expanded.toggle() } label: {
+                    HStack(spacing: 8) {
+                        Text(expanded ? "Calendar" : DayText.month(visibleDay)).font(.headline)
+                            .accessibilityIdentifier("todayStripMonth")
+                        Image(systemName: expanded ? "chevron.up" : "chevron.down").font(.caption.weight(.semibold))
+                    }.frame(minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(expanded ? "Collapse calendar" : "Expand calendar")
+                .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+                .accessibilityIdentifier("expandTodayCalendar")
                 Spacer()
                 Button("Today") {
+                    expanded = false
                     selection = today
                     lower = min(lower, -30); upper = max(upper, 30)
                     centeredDay = today.key
                 }.frame(minHeight: 44).accessibilityIdentifier("stripReturnToToday")
             }
+            if expanded {
+                ExpandableMonthCalendar(today: today, snapshot: snapshot, selection: $selection)
+            } else {
             ScrollView(.horizontal) {
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(days) { day in
                         let markers = DayActivityMarker.recorded(on: day, in: snapshot)
                         Button { selection = day; centeredDay = day.key } label: {
-                            VStack(spacing: 8) {
-                                Text(day.formattingDate, format: .dateTime.weekday(.abbreviated))
-                                    .font(.caption).foregroundStyle(.secondary)
-                                Text(day.day.formatted()).font(.system(.title3, design: .rounded, weight: .semibold))
+                            VStack(spacing: 6) {
+                                Text(day.formattingDate, format: .dateTime.weekday(.narrow))
+                                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                                Text(day.day.formatted()).font(.system(.title2, design: .rounded, weight: day == selection ? .semibold : .regular))
                                     .monospacedDigit()
-                                    .underline(day == today)
+                                    .frame(width: max(44, dayWidth - 8), height: max(44, dayWidth - 8))
+                                    .foregroundStyle(day == selection ? palette.background : day == today ? palette.accent : .primary)
+                                    .background(day == selection ? palette.accent : .clear, in: Circle())
                                 DayActivityIcons(markers: markers)
                             }
-                            .padding(.horizontal, 6).padding(.vertical, 12)
+                            .padding(.vertical, 4)
                             .frame(width: dayWidth, alignment: .top)
-                            .background(day == selection ? palette.sage : palette.surface,
-                                        in: RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous)
-                                    .strokeBorder(day == selection || contrast == .increased ? palette.accent : palette.accent.opacity(0.10),
-                                                  lineWidth: day == selection ? 2 : 1)
-                            }
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain).id(day.key)
                         .accessibilityLabel("\(DayText.full(day)). \(day == today ? "Today. " : "")\(markers.isEmpty ? "No recorded activities" : markers.map(\.title).joined(separator: ", "))")
@@ -85,10 +95,19 @@ struct ActivityCalendarStrip: View {
                 if offset < lower + 7 { lower -= 30 }
                 if offset > upper - 7 { upper += 30 }
             }
+            }
+            Text(DayText.full(selection)).font(.subheadline).frame(maxWidth: .infinity)
+                .accessibilityIdentifier("todayStripSelectedDate")
+            Divider()
+        }
+            .onChange(of: selection) { _, day in
+                let offset = today.days(until: day)
+                lower = offset - 30; upper = offset + 30
+                centeredDay = day.key
+            }
             .onChange(of: today) { old, new in
                 if selection == old { selection = new; centeredDay = new.key }
             }
-        }
         .environment(\.calendar, LocalDay.calendar)
         .environment(\.timeZone, LocalDay.calendar.timeZone)
     }

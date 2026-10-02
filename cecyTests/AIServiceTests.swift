@@ -108,6 +108,20 @@ nonisolated private final class AIHTTPStub: URLProtocol, @unchecked Sendable {
         #expect(value.supportingFacts.count == 1)
         try assertRequest(.answerCycleQuestion)
     }
+    @Test func multipleSymptomsUseOneTypedBoundedRequest() async throws {
+        let today = try LocalDay(key: 20260929)
+        guard case .question(let context) = try AIContextBuilder.question(CycleQuestionScope.symptomFrequency.selectedSymptomsQuestion,
+            scope: .symptomFrequency, kinds: [.headache, .cramps],
+            snapshot: TrackerSnapshot(periods: [], onboardingCompletedAt: nil), today: today) else { Issue.record(); return }
+        _ = try await service(AIFixtures.question).answerCycleQuestion(context: context)
+        try assertRequest(.answerCycleQuestion)
+        struct Request: Decodable { let context: CycleQuestionContext }
+        let body = try #require(AIHTTPStub.state.captured.1.first)
+        let decoded = try JSONDecoder().decode(Request.self, from: body)
+        #expect(decoded.context.facts.symptoms?.map(\.symptom) == [.cramps, .headache])
+        #expect(body.count < 8_000)
+    }
+
     @Test func errorsAndRateLimitsDoNotRetryOrLeakRawMessages() async throws {
         let remote = service("{\"success\":false,\"error\":{\"code\":\"AI_UNAVAILABLE\",\"message\":\"PRIVATE SERVER DETAILS\"}}", status: 502)
         await #expect(throws: AIServiceError.unavailable) { try await remote.normalizeSymptoms(text: "Synthetic") }

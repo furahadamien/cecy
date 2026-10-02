@@ -20,32 +20,48 @@ struct AppleSignInSection: View {
     @State private var requestToken: UUID?
 
     var body: some View {
-        Section {
-            Text(purpose.title).font(.headline)
-                .accessibilityIdentifier("appleSignInPurpose")
-            if purpose != .saveDetails {
-                Text("Your health records stay on this device.").foregroundStyle(.secondary)
-            }
-            #if DEBUG
-            if session.account.usesTestAuthorization {
-                Button("Continue with Apple (test)") {
-                    if session.account.authorizeForUITest(profileID: profileID, protectsExistingProfile: session.snapshot.profile != nil) { onSuccess() }
-                }.frame(minHeight: 50).accessibilityIdentifier("continueWithApple")
-            } else { appleButton }
-            #else
-            appleButton
-            #endif
-            if let message = session.account.message { InlineError(message: message) }
-        } footer: {
-            if purpose != .saveDetails {
-                Text("No cloud backup or cross-device restore. Internet is needed for Apple sign-in.")
+        Group {
+            if purpose == .saveDetails {
+                VStack(spacing: 16) {
+                    authorizationControls
+                }
+            } else {
+                Section {
+                    Text(purpose.title).font(.headline)
+                        .accessibilityIdentifier("appleSignInPurpose")
+                    Text("Your health records stay on this device.").foregroundStyle(.secondary)
+                    authorizationControls
+                } footer: {
+                    Text("No cloud backup or cross-device restore. Internet is needed for Apple sign-in.")
+                }
             }
         }
         .disabled(!session.privacy.canAccess || session.account.isSigningIn || session.isSaving)
     }
 
+    @ViewBuilder private var authorizationControls: some View {
+        #if DEBUG
+        if session.account.usesTestAuthorization {
+            Button {
+                if session.account.authorizeForUITest(profileID: profileID, protectsExistingProfile: session.snapshot.profile != nil) { onSuccess() }
+            } label: {
+                Label(purpose == .saveDetails ? "Sign up with Apple" : "Continue with Apple (test)", systemImage: "apple.logo")
+                    .font(.title3.weight(.medium))
+                    .frame(maxWidth: .infinity, minHeight: 50)
+                    .foregroundStyle(colorScheme == .dark ? Color.black : .white)
+                    .background(colorScheme == .dark ? Color.white : .black, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("continueWithApple")
+        } else { appleButton }
+        #else
+        appleButton
+        #endif
+        if let message = session.account.message { InlineError(message: message) }
+    }
+
     private var appleButton: some View {
-        SignInWithAppleButton(.continue) { request in
+        SignInWithAppleButton(purpose == .saveDetails ? .signUp : .continue) { request in
             request.requestedScopes = [] // The preferred name comes from the local draft. No email is needed.
             requestToken = session.account.beginAuthorization()
         } onCompletion: { result in
@@ -56,6 +72,7 @@ struct AppleSignInSection: View {
         }
         .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
         .frame(height: 50)
+        .clipShape(RoundedRectangle(cornerRadius: purpose == .saveDetails ? 25 : 8))
         .accessibilityIdentifier("continueWithApple")
         .disabled(session.account.isSigningIn || session.isSaving)
     }

@@ -40,18 +40,12 @@ struct OnboardingPage<Content: View>: View {
         }
         .trackerFormStyle()
         .safeAreaInset(edge: .top, spacing: 0) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Step \(step) of \(totalSteps)").fontWeight(.medium)
-                    Spacer()
-                    if optional { Text("Optional") }
-                }.font(.caption).foregroundStyle(.secondary)
-                ProgressView(value: Double(step), total: Double(totalSteps))
-                    .accessibilityLabel("Onboarding progress")
-                    .accessibilityValue("Step \(step) of \(totalSteps)")
-            }
-            .padding(.horizontal, 24).padding(.vertical, 12)
-            .background(palette.background)
+            ProgressView(value: Double(step), total: Double(totalSteps))
+                .accessibilityLabel("Onboarding progress")
+                .accessibilityValue("Step \(step) of \(totalSteps)")
+                .accessibilityHint(optional ? "Optional step" : "")
+                .padding(.horizontal, 24).padding(.vertical, 12)
+                .background(palette.background)
         }
         .navigationTitle("Cecy")
         .navigationBarTitleDisplayMode(.inline)
