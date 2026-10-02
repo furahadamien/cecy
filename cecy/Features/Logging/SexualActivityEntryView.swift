@@ -87,8 +87,13 @@ struct SexualActivityEntryView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         guard validation == nil else { return }
-                        saveError = session.saveSexualActivity(entry, editing: original != nil)
-                        if saveError == nil { dismiss() } else { errorFocused = true }
+                        let value = entry
+                        Task {
+                            saveError = await session.withPredictionUpdate {
+                                session.saveSexualActivity(value, editing: original != nil)
+                            }
+                            if saveError == nil { dismiss() } else { errorFocused = true }
+                        }
                     }
                     .disabled(validation != nil || session.isSaving || (original != nil && !changed))
                     .accessibilityIdentifier("saveSexualActivity")
@@ -166,7 +171,9 @@ struct SexualActivityRecordView: View {
         }
         .sheet(isPresented: $editing) { SexualActivityEntryView(session: session, day: entry.day, entry: entry) }
         .alert("Delete this activity record?", isPresented: $deleting) {
-            Button("Delete activity record", role: .destructive) { error = session.deleteSexualActivity(id: entry.id) }
+            Button("Delete activity record", role: .destructive) {
+                Task { error = await session.withPredictionUpdate { session.deleteSexualActivity(id: entry.id) } }
+            }
             Button("Keep record", role: .cancel) { }
         } message: { Text("All activities and the private note for this day will be removed. This cannot be undone.") }
         .onChange(of: error) { _, message in

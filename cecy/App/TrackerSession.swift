@@ -9,20 +9,29 @@ final class TrackerSession {
     private(set) var activityIndex = DayActivityIndex()
     private(set) var today: LocalDay?
     private(set) var overview: CycleOverview?
+    private(set) var cycleForecast = CycleForecast()
     private(set) var statistics: CycleStatistics?
     private(set) var predictionReplay: PredictionReplay?
     private(set) var insights: [CycleInsight] = []
     private(set) var insightMessage: String?
     private(set) var isSaving = false
+    private(set) var isUpdatingPredictions = false
+    @ObservationIgnored private var predictionUpdateRevision = 0
     private(set) var failureMessage: String?
     var confirmation: String?
     let privacy: TrackerPrivacy
     let account: AppleAccount
     let healthImport: HealthImportReview
     let ai: AIRequestCoordinator
+    let dailyAI: AIRequestCoordinator
+    private(set) var dailyInsightRequest: AIRequest?
+    var dailyInsightOutput: AIOutput? {
+        guard canUseAI, dailyAI.request == dailyInsightRequest else { return nil }
+        return dailyAI.output
+    }
     var canUseAI: Bool {
         privacy.canAccess && privacy.aiEnabled && !account.requiresSignIn && phase == .loaded
-            && snapshot.onboardingCompletedAt != nil && !isSaving
+            && snapshot.onboardingCompletedAt != nil && !isSaving && !isUpdatingPredictions
     }
     enum SetupStage: String {
         case saving = "Saving your profile"
@@ -51,14 +60,55 @@ final class TrackerSession {
         self.account = account ?? AppleAccount()
         healthImport = HealthImportReview(reader: healthReader ?? UnavailableHealthReader())
         ai = AIRequestCoordinator(service: aiService)
+        dailyAI = AIRequestCoordinator(service: aiService)
+    }
+
+    /// UI entry point: present before synchronous local work, and keep its completion
+    /// transition readable. A nil result retains the existing "committed" meaning.
+    func withPredictionUpdate(_ operation: @MainActor () -> String?) async -> String? {
+        guard privacy.canAccess, !account.requiresSignIn, phase == .loaded,
+              !isSaving, !isUpdatingPredictions else { return "Finish the current update or unlock Cecy before saving." }
+        isUpdatingPredictions = true
+        predictionUpdateRevision += 1
+        let token = predictionUpdateRevision
+        let presentationClock = ContinuousClock()
+        let deadline = presentationClock.now.advanced(by: .milliseconds(450))
+        defer { if token == predictionUpdateRevision { isUpdatingPredictions = false } }
+        // Let SwiftUI render the indicator before main-actor storage/calculation work.
+        do { try await Task.sleep(for: .milliseconds(50)) }
+        catch { return "The update was cancelled before saving. Your draft has not been saved." }
+        guard token == predictionUpdateRevision, privacy.canAccess, !account.requiresSignIn,
+              !Task.isCancelled else { return "The update was interrupted before saving. Your draft has not been saved." }
+        let error = operation()
+        if error == nil {
+            // Once committed, cancellation must not misreport the save as a failure.
+            try? await presentationClock.sleep(until: deadline)
+        }
+        return error
+    }
+
+    func cancelPredictionUpdatePresentation() {
+        predictionUpdateRevision += 1
+        isUpdatingPredictions = false
     }
 
     func performAI(_ request: AIRequest) {
+        if dailyAI.isLoading { dailyAI.cancel() }
         ai.begin(request) { [weak self] in self?.canUseAI == true }
     }
 
+    func preloadDailyInsights() {
+        guard canUseAI, privacy.dailyInsightsEnabled, !ai.isLoading, !dailyAI.isLoading,
+              let today, let request = dailyInsightRequest,
+              privacy.reserveDailyInsightAttempt(on: today) else { return }
+        dailyAI.begin(request) { [weak self] in
+            guard let self else { return false }
+            return canUseAI && privacy.dailyInsightsEnabled && self.today == today && dailyInsightRequest == request
+        }
+    }
+
     func setAIEnabled(_ enabled: Bool) -> String? {
-        if !enabled { ai.invalidate() }
+        if !enabled { ai.invalidate(); dailyAI.invalidate() }
         return privacy.setAIEnabled(enabled, now: clock())
     }
 
@@ -74,6 +124,7 @@ final class TrackerSession {
             publish(loaded, today: day)
         } catch {
             phase = .failed
+            dailyAI.invalidate()
             failureMessage = "Your records couldn’t be opened. They have not been reset. Try again when your device is unlocked. If the problem continues, keep your app data intact."
         }
     }
@@ -93,11 +144,14 @@ final class TrackerSession {
         cancelSetup()
         healthImport.stop()
         ai.invalidate()
+        dailyAI.invalidate()
+        dailyInsightRequest = nil
         privacy.cleanupExport()
         snapshot = TrackerSnapshot()
         activityIndex = DayActivityIndex()
         today = nil
         overview = nil
+        cycleForecast = CycleForecast()
         statistics = nil
         predictionReplay = nil
         insights = []
@@ -218,10 +272,13 @@ final class TrackerSession {
 
     private func publish(_ snapshot: TrackerSnapshot, today: LocalDay) {
         ai.invalidate()
+        if self.snapshot != snapshot || self.today != today { dailyAI.invalidate() }
+        dailyInsightRequest = try? AIContextBuilder.recordInsights(snapshot: snapshot, today: today)
         self.snapshot = snapshot
         activityIndex = DayActivityIndex(snapshot: snapshot)
         self.today = today
         overview = CycleCalculator.overview(periods: snapshot.periods, today: today, engine: EvidencePredictionEngine(), profile: snapshot.profile)
+        cycleForecast = overview.map { CycleForecast.calculate(overview: $0, profile: snapshot.profile, periods: snapshot.periods) } ?? CycleForecast()
         predictionReplay = try? PredictionBacktester.evaluate(periods: snapshot.periods, today: today)
         statistics = try? CycleStatistics.calculate(periods: snapshot.periods, today: today)
         privacy.trackingChanged(prediction: overview?.estimate, now: clock(), timeZone: zone())
@@ -284,6 +341,7 @@ final class TrackerSession {
     func deleteAllAndWait() async -> String? {
         guard privacy.canAccess, !isSaving else { return "Unlock Cecy and try again." }
         ai.invalidate()
+        dailyAI.invalidate()
         healthImport.stop()
         if account.requiresSignIn { return await resetWhileSignedOut() }
         do {
@@ -316,6 +374,7 @@ final class TrackerSession {
 
     func deleteAll() -> String? {
         ai.invalidate()
+        dailyAI.invalidate()
         healthImport.stop()
         return mutate(confirmation: nil,
                 failure: "Deletion did not finish. Tracker records remain unchanged; reminders or the local Apple link may already be cleared. Please try again.") { repository, _, _ in

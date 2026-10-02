@@ -1,5 +1,35 @@
 # Cecy — Implementation Plan
 
+## October 2 — adaptive four-output calendar forecast
+
+Implemented next-start estimates and uncertainty, expected bleeding dates, a single possible ovulation date, and a distinct six-day estimated fertile window. Retains the existing rolling-six median primary engine and evidence replay; confirmed end dates independently refine bleeding duration. Later-cycle uncertainty now accumulates, with explicitly approximate 10–16-day ovulation offsets. All calendars share markers, date details and context cautions. No fabricated records, biomarkers, automatic AI requests, storage migration or reminder roll-forward. See [ADAPTIVE_CYCLE_FORECAST.md](ADAPTIVE_CYCLE_FORECAST.md) for formulas, example, sources and limitations, superseding the older forecast formulas.
+
+Validation: all 52 selected unit/persistence tests in eight suites and all three targeted calendar UI scenarios passed together on the final source (97.7 seconds), including setup/evidence regressions and the final bleeding outlines. Debug app/test compilation and the separate unsigned iOS Release build passed (36.7 seconds). See the algorithm document for evidence paths. Device/accessibility, full regression, clinical review/calibration and prior release gates remain open. Existing support, daily-insight and progress work is preserved; no commits or pushes.
+
+## October 2 — native developer support implemented
+
+Implemented Settings → About → Contact support for support@thabo.xyz after reviewing Apple MessageUI and SwiftUI OpenURLAction guidance. Uses the native composer after canSendMail succeeds, otherwise system mailto handoff; the visible address and explicit local-only copy remain available. Only the recipient and generic subject are prefilled: no health records, profile, logs or attachments. Cancel, draft, handoff and failure states never claim verified delivery. No backend, dependencies, automatic sending or storage changes.
+
+Validation: six unit tests and the Settings/navigation/copy UI scenario passed together, along with Debug app/test compilation and a separate unsigned iOS Release build. No live email or AI requests. Native Mail, third-party/no-mail configurations, offline behavior and device accessibility remain open; see [CONTACT_SUPPORT.md](CONTACT_SUPPORT.md). Historical full-suite and release acceptance gates are unchanged. Ongoing prediction/insight work is preserved; nothing committed or pushed.
+
+## October 2 — ovulation marker and context correction
+
+Reviewed ASRM and NHS guidance. Replaced the misleading multi-day ovulation markings with one central, explicitly uncertain date per projected cycle. The broader timing envelope remains in an expandable uncertainty explanation, not a fertile window or duration of ovulation. Removed blanket cycle-context suppression: selected factors instead produce specific cautions, including that some hormonal contraception prevents ovulation and the date may not apply. Numerical period predictions and saved profile answers are unchanged. Upcoming selects a non-past central date; a passed estimate does not imply ovulation happened or pregnancy is impossible. Calendar-only accuracy remains limited; biomarkers/clinical validation are not implemented or claimed.
+
+Validation: 24 focused unit tests and all three targeted UI scenarios passed together; Debug app/test compilation and unsigned iOS Release build passed (32.5 seconds). See [OVULATION_FORECAST.md](OVULATION_FORECAST.md) for updated scientific rationale and evidence. This supersedes the previous blanket-context exclusion and range-wide green markings. Full-suite, device/accessibility and clinical/release gates remain open. No backend changes, live AI calls, commits or pushes.
+
+## October 2 — paired future period and ovulation forecast
+
+Replaced the one-cycle ovulation marker with up to three paired future-cycle projections using the same measured/entered cycle length as the period engine. Later period windows widen; ovulation centers and ranges carry those windows back by 14 and 12–16 days respectively. Later cycles explicitly assume preceding estimated periods occur, without creating records or advancing overdue primary predictions/reminders. A shared cached forecast drives all calendars and upcoming-date cards. Selected unreliable cycle contexts suppress only the new ovulation display. Daily-insight behavior is unchanged.
+
+Validation: all 22 focused unit tests (including eight new projection/session checks), both calendar UI scenarios and the unsigned iOS Release build passed. Release took 41.3 seconds; final unit run took 18.0 seconds. One test fixture date was corrected; no algorithm weakening was needed. See [OVULATION_FORECAST.md](OVULATION_FORECAST.md) for formulas, research, assumptions and evidence. Full regression, medical review/calibration and physical-device acceptance remain open. No backend changes, commits or pushes.
+
+## October 2 — possible ovulation and daily insights
+
+Implemented red dashed period-start windows and green dotted possible ovulation in Calendar and both Today calendar presentations. Ovulation is only a rough calendar approximation (estimated next start minus 14 days), not detection, a phase engine or fertility guidance. Insights now has immediate local daily facts and separately consented once-per-day automatic generation; Ask about your records has three offline prepared answers. Existing AI consent never silently enables automatic requests. Daily attempt limits persist locally, generated output remains session-only, and stale/private results are cancelled or cleared. No backend changes or live gateway calls.
+
+Validation: 29 focused unit tests in four suites passed, both new UI scenarios passed across focused runs, and the unsigned iOS Release build passed in 49.8 seconds. See [DEVICE_FEEDBACK_ROUND_6.md](DEVICE_FEEDBACK_ROUND_6.md) for research, implementation limits and evidence. Full-suite, device/accessibility, medical wording/calibration and live gateway/distribution acceptance remain open. No commits or pushes.
+
 ## October 2 — fewer repeated dates and smaller logging controls
 
 Removed the full-date subtitle below Today and the full-date line below its calendar strip. Dates identifying records and predictions remain, along with full date accessibility labels. Today and Calendar now opt into the same compact logging style: single-line footnote labels, reduced side padding, a 44-point overall minimum target instead of a 44-point label plus system padding, and intrinsic-width capsules instead of stretched buttons. Controls form a row when they fit and stack at larger text sizes or narrow widths. Other logging entry points keep their existing presentation. Sheet behavior, future-date/overlap guards, activity colors, legend, predictions and prior optimizations are preserved.

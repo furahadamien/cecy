@@ -117,12 +117,15 @@ struct SymptomEntryView: View {
                     Button("Save") {
                         guard validation == nil else { return }
                         let values = entries
-                        if original != nil, let entry = values.first {
-                            saveError = session.saveSymptom(entry, editing: true)
-                        } else {
-                            saveError = session.addSymptoms(values)
+                        Task {
+                            saveError = await session.withPredictionUpdate {
+                                if original != nil, let entry = values.first {
+                                    return session.saveSymptom(entry, editing: true)
+                                }
+                                return session.addSymptoms(values)
+                            }
+                            if saveError == nil { dismiss() } else { errorFocused = true }
                         }
-                        if saveError == nil { dismiss() } else { errorFocused = true }
                     }
                     .disabled(validation != nil || session.isSaving || (original != nil && !changed))
                     .accessibilityIdentifier("saveSymptom")
@@ -214,7 +217,9 @@ struct SymptomRecordView: View {
         }
         .sheet(isPresented: $editing) { SymptomEntryView(session: session, day: entry.day, entry: entry) }
         .alert("Delete this observation?", isPresented: $deleting) {
-            Button("Delete recorded observation", role: .destructive) { error = session.deleteSymptom(id: entry.id) }
+            Button("Delete recorded observation", role: .destructive) {
+                Task { error = await session.withPredictionUpdate { session.deleteSymptom(id: entry.id) } }
+            }
             Button("Keep observation", role: .cancel) { }
         } message: { Text("Its rating and private note will also be removed. This cannot be undone.") }
         .onChange(of: error) { _, message in

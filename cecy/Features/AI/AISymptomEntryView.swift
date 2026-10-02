@@ -101,8 +101,11 @@ struct AISymptomEntryView: View {
                     Button("Save confirmed symptoms") {
                         typing = false
                         guard validation == nil, manual || session.canUseAI else { return }
-                        error = session.addSymptoms(entries)
-                        if error == nil { dismiss() }
+                        let values = entries
+                        Task {
+                            error = await session.withPredictionUpdate { session.addSymptoms(values) }
+                            if error == nil { dismiss() }
+                        }
                     }
                     .disabled(validation != nil || session.isSaving || (!manual && !session.canUseAI))
                     .accessibilityIdentifier("saveAISymptoms")
@@ -140,6 +143,7 @@ struct AISymptomEntryView: View {
             reviewed = true
         }
         .onChange(of: session.ai.revision) { _, _ in
+            guard !session.isUpdatingPredictions else { return }
             text = ""; selected = []; ratings = [:]; identifiers = [:]; error = nil
             reviewed = false; manual = false; dismiss()
         }

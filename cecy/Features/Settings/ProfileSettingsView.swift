@@ -83,8 +83,11 @@ struct ProfileSettingsView: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") {
                     profile.preferredName = profile.preferredName.trimmingCharacters(in: .whitespacesAndNewlines)
-                    error = session.saveProfile(profile)
-                    if error == nil { dismiss() } else { errorFocused = true }
+                    let value = profile
+                    Task {
+                        error = await session.withPredictionUpdate { session.saveProfile(value) }
+                        if error == nil { dismiss() } else { errorFocused = true }
+                    }
                 }.disabled(!hasChanges || session.isSaving).accessibilityIdentifier("saveProfile")
             }
         }

@@ -7,14 +7,14 @@ struct ExpandableMonthCalendar: View {
     @Environment(\.colorScheme) private var colorScheme
     let today: LocalDay
     let activityIndex: DayActivityIndex
-    let prediction: CyclePrediction?
+    let forecast: CycleForecast
     @Binding var selection: LocalDay
     @State private var month: LocalDay
 
-    init(today: LocalDay, activityIndex: DayActivityIndex, prediction: CyclePrediction?, selection: Binding<LocalDay>) {
+    init(today: LocalDay, activityIndex: DayActivityIndex, forecast: CycleForecast, selection: Binding<LocalDay>) {
         self.today = today
         self.activityIndex = activityIndex
-        self.prediction = prediction
+        self.forecast = forecast
         _selection = selection
         _month = State(initialValue: selection.wrappedValue.monthStart)
     }
@@ -71,28 +71,37 @@ struct ExpandableMonthCalendar: View {
     private func dateButton(_ day: LocalDay, asList: Bool) -> some View {
         let palette = TrackerPalette(scheme: colorScheme)
         let markers = activityIndex.markers(on: day)
-        let predicted = prediction?.contains(day) == true
+        let period = forecast.period(on: day)
+        let ovulation = forecast.ovulation(on: day)
+        let predicted = period != nil || forecast.bleeding(on: day) != nil
         return Button { selection = day } label: {
             VStack(spacing: 4) {
                 Text(asList ? DayText.full(day) : day.day.formatted())
                     .font(.body.weight(day == selection ? .semibold : .regular))
                     .frame(maxWidth: .infinity, minHeight: 44)
-                    .foregroundStyle(day == selection ? palette.background : day == today ? palette.accent : .primary)
-                    .background(day == selection ? palette.accent : .clear, in: RoundedRectangle(cornerRadius: 22))
+                    .foregroundStyle(day == selection ? palette.accent : day == today ? palette.accent : .primary)
+                    .background(day == selection ? palette.sage : .clear, in: RoundedRectangle(cornerRadius: 22))
                     .overlay {
                         if predicted {
                             RoundedRectangle(cornerRadius: 22)
-                                .strokeBorder(day == selection ? palette.background : palette.accent,
+                                .strokeBorder(palette.recorded,
                                               style: StrokeStyle(lineWidth: 2, dash: [3, 3]))
+                        }
+                        if ovulation != nil {
+                            RoundedRectangle(cornerRadius: 22)
+                                .strokeBorder(palette.accent, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [1, 4]))
+                                .padding(predicted ? 3 : 0)
                         }
                     }
                 DayActivityIcons(markers: markers)
+                ForecastDayIcons(forecast: forecast, day: day)
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(DayText.full(day)). \(day == today ? "Today. " : "")\(markers.isEmpty ? "No recorded activities" : markers.map(\.title).joined(separator: ", "))\(predicted ? ". Estimated start window" : "")")
+        .accessibilityLabel("\(DayText.full(day)). \(day == today ? "Today. " : "")\(markers.isEmpty ? "No recorded activities" : markers.map(\.title).joined(separator: ", "))\(period != nil ? ". Estimated start window" : "")\(ovulation != nil ? ". Possible ovulation, calendar estimate only" : "")\(ovulation?.ovulationWarnings.isEmpty == false ? ". Timing may not apply with your cycle context" : "")\(period?.isLaterProjection == true || ovulation?.isLaterProjection == true ? ". Future-cycle projection assumes unrecorded periods" : "")")
         .accessibilityAddTraits(day == selection ? .isSelected : [])
+        .accessibilityValue(forecast.additionalDayDescription(day))
         .accessibilityIdentifier("todayMonthDate_\(day.key)")
     }
     private func move(_ offset: Int) {

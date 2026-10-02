@@ -170,8 +170,10 @@ private struct HealthStartReviewView: View {
                     Button("Save confirmed start") {
                         do {
                             let day = try LocalDay(date: startDate, timeZone: LocalDay.calendar.timeZone)
-                            error = session.importHealthStart(sample, confirmedStart: day)
-                            if error == nil { dismiss() } else { errorFocused = true }
+                            Task {
+                                error = await session.withPredictionUpdate { session.importHealthStart(sample, confirmedStart: day) }
+                                if error == nil { dismiss() } else { errorFocused = true }
+                            }
                         } catch { self.error = "Check the selected date."; errorFocused = true }
                     }
                     .disabled(!confirmed || validation != nil || session.isSaving || !session.healthImport.contains(sample))

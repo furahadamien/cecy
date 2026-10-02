@@ -25,15 +25,17 @@ struct PeriodRecordActions: View {
         .disabled(session.isSaving)
         .sheet(isPresented: $editing) {
             if let current = session.snapshot.periods.first(where: { $0.id == period.id }), let today = session.today {
-                PeriodEntryView(period: current, today: today, existing: session.snapshot.periods, isEditing: true) {
-                    session.update($0)
+                PeriodEntryView(period: current, today: today, existing: session.snapshot.periods, isEditing: true) { period in
+                    await session.withPredictionUpdate { session.update(period) }
                 }
             }
         }
         .alert("Delete this period?", isPresented: $confirmDelete) {
             Button("Delete recorded period", role: .destructive) {
-                error = session.delete(id: period.id)
-                errorFocused = error != nil
+                Task {
+                    error = await session.withPredictionUpdate { session.delete(id: period.id) }
+                    errorFocused = error != nil
+                }
             }
             Button("Keep period", role: .cancel) { }
         } message: {

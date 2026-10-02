@@ -10,6 +10,15 @@ struct TrackerRootView: View {
         _session = State(initialValue: session)
     }
 
+    private struct DailyPreloadKey: Equatable {
+        let active: Bool
+        let allowed: Bool
+        let enabled: Bool
+        let manualRequestRunning: Bool
+        let day: LocalDay?
+        let request: AIRequest?
+    }
+
     var body: some View {
         Group {
             if !session.privacy.isReady {
@@ -55,6 +64,8 @@ struct TrackerRootView: View {
         .tint(Color.accentColor)
         .fontDesign(.rounded)
         .buttonBorderShape(.capsule)
+        .environment(\.predictionUpdateInProgress, session.isUpdatingPredictions)
+        .disabled(session.isUpdatingPredictions)
         .preferredColorScheme(session.privacy.preferences.appearance.map { $0 == .dark ? ColorScheme.dark : .light })
         .background(PrivacyShield(isActive: scenePhase == .active))
         .task {
@@ -63,18 +74,42 @@ struct TrackerRootView: View {
             if session.privacy.canAccess && session.phase == .loading { session.load() }
             if session.privacy.canAccess { await session.account.checkCredentialState() }
         }
+        .task(id: DailyPreloadKey(active: scenePhase == .active, allowed: session.canUseAI,
+                                  enabled: session.privacy.dailyInsightsEnabled,
+                                  manualRequestRunning: session.ai.isLoading, day: session.today,
+                                  request: session.dailyInsightRequest)) {
+            if scenePhase == .active { session.preloadDailyInsights() }
+        }
         .onChange(of: session.privacy.canAccess) { _, accessible in
             if accessible { session.account.reload(); session.load() }
-            else { session.healthImport.stop(); session.ai.invalidate() }
+            else {
+                session.cancelPredictionUpdatePresentation()
+                session.healthImport.stop(); session.ai.invalidate(); session.dailyAI.invalidate()
+            }
         }
         .onChange(of: session.account.requiresSignIn) { _, required in
-            if required { session.healthImport.stop(); session.ai.invalidate() }
+            if required {
+                session.cancelPredictionUpdatePresentation()
+                session.healthImport.stop(); session.ai.invalidate(); session.dailyAI.invalidate()
+            }
         }
         .onChange(of: session.privacy.aiEnabled) { _, enabled in
-            if !enabled { session.ai.invalidate() }
+            if !enabled { session.ai.invalidate(); session.dailyAI.invalidate() }
+        }
+        .onChange(of: session.privacy.dailyInsightsEnabled) { _, enabled in
+            if !enabled { session.dailyAI.invalidate() }
+        }
+        .onChange(of: session.isUpdatingPredictions) { _, updating in
+            if updating, scenePhase == .active, session.privacy.canAccess {
+                AccessibilityNotification.Announcement("Updating your predictions").post()
+            }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active { session.ai.invalidate() }
+            if phase != .active {
+                session.cancelPredictionUpdatePresentation()
+                session.ai.invalidate()
+            }
+            if phase != .active, session.dailyAI.isLoading { session.dailyAI.cancel() }
             if phase == .active {
                 session.refresh()
                 Task { await session.privacy.unlockAutomatically() }
@@ -128,7 +163,9 @@ private struct TrackerTabs: View {
         .modifier(TrackerTabBarStyle())
         .sheet(item: $loggingDay) { day in
             PeriodEntryView(period: Period(start: day), today: session.today ?? today,
-                            existing: session.snapshot.periods) { period in session.save([period]) }
+                            existing: session.snapshot.periods) { period in
+                await session.withPredictionUpdate { session.save([period]) }
+            }
         }
         .sheet(isPresented: $showHistory) {
             NavigationStack { HistoryEntryView(session: session, today: session.today ?? today, isOnboarding: false) }

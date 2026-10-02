@@ -78,7 +78,13 @@ struct TrackerCalendarView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Label("Recorded start or confirmed bleeding day", systemImage: "drop.fill")
                                     .foregroundStyle(palette.recorded)
-                                Label("Estimated start window · Dashed border", systemImage: "circle.dashed")
+                                Label("Possible starts / expected bleeding · Dashed border", systemImage: "circle.dashed")
+                                    .foregroundStyle(palette.recorded)
+                                Label("Possible ovulation · Dotted border", systemImage: "circle.dotted")
+                                    .foregroundStyle(palette.accent)
+                                Label("Expected bleeding · Not recorded", systemImage: "drop")
+                                    .foregroundStyle(palette.recorded)
+                                Label("Estimated fertile window", systemImage: "leaf")
                                     .foregroundStyle(palette.accent)
                                 Label { Text("Sexual activity") } icon: {
                                     Image(systemName: "heart.fill").foregroundStyle(palette.sexualActivity)
@@ -86,12 +92,15 @@ struct TrackerCalendarView: View {
                                 Label("Symptoms use their individual icons", systemImage: "waveform.path.ecg")
                                 Text("A dot beside the date marks today. Tap a date for all records.")
                                 Text("An underlined date is selected. Estimates are not recorded bleeding days.")
+                                Text("One dotted date estimates ovulation. Leaves mark the six-day estimated fertile window—not six days of ovulation. Actual timing may differ, and unmarked days are not safe days. Not for contraception or diagnosis.")
+                                Text("Later cycles assume estimated periods occur. Only three cycles are projected from your last recorded start.")
                             }
                             .font(.footnote).foregroundStyle(.secondary).padding(8)
                             .accessibilityElement(children: .contain)
                             .accessibilityIdentifier("calendarLegend")
                         }
                         if !listLayout { TrackerCard(padding: 14) { selectedDetails } }
+                        TrackerCard { UpcomingCycleForecastView(forecast: session.cycleForecast, today: today) }
                     }
                     .frame(width: max(0, contentWidth), alignment: .leading)
                     .padding(.vertical, TrackerLayout.pageInset)
@@ -103,6 +112,7 @@ struct TrackerCalendarView: View {
             }
             .background(palette.background.ignoresSafeArea())
         }
+        .predictionUpdateProgress()
         .sheet(isPresented: $showDatePicker) {
             CalendarDateSheet(day: selection) { selection = $0 }
         }
@@ -154,13 +164,21 @@ struct TrackerCalendarView: View {
         let count = observationCount(on: day)
         if count > 0 { parts.append("\(count) recorded observations") }
         parts += DayActivityMarker.recorded(on: day, in: session.snapshot).filter { $0.id != "period" }.map(\.title)
-        if overview.estimate?.contains(day) == true { parts.append("Possible next period start; estimate") }
-        return parts.joined(separator: ". ")
+        let period = session.cycleForecast.period(on: day)
+        let ovulation = session.cycleForecast.ovulation(on: day)
+        if period != nil { parts.append("Possible period start; estimate") }
+        if ovulation != nil { parts.append("Possible ovulation; calendar estimate, not confirmed") }
+        if ovulation?.ovulationWarnings.isEmpty == false { parts.append("Timing may not apply with your cycle context; review date details") }
+        if period?.isLaterProjection == true || ovulation?.isLaterProjection == true {
+            parts.append("Future-cycle projection assumes unrecorded periods")
+        }
+        return parts.joined(separator: ". ") + session.cycleForecast.additionalDayDescription(day)
     }
 
     private func dayButton(_ day: LocalDay, asList: Bool) -> some View {
         let recorded = record(on: day) != nil
-        let predicted = overview.estimate?.contains(day) == true
+        let predicted = session.cycleForecast.period(on: day) != nil || session.cycleForecast.bleeding(on: day) != nil
+        let ovulation = session.cycleForecast.ovulation(on: day) != nil
         return Button { selection = day } label: {
             VStack(alignment: asList ? .leading : .center, spacing: 4) {
                 HStack(spacing: 2) {
@@ -173,6 +191,7 @@ struct TrackerCalendarView: View {
                     Text(status(day)).font(.footnote)
                 } else {
                     DayActivityIcons(markers: DayActivityMarker.recorded(on: day, in: session.snapshot))
+                    ForecastDayIcons(forecast: session.cycleForecast, day: day)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 44, alignment: asList ? .leading : .center)
@@ -182,8 +201,13 @@ struct TrackerCalendarView: View {
             .overlay {
                 if predicted {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(palette.accent, style: StrokeStyle(lineWidth: 2, dash: [3, 3]))
-                } else if selection == day {
+                        .strokeBorder(palette.recorded, style: StrokeStyle(lineWidth: 2, dash: [3, 3]))
+                }
+                if ovulation {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(palette.accent, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [1, 4]))
+                        .padding(predicted ? 3 : 0)
+                } else if !predicted, selection == day {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .strokeBorder(palette.accent, lineWidth: 1.5)
                 }
@@ -230,6 +254,9 @@ struct TrackerCalendarView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(DayText.full(selection)).font(.headline).accessibilityAddTraits(.isHeader)
             if selection == today { Text("Today").font(.subheadline) }
+            ForEach(session.cycleForecast.cycles.filter { $0.contains(selection) }) { cycle in
+                ProjectedCycleDetails(cycle: cycle)
+            }
             if let period = record(on: selection) {
                 PeriodRecordSummary(session: session, period: period,
                                     title: period.start == selection ? "Recorded period start" : "Confirmed bleeding day")
@@ -237,8 +264,6 @@ struct TrackerCalendarView: View {
                 Text("No period recorded for this day.")
             }
             if let estimate = overview.estimate, estimate.contains(selection) {
-                Label("Possible start date · Estimate", systemImage: "circle.dashed")
-                Text(DayText.range(estimate.earliest, estimate.latest))
                 if today > estimate.latest { Text("Estimated window passed. No new start has been recorded.") }
                 Button("How this estimate works") { showExplanation = true }.frame(minHeight: 44)
             }

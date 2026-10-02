@@ -1,5 +1,5 @@
-import SwiftUI
 import Observation
+import SwiftUI
 
 @MainActor @Observable
 final class PeriodDraft {
@@ -49,10 +49,10 @@ struct PeriodEntryView: View {
     let existing: [Period]
     let isDraft: Bool
     let isEditing: Bool
-    let onSave: (Period) -> String?
+    let onSave: (Period) async -> String?
 
     init(period: Period, today: LocalDay, existing: [Period], isDraft: Bool = false,
-         isEditing: Bool = false, onSave: @escaping (Period) -> String?) {
+         isEditing: Bool = false, onSave: @escaping (Period) async -> String?) {
         _draft = State(initialValue: PeriodDraft(period: period))
         self.today = today
         self.existing = existing
@@ -121,10 +121,14 @@ struct PeriodEntryView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isEditing ? "Save changes" : (isDraft ? "Add to list" : "Record start")) {
+                        guard !isSaving else { return }
+                        let period = draft.period
                         isSaving = true
-                        saveError = onSave(draft.period)
-                        isSaving = false
-                        if saveError == nil { dismiss() } else { errorFocused = true }
+                        Task {
+                            saveError = await onSave(period)
+                            isSaving = false
+                            if saveError == nil { dismiss() } else { errorFocused = true }
+                        }
                     }
                     .disabled(validationMessage != nil || isSaving || (isEditing && !draft.hasChanges))
                     .accessibilityIdentifier("savePeriod")
