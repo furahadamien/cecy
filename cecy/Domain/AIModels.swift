@@ -143,6 +143,18 @@ nonisolated struct AIQuestionFacts: Codable, Equatable, Sendable {
     var timingWindow: String?
     var minimumRecordedOffsetDays: Int?
     var maximumRecordedOffsetDays: Int?
+    var symptoms: [AIQuestionSymptomFacts]?
+}
+
+nonisolated struct AIQuestionSymptomFacts: Codable, Equatable, Sendable {
+    let symptom: AISymptomType
+    let cyclesAnalyzed: Int?
+    let daysAnalyzed: Int?
+    let recordedDays: Int?
+    let matchingStarts: Int?
+    let timingWindow: String?
+    let minimumRecordedOffsetDays: Int?
+    let maximumRecordedOffsetDays: Int?
 }
 
 nonisolated protocol AIValidatedResponse: Codable, Sendable { func validate() throws }

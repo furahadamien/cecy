@@ -78,12 +78,16 @@ struct PeriodEntryView: View {
                     Text("Leaving the end blank records the start only. It does not mean bleeding continued after that day.")
                 }
                 Section {
-                    Picker("Overall flow (optional)", selection: $draft.flow) {
-                        Text("Not recorded").tag(PeriodFlow?.none)
+                    Text("Overall flow · Optional").font(.headline)
+                    SelectionFlowLayout {
+                        SelectionChip(title: "Not recorded", symbol: "minus.circle", selected: draft.flow == nil) { draft.flow = nil }
+                            .accessibilityIdentifier("periodFlow_none")
                         ForEach(PeriodFlow.allCases, id: \.self) { flow in
-                            Text(flow.title).tag(PeriodFlow?.some(flow))
+                            SelectionChip(title: flow.title, symbol: flow.symbol, selected: draft.flow == flow) { draft.flow = flow }
+                                .accessibilityIdentifier("periodFlow_\(flow.rawValue)")
                         }
                     }
+                    .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("periodFlow")
                 } footer: {
                     Text("Your summary for this period, not a daily measurement or medical assessment.")

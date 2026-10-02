@@ -41,7 +41,7 @@ struct ProfileSettingsView: View {
                 Section { ProfileCycleFields(profile: $profile) } header: {
                     Text("Cycle basics")
                 } footer: {
-                    Text("Typical length is your own summary, not a measured average. Edit historical dates in Calendar or Insights to update predictions.")
+                    Text("Your typical cycle length supplies a low-confidence starter estimate until three completed intervals are recorded. Typical period length never fills in bleeding days. Clear cycle length to stop starter estimates; recorded-history estimates remain available when supported.")
                 }
                 Section {
                     NavigationLink {

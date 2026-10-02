@@ -19,7 +19,7 @@ struct PeriodRecordActions: View {
             Button(role: .destructive) { confirmDelete = true } label: { Label("Delete", systemImage: "trash") }
                 .frame(minHeight: 44).accessibilityIdentifier("deletePeriod")
                 .accessibilityLabel("Delete period")
-            }.font(.subheadline)
+            }.font(.subheadline).buttonStyle(.bordered).buttonBorderShape(.capsule)
             if let error { InlineError(message: error).accessibilityFocused($errorFocused) }
         }
         .disabled(session.isSaving)
@@ -43,17 +43,23 @@ struct PeriodRecordActions: View {
 }
 
 struct PeriodRecordSummary: View {
+    @Environment(\.colorScheme) private var colorScheme
     let session: TrackerSession
     let period: Period
     var title = "Recorded period"
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label(title, systemImage: "drop.fill").font(.subheadline.weight(.semibold))
-            Text(DayText.short(period.start)).font(.headline)
-            Text(period.end.map { "To \(DayText.short($0)) · \(period.duration ?? 0) days" } ?? "End not recorded")
-                .font(.footnote).foregroundStyle(.secondary)
-            PeriodExtraDetails(period: period).font(.footnote)
+        let accent = TrackerPalette(scheme: colorScheme).recorded
+        VStack(alignment: .leading, spacing: 12) {
+            RecordHeader(title: title, date: period.end.map { DayText.range(period.start, $0) } ?? DayText.full(period.start),
+                         symbol: "drop.fill", accent: accent)
+            SelectionFlowLayout {
+                RecordBadge(title: period.duration.map { "\($0) days · confirmed" } ?? "End not recorded",
+                            symbol: period.end == nil ? "calendar.badge.questionmark" : "checkmark.circle", accent: accent)
+                if let flow = period.flow { RecordBadge(title: flow.title + " flow", symbol: flow.symbol, accent: accent) }
+            }
+            if let note = period.notes { DisclosureGroup("Private note") { Text(note) }.font(.subheadline) }
+            Divider()
             PeriodRecordActions(session: session, period: period).id(period.id)
         }
     }

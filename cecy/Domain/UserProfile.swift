@@ -66,7 +66,7 @@ nonisolated enum CycleContext: String, Codable, CaseIterable, Sendable {
 }
 
 nonisolated enum TrackingGoal: String, Codable, CaseIterable, Sendable {
-    case predictPeriod, understandCycle, trackSymptoms, understandChanges, moodAndEnergy, doctorVisits, learnPatterns
+    case predictPeriod, understandCycle, trackSymptoms, understandChanges, moodAndEnergy, doctorVisits, learnPatterns, healthAndWellness
     var title: String {
         switch self {
         case .predictPeriod: "Predict my next period"
@@ -76,6 +76,7 @@ nonisolated enum TrackingGoal: String, Codable, CaseIterable, Sendable {
         case .moodAndEnergy: "Track mood and energy"
         case .doctorVisits: "Prepare for doctor visits"
         case .learnPatterns: "Learn my patterns"
+        case .healthAndWellness: "Health and wellness"
         }
     }
 }
@@ -90,6 +91,7 @@ nonisolated struct LocalProfile: Codable, Equatable, Sendable, Identifiable {
     var weightKilograms: Double?
     var predictability: CyclePredictability = .notSure
     var typicalPeriodDays: Int?
+    var typicalCycleDays: Int?
     var commonSymptoms: Set<CommonSymptom> = []
     var cycleContext: Set<CycleContext> = []
     var goals: Set<TrackingGoal> = []
@@ -129,6 +131,8 @@ nonisolated struct LocalProfile: Codable, Equatable, Sendable, Identifiable {
         if let heightCentimeters, !heightCentimeters.isFinite || !(1...300).contains(heightCentimeters) { throw ProfileError.measurement }
         if let weightKilograms, !weightKilograms.isFinite || !(1...1000).contains(weightKilograms) { throw ProfileError.measurement }
         if let typicalPeriodDays, !(1...30).contains(typicalPeriodDays) { throw ProfileError.duration }
+        if let typicalCycleDays, !CycleSetupPolicy.cycleDays.contains(typicalCycleDays) { throw ProfileError.cycleLength }
+        if let typicalPeriodDays, let typicalCycleDays, typicalPeriodDays > typicalCycleDays { throw ProfileError.cycleLength }
         if commonSymptoms.contains(.none), commonSymptoms.count > 1 { throw ProfileError.selection }
         if cycleContext.contains(.none) || cycleContext.contains(.preferNotToSay), cycleContext.count > 1 { throw ProfileError.selection }
         try wellnessPreferences?.validate()
@@ -139,7 +143,7 @@ nonisolated struct LocalProfile: Codable, Equatable, Sendable, Identifiable {
 }
 
 nonisolated enum ProfileError: Error, LocalizedError {
-    case name, birthday, measurement, duration, selection, fourPeriods, notReady, identity, alreadyCompleted
+    case name, birthday, measurement, duration, cycleLength, selection, lastPeriod, notReady, identity, alreadyCompleted
     var errorDescription: String? {
         switch self {
         case .name: "Enter a preferred name of up to 80 characters."
@@ -147,7 +151,8 @@ nonisolated enum ProfileError: Error, LocalizedError {
         case .measurement: "Enter a valid positive height or weight, or leave it blank."
         case .duration: "Choose a period length between 1 and 30 days."
         case .selection: "Choose None or Prefer not to say on its own."
-        case .fourPeriods: "Add at least four period starts. Estimates are okay."
+        case .lastPeriod: "Choose when your last period started, no later than today."
+        case .cycleLength: "Choose a typical cycle of 10–120 days, at least as long as your typical period. This range is an app limit, not a medical definition."
         case .notReady: "Unlock Cecy and try again. Your setup has not finished."
         case .identity: "Sign in with the Apple Account linked to this local profile. To change accounts, first delete the local profile and records in Settings."
         case .alreadyCompleted: "Setup is already complete. Edit your profile in Settings."
@@ -156,7 +161,12 @@ nonisolated enum ProfileError: Error, LocalizedError {
 }
 
 nonisolated struct OnboardingDraft: Equatable, Sendable {
-    var profile = LocalProfile()
+    var profile: LocalProfile = {
+        var value = LocalProfile()
+        value.typicalPeriodDays = CycleSetupPolicy.defaultPeriodDays
+        value.typicalCycleDays = CycleSetupPolicy.defaultCycleDays
+        return value
+    }()
     var periods: [Period] = []
     var dailyReminder = false
     var windowReminder = false
@@ -166,13 +176,14 @@ nonisolated struct OnboardingDraft: Equatable, Sendable {
     func validate(today: LocalDay) throws {
         try profile.validate(today: today)
         guard profile.typicalPeriodDays != nil else { throw ProfileError.duration }
-        guard periods.count >= 4 else { throw ProfileError.fourPeriods }
+        guard profile.typicalCycleDays != nil else { throw ProfileError.cycleLength }
+        guard !periods.isEmpty else { throw ProfileError.lastPeriod }
         try PeriodValidation.validate(periods, asOf: today)
         guard (0...23).contains(reminderHour), (0...59).contains(reminderMinute) else { throw TrackingError.invalidData }
     }
 
     func overview(today: LocalDay) -> CycleOverview {
-        CycleCalculator.overview(periods: periods, today: today, engine: EvidencePredictionEngine())
+        CycleCalculator.overview(periods: periods, today: today, engine: EvidencePredictionEngine(), profile: profile)
     }
     func statistics(today: LocalDay) -> CycleStatistics? {
         try? CycleStatistics.calculate(periods: periods, today: today)

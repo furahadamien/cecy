@@ -127,18 +127,25 @@ struct TrackerCard<Content: View>: View {
 
     var body: some View {
         let palette = TrackerPalette(scheme: colorScheme)
-        VStack(alignment: .leading, spacing: 16) { content }
+        VStack(alignment: .leading, spacing: 14) { content }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(padding)
             .background(highlighted ? palette.sage : palette.surface,
                         in: RoundedRectangle(cornerRadius: TrackerLayout.cardRadius, style: .continuous))
+            .background {
+                RoundedRectangle(cornerRadius: TrackerLayout.cardRadius, style: .continuous)
+                    .fill(palette.accent.opacity(0.04))
+                    .offset(y: 3)
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: TrackerLayout.cardRadius, style: .continuous)
-                    .strokeBorder(contrast == .increased ? palette.accent : palette.accent.opacity(0.10),
-                                  lineWidth: contrast == .increased ? 1.5 : 0.5)
+                    .strokeBorder(LinearGradient(colors: [palette.accent.opacity(contrast == .increased ? 1 : 0.20),
+                                                          palette.accent.opacity(contrast == .increased ? 1 : 0.05)],
+                                                 startPoint: .topLeading, endPoint: .bottomTrailing),
+                                  lineWidth: contrast == .increased ? 1.5 : 1)
                     .allowsHitTesting(false)
             }
-            .shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.025), radius: 10, x: 0, y: 4)
+            .shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.035), radius: 12, x: 0, y: 5)
     }
 }
 

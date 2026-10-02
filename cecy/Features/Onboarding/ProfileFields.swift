@@ -153,26 +153,10 @@ struct ProfileCycleFields: View {
             }
             .accessibilityIdentifier("profilePredictability")
         }
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Typical period length").font(.headline)
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal) {
-                    HStack(spacing: 8) {
-                        ForEach(1...30, id: \.self) { days in
-                            SelectionChip(title: days == 1 ? "1 day" : "\(days) days", selected: profile.typicalPeriodDays == days) {
-                                profile.typicalPeriodDays = profile.typicalPeriodDays == days ? nil : days
-                            }
-                            .id(days)
-                            .accessibilityIdentifier("profileDuration_\(days)")
-                        }
-                    }.padding(.vertical, 4)
-                }
-                .onAppear {
-                    if let days = profile.typicalPeriodDays { proxy.scrollTo(days, anchor: .center) }
-                }
-                .accessibilityIdentifier("profileDuration")
-            }
-        }
+        CyclePreferenceField(title: "Typical period length", range: CycleSetupPolicy.periodDays,
+                             defaultValue: 5, identifier: "profileDuration", value: $profile.typicalPeriodDays)
+        CyclePreferenceField(title: "Typical cycle length", range: CycleSetupPolicy.cycleDays,
+                             defaultValue: 28, identifier: "profileCycleLength", value: $profile.typicalCycleDays)
     }
 }
 
@@ -187,6 +171,7 @@ struct ProfileSymptomFields: View {
                 .accessibilityIdentifier("commonSymptom_\(symptom.rawValue)")
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("commonSymptoms")
     }
 }

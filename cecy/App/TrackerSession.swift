@@ -160,7 +160,7 @@ final class TrackerSession {
             setupStage = .predicting
             await Task.yield()
             try checkAccess()
-            overview = CycleCalculator.overview(periods: staged.periods, today: day, engine: EvidencePredictionEngine())
+            overview = CycleCalculator.overview(periods: staged.periods, today: day, engine: EvidencePredictionEngine(), profile: staged.profile)
             predictionReplay = try PredictionBacktester.evaluate(periods: staged.periods, today: day)
             setupStage = .insights
             await Task.yield()
@@ -217,7 +217,7 @@ final class TrackerSession {
         ai.invalidate()
         self.snapshot = snapshot
         self.today = today
-        overview = CycleCalculator.overview(periods: snapshot.periods, today: today, engine: EvidencePredictionEngine())
+        overview = CycleCalculator.overview(periods: snapshot.periods, today: today, engine: EvidencePredictionEngine(), profile: snapshot.profile)
         predictionReplay = try? PredictionBacktester.evaluate(periods: snapshot.periods, today: today)
         statistics = try? CycleStatistics.calculate(periods: snapshot.periods, today: today)
         privacy.trackingChanged(prediction: overview?.estimate, now: clock(), timeZone: zone())

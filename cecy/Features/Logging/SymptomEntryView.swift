@@ -171,6 +171,7 @@ struct SymptomLogButton: View {
 }
 
 struct SymptomRecordView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let session: TrackerSession
     let entry: SymptomEntry
@@ -178,11 +179,12 @@ struct SymptomRecordView: View {
     @State private var deleting = false
     @State private var error: String?
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label(entry.kind.title, systemImage: entry.kind.symbol).font(.subheadline.weight(.semibold))
-            Text("\(DayText.short(entry.day)) · \(entry.ratingLabel ?? "Not rated")")
-                .font(.footnote).foregroundStyle(.secondary)
+        let accent = TrackerPalette(scheme: colorScheme).accent
+        VStack(alignment: .leading, spacing: 12) {
+            RecordHeader(title: entry.kind.title, date: DayText.full(entry.day), symbol: entry.kind.symbol, accent: accent)
+            RecordBadge(title: entry.ratingLabel ?? "Not rated", symbol: "slider.horizontal.3", accent: accent)
             if let notes = entry.notes { DisclosureGroup("Private note") { Text(notes) }.font(.footnote) }
+            Divider()
             let layout = dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout(spacing: 20))
             layout {
             Button { editing = true } label: { Label("Edit", systemImage: "pencil") }.frame(minHeight: 44)
@@ -191,7 +193,7 @@ struct SymptomRecordView: View {
             Button(role: .destructive) { deleting = true } label: { Label("Delete", systemImage: "trash") }.frame(minHeight: 44)
                 .accessibilityLabel("Delete observation")
                 .accessibilityIdentifier("deleteSymptom_\(entry.kind.rawValue)")
-            }.font(.subheadline)
+            }.font(.subheadline).buttonStyle(.bordered).buttonBorderShape(.capsule)
             if let error { InlineError(message: error) }
         }
         .sheet(isPresented: $editing) { SymptomEntryView(session: session, day: entry.day, entry: entry) }
