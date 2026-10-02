@@ -1,5 +1,9 @@
 # Cecy — Implementation Plan
 
+## October 1 — second device-feedback pass implemented and focused validation complete
+
+Authorized: one-decimal numeric presentation, horizontal record-scope choices, calmer loading copy, compact record components, in-memory Today wellness results with preference editing, deterministic Insights charts, collapsible measurement wheels with Metric/Imperial labels, and a static branded launch screen. Preserve full-precision stored facts, explicit request consent, cancellation/privacy invalidation, accessible touch targets and medical safety notices. No automatic external requests or persistent suggestion cache. Use bounded validation; record simulator blockers rather than repeatedly retrying. Warm red sexual-activity icons were also requested and implemented in calendar markers, the legend and logging/record screens. Final app/test compilation passed after removing an editor-inserted duplicate source block. All 17 focused unit tests passed; all three new UI scenarios passed across targeted runs after test-helper corrections. A fresh unsigned iOS Release build passed in 39.1 seconds. Physical-device/launch/accessibility and historical full-suite acceptance remain open; no live gateway calls, commits or pushes were made. See [DEVICE_FEEDBACK_ROUND_2.md](DEVICE_FEEDBACK_ROUND_2.md) for final results and remaining device checks.
+
 ## October 1 — visual refresh implemented; runtime acceptance blocked
 
 On `testing/on-device-fixes`, the shared visual refresh is implemented: rounded Dynamic Type typography, light/dark semantic colors, consistent cards/forms/actions, and native Liquid Glass tabs on iOS 26+ with older-OS fallbacks. A fresh unsigned iOS Release build passed in 54.2 seconds. Simulator discovery succeeded, but boot health reported **Data Migration Failed** despite exit 0; focused tests were deliberately not launched and no recovery/retry loop was attempted. Prior temporary test logs were unavailable, so no fresh unit/UI pass is claimed. See [UI_REFRESH.md](UI_REFRESH.md) for evidence and the minimal remaining checks. Runtime/accessibility/device acceptance remains open. No application-code changes, commits or pushes were made during this validation continuation.
@@ -34,7 +38,7 @@ This document tracks the phased implementation plan derived from the product bri
 - Complete each phase's acceptance criteria before expanding scope.
 - Optional integrations may be reordered or deferred based on product validation.
 
-Current user-directed priority: **Visual refresh implemented; Release verified, focused runtime acceptance blocked by simulator boot health.** See [UI_REFRESH.md](UI_REFRESH.md) for the bounded validation checkpoint; resume focused testing only on a healthy simulator/device. Device-feedback refinements remain implemented; see [DEVICE_FEEDBACK_VALIDATION.md](DEVICE_FEEDBACK_VALIDATION.md). All five AI integrations remain implemented at prototype level. Live gateway/provider review and historical baseline/signed-device acceptance remain open; cloud sync/sharing remain deferred and subscriptions last.
+Current user-directed priority: **Second device-feedback refinements have passing focused validation; continue on-device review.** See [DEVICE_FEEDBACK_ROUND_2.md](DEVICE_FEEDBACK_ROUND_2.md). Earlier visual-refresh and device-feedback records remain historical evidence. Live gateway/provider review and baseline/signed-device acceptance remain open; cloud sync/sharing remain deferred and subscriptions last.
 
 ### Progress overview
 
@@ -53,6 +57,7 @@ Current user-directed priority: **Visual refresh implemented; Release verified, 
 | 8 | Optional AI enhancements | All five iOS paths implemented; 62 focused tests and four AI UI scenarios passed together, plus Debug and a fresh unsigned Release build. See PHASE_8_VALIDATION.md; live contract/prototype/device gates open |
 | Post-8 | On-device feedback: UX, activity calendars and optional identity answers | Implemented; 86 focused tests, 11 UI scenarios across reruns, and unsigned Release passed. Physical-device follow-up remains open; see DEVICE_FEEDBACK_VALIDATION.md |
 | Post-8 UI | Shared visual refresh and native Liquid Glass navigation | Implemented; fresh unsigned Release passed. Focused runtime tests blocked by simulator boot migration failure; visual/device acceptance remains open. See UI_REFRESH.md |
+| Post-8 UX 2 | Charts, inline wellness, compact records, measurement controls, launch screen and red activity icons | Implemented; 17 focused unit tests and three new UI scenarios passed across targeted runs; Debug/test and unsigned Release builds passed. Device/full-suite gates remain open. See DEVICE_FEEDBACK_ROUND_2.md |
 | 9A | Optional personal cloud synchronization | Deferred |
 | 9B | Optional partner sharing | Deferred |
 

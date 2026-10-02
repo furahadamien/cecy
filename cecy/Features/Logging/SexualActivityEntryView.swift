@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SexualActivityEntryView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     let session: TrackerSession
     let original: SexualActivityEntry?
     private let initialDay: LocalDay
@@ -43,7 +44,8 @@ struct SexualActivityEntryView: View {
                 Section {
                     SelectionFlowLayout {
                         ForEach(SexualActivityKind.allCases, id: \.self) { kind in
-                            SelectionChip(title: kind.title, symbol: "heart", selected: activities.contains(kind)) {
+                            SelectionChip(title: kind.title, symbol: "heart.fill", selected: activities.contains(kind),
+                                          iconTint: TrackerPalette(scheme: colorScheme).sexualActivity) {
                                 if activities.remove(kind) == nil { activities.insert(kind) }
                             }
                             .accessibilityIdentifier("sexualActivityKind_\(kind.rawValue)")
@@ -105,13 +107,16 @@ struct SexualActivityEntryView: View {
 }
 
 struct SexualActivityLogButton: View {
+    @Environment(\.colorScheme) private var colorScheme
     let session: TrackerSession
     let day: LocalDay
     @State private var showEntry = false
 
     var body: some View {
         Button { showEntry = true } label: {
-            Label("Log sex", systemImage: "heart").frame(maxWidth: .infinity, minHeight: TrackerLayout.minimumTarget)
+            Label { Text("Log sex") } icon: {
+                Image(systemName: "heart.fill").foregroundStyle(TrackerPalette(scheme: colorScheme).sexualActivity)
+            }.frame(maxWidth: .infinity, minHeight: TrackerLayout.minimumTarget)
         }
         .buttonStyle(.bordered).accessibilityIdentifier("logSexualActivity")
         .sheet(isPresented: $showEntry) {
@@ -122,6 +127,7 @@ struct SexualActivityLogButton: View {
 }
 
 struct SexualActivityRecordView: View {
+    @Environment(\.colorScheme) private var colorScheme
     let session: TrackerSession
     let entry: SexualActivityEntry
     @State private var editing = false
@@ -130,7 +136,9 @@ struct SexualActivityRecordView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Sexual activity", systemImage: "heart").font(.headline)
+            Label { Text("Sexual activity") } icon: {
+                Image(systemName: "heart.fill").foregroundStyle(TrackerPalette(scheme: colorScheme).sexualActivity)
+            }.font(.headline)
             Text(DayText.full(entry.day))
             Text(entry.summary).accessibilityIdentifier("sexualActivitySummary_\(entry.day.key)")
             if let notes = entry.notes { Text(notes) }

@@ -79,14 +79,16 @@ struct TrackerCalendarView: View {
                                     .foregroundStyle(palette.recorded)
                                 Label("Estimated start window · Dashed border", systemImage: "circle.dashed")
                                     .foregroundStyle(palette.accent)
-                                Label("Sexual activity", systemImage: "heart.fill")
+                                Label { Text("Sexual activity") } icon: {
+                                    Image(systemName: "heart.fill").foregroundStyle(palette.sexualActivity)
+                                }
                                 Label("Symptoms use their individual icons", systemImage: "waveform.path.ecg")
                                 Text("A dot beside the date marks today. Tap a date for all records.")
                                 Text("An underlined date is selected. Estimates are not recorded bleeding days.")
                             }
                             .font(.footnote).foregroundStyle(.secondary).padding(8)
                         }
-                        if !listLayout { TrackerCard { selectedDetails } }
+                        if !listLayout { TrackerCard(padding: 14) { selectedDetails } }
                     }
                     .frame(width: max(0, contentWidth), alignment: .leading)
                     .padding(.vertical, TrackerLayout.pageInset)
@@ -196,15 +198,8 @@ struct TrackerCalendarView: View {
             Text(DayText.full(selection)).font(.headline).accessibilityAddTraits(.isHeader)
             if selection == today { Text("Today").font(.subheadline) }
             if let period = record(on: selection) {
-                Label(period.start == selection ? "Recorded period start" : "Confirmed bleeding day", systemImage: "drop.fill")
-                Text("Started \(DayText.full(period.start))")
-                if let end = period.end, let duration = period.duration {
-                    Text("Ended \(DayText.full(end)) · \(duration) days, inclusive")
-                } else {
-                    Text("End not recorded. No later bleeding days are assumed.")
-                }
-                PeriodExtraDetails(period: period)
-                PeriodRecordActions(session: session, period: period).id(period.id)
+                PeriodRecordSummary(session: session, period: period,
+                                    title: period.start == selection ? "Recorded period start" : "Confirmed bleeding day")
             } else {
                 Text("No period recorded for this day.")
             }

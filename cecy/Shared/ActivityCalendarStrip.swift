@@ -9,7 +9,9 @@ struct DayActivityIcons: View {
                 Image(systemName: marker.symbol).font(.system(size: 10, weight: .medium))
                     .foregroundStyle(marker.id == "period"
                                      ? TrackerPalette(scheme: colorScheme).recorded
-                                     : TrackerPalette(scheme: colorScheme).accent)
+                                     : marker.id == "sexualActivity"
+                                        ? TrackerPalette(scheme: colorScheme).sexualActivity
+                                        : TrackerPalette(scheme: colorScheme).accent)
             }
         }
         .frame(minHeight: 10)

@@ -48,7 +48,7 @@ struct AIRequestStatus: View {
         if coordinator.isLoading {
             ProgressView(label)
                 .accessibilityIdentifier("aiLoading")
-            Text("Up to 75 seconds. Your records won’t change.")
+            Text("Hang tight while we gather your insights. Your records won’t change.")
                 .font(.footnote).foregroundStyle(.secondary)
             Button("Cancel request") { coordinator.cancel() }.accessibilityIdentifier("cancelAIRequest")
         }
@@ -58,14 +58,27 @@ struct AIRequestStatus: View {
     }
 }
 
+struct WellnessSafetyNotice: View {
+    let symptoms: [SymptomEntry]
+    let today: LocalDay?
+    var body: some View {
+        if symptoms.contains(where: { $0.day == today && $0.value == 3 && $0.kind != .sleepQuality && $0.kind != .energyLevel }) {
+            Label("You logged a severe symptom today. General wellness suggestions are not treatment. Consider medical advice; seek urgent care for severe or sudden concerning symptoms.", systemImage: "exclamationmark.triangle")
+                .font(.footnote)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("localSevereSymptomNotice")
+        }
+    }
+}
+
 struct AISafetyNotice: View {
     let message: String?
     var body: some View {
         if let message {
             Label { Text(verbatim: message) } icon: { Image(systemName: "exclamationmark.triangle") }
-                .font(.callout.weight(.medium)).padding(16)
+                .font(.footnote).padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.yellow.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
+                .background(.yellow.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
                 .accessibilityIdentifier("aiSafetyMessage")
         }
     }

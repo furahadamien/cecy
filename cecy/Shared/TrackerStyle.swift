@@ -36,6 +36,9 @@ struct TrackerPalette {
     var recordedSurface: Color {
         scheme == .dark ? Color(red: 0.27, green: 0.15, blue: 0.19) : Color(red: 0.98, green: 0.91, blue: 0.92)
     }
+    var sexualActivity: Color {
+        scheme == .dark ? Color(red: 1, green: 0.48, blue: 0.38) : Color(red: 0.70, green: 0.16, blue: 0.10)
+    }
     // A dark fill keeps white primary-action labels legible in either appearance.
     var action: Color { Color(red: 0.15, green: 0.35, blue: 0.29) }
 }

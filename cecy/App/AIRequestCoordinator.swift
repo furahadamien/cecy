@@ -9,6 +9,8 @@ import Observation
     private(set) var request: AIRequest?
     private(set) var message: String?
     private(set) var revision = 0
+    private var wellnessContext: WellnessRecommendationContext?
+    private var wellnessResult: WellnessRecommendation?
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var work: Task<Void, Never>?
     @ObservationIgnored private var deadline: Task<Void, Never>?
@@ -26,6 +28,10 @@ import Observation
         generation += 1
         let token = generation
         self.request = request
+        if case .wellness = request {
+            wellnessContext = nil
+            wellnessResult = nil
+        }
         output = nil
         message = nil
         isLoading = true
@@ -56,6 +62,10 @@ import Observation
                 guard let self, token == generation, !Task.isCancelled else { return }
                 guard canAccess() else { invalidate(); return }
                 output = result
+                if case .wellness(let context) = request, case .wellness(let value) = result {
+                    wellnessContext = context
+                    wellnessResult = value
+                }
                 isLoading = false
                 work = nil
                 deadline?.cancel(); deadline = nil
@@ -87,5 +97,15 @@ import Observation
         request = nil
         message = nil
     }
-    func invalidate() { cancel(); revision += 1 }
+    func wellness(for request: AIRequest) -> WellnessRecommendation? {
+        guard case .wellness(let context) = request, context == wellnessContext else { return nil }
+        return wellnessResult
+    }
+
+    func invalidate() {
+        cancel()
+        wellnessContext = nil
+        wellnessResult = nil
+        revision += 1
+    }
 }

@@ -6,6 +6,7 @@ struct SelectionChip: View {
     let title: String
     var symbol: String? = nil
     let selected: Bool
+    var iconTint: Color? = nil
     let action: () -> Void
 
     var body: some View {
@@ -14,6 +15,7 @@ struct SelectionChip: View {
             HStack(spacing: 8) {
                 if let symbol {
                     Image(systemName: symbol).symbolRenderingMode(.monochrome)
+                        .foregroundStyle(iconTint ?? (selected ? palette.accent : .primary))
                         .accessibilityHidden(true)
                 }
                 Text(title).fixedSize(horizontal: false, vertical: true)

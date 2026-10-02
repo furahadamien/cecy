@@ -171,21 +171,27 @@ struct SymptomLogButton: View {
 }
 
 struct SymptomRecordView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let session: TrackerSession
     let entry: SymptomEntry
     @State private var editing = false
     @State private var deleting = false
     @State private var error: String?
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label(entry.kind.title, systemImage: entry.kind.symbol).font(.headline)
-            Text(DayText.full(entry.day))
-            Text(entry.ratingLabel ?? "Not rated").foregroundStyle(.secondary)
-            if let notes = entry.notes { Text(notes) }
-            Button("Edit observation") { editing = true }.frame(minHeight: 44)
+        VStack(alignment: .leading, spacing: 6) {
+            Label(entry.kind.title, systemImage: entry.kind.symbol).font(.subheadline.weight(.semibold))
+            Text("\(DayText.short(entry.day)) · \(entry.ratingLabel ?? "Not rated")")
+                .font(.footnote).foregroundStyle(.secondary)
+            if let notes = entry.notes { DisclosureGroup("Private note") { Text(notes) }.font(.footnote) }
+            let layout = dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout(spacing: 20))
+            layout {
+            Button { editing = true } label: { Label("Edit", systemImage: "pencil") }.frame(minHeight: 44)
+                .accessibilityLabel("Edit observation")
                 .accessibilityIdentifier("editSymptom_\(entry.kind.rawValue)")
-            Button("Delete observation", role: .destructive) { deleting = true }.frame(minHeight: 44)
+            Button(role: .destructive) { deleting = true } label: { Label("Delete", systemImage: "trash") }.frame(minHeight: 44)
+                .accessibilityLabel("Delete observation")
                 .accessibilityIdentifier("deleteSymptom_\(entry.kind.rawValue)")
+            }.font(.subheadline)
             if let error { InlineError(message: error) }
         }
         .sheet(isPresented: $editing) { SymptomEntryView(session: session, day: entry.day, entry: entry) }
