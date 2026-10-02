@@ -116,23 +116,79 @@ nonisolated enum AIContextBuilder {
             let severity: AISeverity? = entry.value.map { $0 == 1 ? .mild : $0 == 2 ? .moderate : .severe }
             return AISymptom(type: AISymptomType(kind: entry.kind), severity: severity)
         }.sorted { $0.type.rawValue < $1.type.rawValue }
-        let overview = CycleCalculator.overview(periods: snapshot.periods, today: today, engine: EvidencePredictionEngine())
+        try PeriodValidation.validate(snapshot.periods, asOf: today)
+        let cycleDay = snapshot.periods.map(\.start).max().map { $0.days(until: today) + 1 }
         let activityWire = activity == .beginner ? "beginner" : activity == .moderatelyActive ? "moderately_active" : "very_active"
         let exerciseWire = exercises.map { exercise in
             exercise == .strengthTraining ? "strength_training" : exercise == .homeWorkouts ? "home_workouts" : exercise.rawValue
         }.sorted()
-        return .wellness(WellnessRecommendationContext(cycleDay: overview.currentDay, symptoms: symptoms,
+        return .wellness(WellnessRecommendationContext(cycleDay: cycleDay, symptoms: symptoms,
             activityLevel: activityWire, preferredExercises: exerciseWire,
             dietaryPreference: diet == .noPreference ? "none" : diet.rawValue,
             foodAllergies: p.foodAllergies.sorted(), userGoals: goals.map { $0 == .manageSymptoms ? "manage_symptoms" : "stay_active" }.sorted()))
+    }
+
+    /// Uses the existing question contract: unknown measurements are omitted, never sent as zero.
+    static func recordInsights(snapshot: TrackerSnapshot, today: LocalDay) throws -> AIRequest {
+        try PeriodValidation.validate(snapshot.periods, asOf: today)
+        try SymptomValidation.validate(snapshot.symptoms, asOf: today)
+        let periods = Array(snapshot.periods.sorted { $0.start < $1.start }.suffix(7))
+        let windowStart = try today.adding(days: -89)
+        let logs = snapshot.symptoms.filter { $0.day >= windowStart && $0.day <= today }
+        guard !periods.isEmpty || !logs.isEmpty else { throw AIContextError.insufficientRecords }
+        let lengths = zip(periods, periods.dropFirst()).map { $0.start.days(until: $1.start) }
+        let stats = RecordedStatistics(lengths: lengths)
+        let durations = periods.compactMap(\.duration)
+        let counts = Dictionary(grouping: logs, by: \.kind)
+        let observations = SymptomKind.allCases.compactMap { kind -> String? in
+            guard let entries = counts[kind] else { return nil }
+            return "\(kind.title): \(Set(entries.map(\.day)).count) recorded days in the last 90 days."
+        }
+        let details = [
+            "\(periods.count) recorded period starts; \(lengths.count) completed intervals in the selected records.",
+            "Confirmed bleeding durations (days): \(durations.isEmpty ? "unknown" : durations.map(String.init).joined(separator: ", ")).",
+            "\(periods.count - durations.count) bleeding ends are unknown. An open interval is not a measured cycle length.",
+            "Small samples describe only the available records, not a trend, typical cycle or prediction. Sleep and energy counts are ratings, not proof of adverse symptoms."
+        ] + observations + [caveat]
+        var facts = AIQuestionFacts(scope: CycleQuestionScope.cycleLengths.rawValue, caveat: details.joined(separator: " "))
+        facts.cyclesAnalyzed = lengths.count
+        facts.averageCycleLength = stats?.mean
+        facts.minimumCycleLength = stats?.minimum
+        facts.maximumCycleLength = stats?.maximum
+        facts.populationStandardDeviationDays = stats?.standardDeviation
+        return .question(CycleQuestionContext(question: "Summarize my available recorded facts and explain what is still unknown, without inferring a pattern.", facts: facts))
     }
 
     static func summary(snapshot: TrackerSnapshot, start: LocalDay, today: LocalDay) throws -> AIRequest {
         try PeriodValidation.validate(snapshot.periods, asOf: today)
         try SymptomValidation.validate(snapshot.symptoms, asOf: today)
         let periods = snapshot.periods.sorted { $0.start < $1.start }
-        guard let index = periods.firstIndex(where: { $0.start == start }), index + 1 < periods.count,
-              let duration = periods[index].duration else { throw AIContextError.insufficientRecords }
+        guard let index = periods.firstIndex(where: { $0.start == start }) else { throw AIContextError.insufficientRecords }
+        guard index + 1 < periods.count, let duration = periods[index].duration else {
+            let next = index + 1 < periods.count ? periods[index + 1].start : nil
+            let through = try next.map { try $0.adding(days: -1) } ?? today
+            let selected = TrackerSnapshot(periods: [periods[index]],
+                symptoms: snapshot.symptoms.filter { $0.day >= start && $0.day <= through })
+            guard case .question(let context) = try recordInsights(snapshot: selected, today: through) else {
+                throw AIContextError.insufficientRecords
+            }
+            // The general sparse description has one start. Include a confirmed next-start
+            // interval separately rather than dropping it or inventing a bleeding duration.
+            var facts = context.facts
+            if let next {
+                let length = start.days(until: next)
+                facts = AIQuestionFacts(scope: CycleQuestionScope.cycleLengths.rawValue,
+                    caveat: "Selected completed interval: \(length) days between recorded starts; bleeding duration unknown. "
+                        + "Symptom records in this interval: "
+                        + SymptomKind.allCases.compactMap { kind in
+                            let count = selected.symptoms.filter { $0.kind == kind }.count
+                            return count > 0 ? "\(kind.title): \(count) recorded days" : nil
+                        }.joined(separator: "; ")
+                        + ". One interval is not a trend. Sleep and energy are ratings, not necessarily adverse symptoms. " + caveat,
+                    cyclesAnalyzed: 1, averageCycleLength: Double(length), minimumCycleLength: length, maximumCycleLength: length)
+            }
+            return .question(CycleQuestionContext(question: "Describe the available records for this cycle, explaining missing measurements without guessing.", facts: facts))
+        }
         let next = periods[index + 1].start
         let lengths = zip(periods.prefix(index + 2), periods.prefix(index + 2).dropFirst()).map { $0.start.days(until: $1.start) }
         guard let stats = RecordedStatistics(lengths: Array(lengths.suffix(6))) else { throw AIContextError.insufficientRecords }
@@ -163,7 +219,13 @@ nonisolated enum AIContextBuilder {
         if scope == .cycleLengths {
             let periods = snapshot.periods.sorted { $0.start < $1.start }
             let lengths = Array(zip(periods, periods.dropFirst()).map { $0.start.days(until: $1.start) }.suffix(6))
-            guard let stats = RecordedStatistics(lengths: lengths) else { throw AIContextError.insufficientRecords }
+            guard let stats = RecordedStatistics(lengths: lengths) else {
+                guard !periods.isEmpty else { throw AIContextError.insufficientRecords }
+                return .question(CycleQuestionContext(question: question,
+                    facts: AIQuestionFacts(scope: scope.rawValue,
+                        caveat: "\(periods.count) recorded start; no completed interval. Cycle length and variability are unknown. Describe only this limited record; do not substitute a usual length or infer a trend. " + caveat,
+                        cyclesAnalyzed: 0)))
+            }
             facts.cyclesAnalyzed = stats.count
             facts.averageCycleLength = stats.mean
             facts.minimumCycleLength = stats.minimum

@@ -13,6 +13,10 @@ nonisolated enum InsightChartData {
             .sorted { $0.start < $1.start }.suffix(12))
     }
 
+    static func recordedStarts(_ periods: [Period], today: LocalDay) -> [Period] {
+        Array(periods.filter { $0.start <= today }.sorted { $0.start < $1.start }.suffix(12))
+    }
+
     static func observationCounts(_ entries: [SymptomEntry], today: LocalDay) -> [ObservationCount] {
         let recent = entries.filter { (0..<90).contains($0.day.days(until: today)) }
         return Dictionary(grouping: recent, by: \.kind).map { kind, records in

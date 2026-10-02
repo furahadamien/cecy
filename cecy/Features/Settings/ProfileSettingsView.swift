@@ -41,7 +41,7 @@ struct ProfileSettingsView: View {
                 Section { ProfileCycleFields(profile: $profile) } header: {
                     Text("Cycle basics")
                 } footer: {
-                    Text("Your typical cycle length supplies a low-confidence starter estimate until three completed intervals are recorded. Typical period length never fills in bleeding days. Clear cycle length to stop starter estimates; recorded-history estimates remain available when supported.")
+                    Text("One prediction calculation uses your typical cycle length when no completed interval is available, then your measured intervals as you record them. Sparse data stays low confidence. Typical period length never fills in bleeding days. Clearing cycle length removes the assumption, not measured-history estimates.")
                 }
                 Section {
                     NavigationLink {

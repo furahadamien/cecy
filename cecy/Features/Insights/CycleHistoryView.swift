@@ -9,6 +9,13 @@ struct CycleHistoryView: View {
         TrackerPage(title: "Insights", subtitle: "Your cycle history, from recorded starts.") {
             TrackerCard {
                 NavigationLink {
+                    AIFeatureView(session: session, feature: .records)
+                } label: { TrackerNavigationLabel(title: "Generate insights", symbol: "sparkles") }
+                .accessibilityIdentifier("generateRecordInsights")
+                Text("Start with the records you have. Limited data will be described, not treated as a pattern.")
+                    .font(.footnote).foregroundStyle(.secondary)
+                Divider()
+                NavigationLink {
                     AIFeatureView(session: session, feature: .question)
                 } label: { TrackerNavigationLabel(title: "Ask about your records", symbol: "sparkles") }
                 .accessibilityIdentifier("askCecy")
@@ -36,7 +43,8 @@ struct CycleHistoryView: View {
             }
             .buttonStyle(.plain)
             if let today = session.today {
-                InsightChartsView(intervals: overview.intervals, symptoms: session.snapshot.symptoms, today: today)
+                InsightChartsView(intervals: overview.intervals, symptoms: session.snapshot.symptoms, today: today,
+                                  periods: session.snapshot.periods)
             }
             TrackerCard(highlighted: true) {
                 Text("Completed cycle intervals").font(.headline).accessibilityAddTraits(.isHeader)
@@ -62,14 +70,10 @@ struct CycleHistoryView: View {
                     Text("\(interval.length) days").font(TrackerTypography.sectionTitle).monospacedDigit()
                     Text("Start: \(DayText.full(interval.start))")
                     Text("Next start: \(DayText.full(interval.nextStart))")
-                    if session.snapshot.periods.contains(where: { $0.start == interval.start && $0.end != nil }) {
-                        NavigationLink("Your cycle summary") {
-                            AIFeatureView(session: session, feature: .summary(interval.start))
-                        }
-                        .frame(minHeight: 44).accessibilityIdentifier("cycleSummaryAI_\(interval.start.key)")
-                    } else {
-                        Text("A summary needs a confirmed bleeding end date.").font(.footnote).foregroundStyle(.secondary)
+                    NavigationLink("Your cycle summary") {
+                        AIFeatureView(session: session, feature: .summary(interval.start))
                     }
+                    .frame(minHeight: 44).accessibilityIdentifier("cycleSummaryAI_\(interval.start.key)")
                 }
                 .accessibilityElement(children: .contain)
             }
@@ -77,8 +81,12 @@ struct CycleHistoryView: View {
                 TrackerCard {
                     Text("Latest recorded start").font(.headline)
                     Text(DayText.full(start))
-                    Text("The interval since this start is not complete and is not included in the estimate.")
+                    Text("The interval since this start is not complete, so its length is still unknown.")
                         .font(.footnote).foregroundStyle(.secondary)
+                    NavigationLink("Summary of available records") {
+                        AIFeatureView(session: session, feature: .summary(start))
+                    }
+                    .frame(minHeight: 44).accessibilityIdentifier("cycleSummaryAI_\(start.key)")
                 }
             }
             Text("Missing records can lengthen an observed interval. Cecy never inserts an assumed period or removes an unusual interval.")

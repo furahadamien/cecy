@@ -179,43 +179,31 @@ struct ProfileSymptomFields: View {
 struct ProfileContextFields: View {
     @Binding var profile: LocalProfile
     var body: some View {
-        ForEach(CycleContext.allCases, id: \.self) { context in
-            ProfileChoiceRow(title: context.title, selected: profile.cycleContext.contains(context)) { profile.toggle(context) }
+        SelectionFlowLayout {
+            ForEach(CycleContext.allCases, id: \.self) { context in
+                SelectionChip(title: context.title, selected: profile.cycleContext.contains(context)) {
+                    profile.toggle(context)
+                }
+                .accessibilityIdentifier("cycleContext_\(context.rawValue)")
+            }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("profileCycleContext")
     }
 }
 
 struct ProfileGoalFields: View {
     @Binding var profile: LocalProfile
     var body: some View {
-        ForEach(TrackingGoal.allCases, id: \.self) { goal in
-            ProfileChoiceRow(title: goal.title, selected: profile.goals.contains(goal)) {
-                if profile.goals.remove(goal) == nil { profile.goals.insert(goal) }
+        SelectionFlowLayout {
+            ForEach(TrackingGoal.allCases, id: \.self) { goal in
+                SelectionChip(title: goal.title, selected: profile.goals.contains(goal)) {
+                    if profile.goals.remove(goal) == nil { profile.goals.insert(goal) }
+                }
+                .accessibilityIdentifier("goal_\(goal.rawValue)")
             }
-            .accessibilityIdentifier("goal_\(goal.rawValue)")
         }
-    }
-}
-
-private struct ProfileChoiceRow: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let title: String
-    let selected: Bool
-    let action: () -> Void
-    var body: some View {
-        Button(action: action) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title).foregroundStyle(.primary).fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 12)
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle").accessibilityHidden(true)
-            }
-            .padding(.horizontal, 12).padding(.vertical, 6)
-            .frame(minHeight: 44)
-            .background(selected ? TrackerPalette(scheme: colorScheme).sage : Color.clear,
-                        in: RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? [.isSelected] : [])
-        .accessibilityValue(selected ? "Selected" : "Not selected")
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("profileGoals")
     }
 }

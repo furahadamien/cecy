@@ -81,6 +81,49 @@ struct TrackerPrimaryButtonStyle: PrimitiveButtonStyle {
     }
 }
 
+/// Logging controls have a 44-point total target, without native padding around a 44-point label.
+struct TrackerCompactLogButtonStyle: ButtonStyle {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isEnabled) private var isEnabled
+    var prominent = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        let palette = TrackerPalette(scheme: colorScheme)
+        configuration.label
+            .font(.footnote.weight(.semibold))
+            .labelStyle(.titleAndIcon)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .frame(minWidth: 44, minHeight: 44)
+            .foregroundStyle(prominent ? Color.white : palette.accent)
+            .background(prominent ? palette.action : palette.sage, in: Capsule())
+            .contentShape(Capsule())
+            .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1) : 0.45)
+    }
+}
+
+struct TrackerCompactLogActions<Content: View>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 6) { content }
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 6) { content }
+                        .fixedSize(horizontal: true, vertical: false)
+                    VStack(alignment: .leading, spacing: 6) { content }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 struct TrackerPage<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
     let title: String
@@ -196,17 +239,28 @@ struct InlineError: View {
 
 /// Format UTC anchors in UTC, never as local instants that can change their civil day.
 enum DayText {
+    private static var cachedLocaleIdentifier: String?
+    private static var formatters: [String: DateFormatter] = [:]
     static func full(_ day: LocalDay) -> String { format(day, template: "yMMMMd") }
     static func short(_ day: LocalDay) -> String { format(day, template: "yMMMd") }
     static func month(_ day: LocalDay) -> String { format(day, template: "yMMMM") }
     static func range(_ first: LocalDay, _ last: LocalDay) -> String { "\(short(first)) – \(short(last))" }
 
     private static func format(_ day: LocalDay, template: String) -> String {
+        let locale = Locale.autoupdatingCurrent
+        if cachedLocaleIdentifier != locale.identifier {
+            formatters.removeAll()
+            cachedLocaleIdentifier = locale.identifier
+        }
+        if let formatter = formatters[template] {
+            return formatter.string(from: day.formattingDate)
+        }
         let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
+        formatter.locale = locale
         formatter.calendar = LocalDay.calendar
         formatter.timeZone = LocalDay.calendar.timeZone
         formatter.setLocalizedDateFormatFromTemplate(template)
+        formatters[template] = formatter
         return formatter.string(from: day.formattingDate)
     }
 }

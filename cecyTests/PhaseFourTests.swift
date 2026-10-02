@@ -13,7 +13,7 @@ nonisolated struct PhaseFourDomainTests {
     @Test func replayUsesOnlyEarlierIntervalsAndIsPrefixStable() throws {
         let periods = try history([28, 29, 30, 31, 28, 29, 30, 32])
         let replay = try PredictionBacktester.evaluate(periods: periods.reversed(), today: today)
-        #expect(replay.rows.count == 8 && replay.warmUpCount == 3 && replay.scored.count == 5)
+        #expect(replay.rows.count == 8 && replay.warmUpCount == 1 && replay.scored.count == 7)
         for (index, row) in replay.rows.enumerated() {
             #expect(row.sources.count == min(index, 6))
             #expect(row.sources.allSatisfy { $0.nextStart <= row.target.start })
@@ -33,21 +33,21 @@ nonisolated struct PhaseFourDomainTests {
         let empty = try PredictionBacktester.evaluate(periods: [], today: today)
         #expect(empty.rows.isEmpty && empty.meanAbsoluteError == nil && empty.meanWindowSpan == nil)
         let warmup = try PredictionBacktester.evaluate(periods: history([28, 28, 28]), today: today)
-        #expect(warmup.warmUpCount == 3 && warmup.scored.isEmpty && warmup.withheldCount == 0)
+        #expect(warmup.warmUpCount == 1 && warmup.scored.count == 2 && warmup.withheldCount == 0)
         let withheld = try PredictionBacktester.evaluate(periods: history([28, 28, 43, 28]), today: today)
-        #expect(withheld.withheldCount == 1 && withheld.warmUpCount == 3 && withheld.scored.isEmpty)
-        #expect(withheld.meanAbsoluteError == nil && withheld.coveredCount == 0)
+        #expect(withheld.withheldCount == 1 && withheld.warmUpCount == 1 && withheld.scored.count == 2)
+        #expect(withheld.meanAbsoluteError == 7.5 && withheld.coveredCount == 1)
     }
 
     @Test func errorSignInclusiveCoverageAndSpan() throws {
         for target in [25, 26, 28, 30, 31] {
             let replay = try PredictionBacktester.evaluate(periods: history([28, 28, 28, target]), today: today)
-            let row = try #require(replay.scored.first)
+            let row = try #require(replay.scored.last)
             #expect(row.signedError == target - 28)
             #expect(row.covered == (26...30).contains(target))
             #expect(row.windowSpan == 4)
             #expect(row.outsideWindowDays == max(0, abs(target - 28) - 2))
-            #expect(replay.meanAbsoluteError == Double(abs(target - 28)))
+            #expect(replay.meanAbsoluteError == Double(abs(target - 28)) / 3)
             #expect(replay.meanWindowSpan == 4)
         }
     }
@@ -83,7 +83,7 @@ nonisolated struct PhaseFourDomainTests {
         }
         let stable = CycleCalculator.overview(periods: try history([28, 29, 30, 28, 29, 30]), today: today, engine: EvidencePredictionEngine())
         #expect(stable.estimate?.confidence == .moderate)
-        let missed = CycleCalculator.overview(periods: try history([28, 28, 28, 28, 28, 35]), today: today, engine: EvidencePredictionEngine())
+        let missed = CycleCalculator.overview(periods: try history([28, 28, 31, 34, 35, 35]), today: today, engine: EvidencePredictionEngine())
         #expect(missed.estimate?.confidence == .low)
     }
 
@@ -118,7 +118,7 @@ nonisolated struct PhaseFourDomainTests {
         #expect(try confidence([30, 0, 0, 0, 0, 0, 0]) == .moderate) // Only last six checks.
         let actual = try PredictionBacktester.evaluate(periods: history(Array(repeating: 28, count: 12)), today: today)
         let evidence = PredictionEvidence.assess(sourceLengths: Array(repeating: 28, count: 6), replay: actual)
-        #expect(actual.warmUpCount == 3 && evidence.recentReplay.rows.count == 6)
+        #expect(actual.warmUpCount == 1 && evidence.recentReplay.rows.count == 6)
         #expect(evidence.recentReplay.warmUpCount == 0 && evidence.confidence == .moderate)
     }
 
@@ -129,7 +129,7 @@ nonisolated struct PhaseFourDomainTests {
         let end = try LocalDay(key: 99991231)
         let periods = try history([28, 28, 28, 1], start: 99991007)
         let report = try PredictionBacktester.evaluate(periods: periods, today: end)
-        #expect(report.withheldCount == 1)
+        #expect(report.withheldCount == 2)
         #expect(report.rows.last?.outcome == .unavailable(.invalidDay))
         let invalid = CycleInterval(id: UUID(), start: day, nextStart: day)
         #expect(throws: TrackingError.invalidData) { try PredictionBacktester.evaluate(intervals: [invalid]) }
@@ -140,7 +140,7 @@ nonisolated struct PhaseFourDomainTests {
         let before = try PredictionBacktester.evaluate(periods: periods, today: today)
         for index in periods.indices { periods[index].end = try periods[index].start.adding(days: 3) }
         #expect(try PredictionBacktester.evaluate(periods: periods, today: today) == before)
-        #expect(before.coveredCount == 3 && before.meanAbsoluteError == 0)
+        #expect(before.coveredCount == 5 && before.meanAbsoluteError == 0)
     }
 
     @Test func reproducibleSyntheticComparison() throws {
@@ -154,12 +154,12 @@ nonisolated struct PhaseFourDomainTests {
         ]
         // Golden totals keep the checked-in comparison table reproducible, not just diagnostic output.
         let expected: [String: (scored: Int, covered: Int, withheld: Int, span: Int, errors: [Int])] = [
-            "constant": (9, 9, 0, 36, [0, 0, 0]),
-            "alternating": (9, 9, 0, 90, [33, 29, 30]),
-            "drift": (9, 9, 0, 75, [25, 25, 24]),
-            "shift": (9, 8, 0, 71, [24, 24, 18]),
-            "long-gap": (3, 2, 6, 12, [28, 28, 28]),
-            "broad": (0, 0, 9, 0, [0, 0, 0])
+            "constant": (11, 11, 0, 44, [0, 0, 0]),
+            "alternating": (11, 10, 0, 104, [42, 38, 40]),
+            "drift": (11, 11, 0, 84, [27, 27, 26]),
+            "shift": (11, 10, 0, 79, [24, 24, 18]),
+            "long-gap": (5, 4, 6, 20, [28, 28, 28]),
+            "broad": (1, 0, 10, 4, [20, 20, 20])
         ]
         for (name, lengths) in fixtures {
             let golden = try #require(expected[name])
@@ -186,11 +186,11 @@ nonisolated struct PhaseFourDomainTests {
         let periods = try (0..<7).map { Period(start: try today.adding(days: -180 + $0 * 28)) }
         #expect(session.save(periods, completingOnboarding: true) == nil)
         let initial = session.predictionReplay
-        #expect(initial?.scored.count == 3 && session.overview?.estimate?.confidence == .moderate)
+        #expect(initial?.scored.count == 5 && session.overview?.estimate?.confidence == .moderate)
         #expect(session.saveSymptom(SymptomEntry(day: today, kind: .headache)) == nil)
         #expect(session.predictionReplay == initial)
         var edit = periods.last!
-        edit.start = try edit.start.adding(days: 7)
+        edit.start = try edit.start.adding(days: 8)
         #expect(session.update(edit) == nil)
         #expect(session.predictionReplay != initial && session.overview?.estimate?.confidence == .low)
         now = try today.adding(days: -30).formattingDate
@@ -199,7 +199,7 @@ nonisolated struct PhaseFourDomainTests {
         now = today.formattingDate
         session.refresh()
         #expect(session.predictionReplay != nil)
-        #expect(session.delete(id: edit.id) == nil && session.predictionReplay?.scored.count == 2)
+        #expect(session.delete(id: edit.id) == nil && session.predictionReplay?.scored.count == 4)
         #expect(session.deleteAll() == nil && session.predictionReplay?.rows.isEmpty == true)
     }
 }

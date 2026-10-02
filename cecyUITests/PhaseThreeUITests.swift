@@ -131,6 +131,8 @@ final class PhaseThreeUITests: XCTestCase {
         app.tabBars.buttons["Settings"].tap()
         let reset = app.buttons["deleteAllData"]
         reveal(reset, in: app); reset.tap()
+        XCTAssertTrue(app.alerts["Delete all data?"].waitForExistence(timeout: 5))
+        app.alerts["Delete all data?"].buttons["reviewDataDeletion"].firstMatch.tap()
         let confirmation = app.textFields["resetConfirmation"]
         reveal(confirmation, in: app); confirmation.tap(); confirmation.typeText("DELETE")
         let commit = app.buttons["confirmReset"]

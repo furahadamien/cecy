@@ -10,6 +10,10 @@ struct ObservationsView: View {
                 Button("Dismiss confirmation") { session.confirmation = nil }.frame(minHeight: 44)
             }
             if let today = session.today { SymptomLogButton(session: session, day: today) }
+            NavigationLink {
+                AIFeatureView(session: session, feature: .records)
+            } label: { Label("Generate insights", systemImage: "sparkles").frame(minHeight: 44) }
+                .accessibilityIdentifier("generateRecordInsights")
             if let message = session.insightMessage {
                 InlineError(message: message)
                     .onAppear { AccessibilityNotification.Announcement(message).post() }
@@ -17,6 +21,7 @@ struct ObservationsView: View {
             if session.insights.isEmpty {
                 TrackerCard {
                     Text("No repeated pattern to show yet.").font(.headline)
+                    Text("You can still generate a description of the records available so far.")
                     Text("Timing observations need matching logs near at least three eligible period starts. Changes compare two groups of three completed records. Sparse or missing logs do not mean symptom-free days.")
                 }
             }

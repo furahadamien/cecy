@@ -74,6 +74,7 @@ struct TrackerCalendarView: View {
                                     ForEach(days) { day in dayButton(day, asList: false) }
                                 }
                             }
+                            loggingActions
                             VStack(alignment: .leading, spacing: 8) {
                                 Label("Recorded start or confirmed bleeding day", systemImage: "drop.fill")
                                     .foregroundStyle(palette.recorded)
@@ -87,6 +88,8 @@ struct TrackerCalendarView: View {
                                 Text("An underlined date is selected. Estimates are not recorded bleeding days.")
                             }
                             .font(.footnote).foregroundStyle(.secondary).padding(8)
+                            .accessibilityElement(children: .contain)
+                            .accessibilityIdentifier("calendarLegend")
                         }
                         if !listLayout { TrackerCard(padding: 14) { selectedDetails } }
                     }
@@ -193,6 +196,36 @@ struct TrackerCalendarView: View {
         .accessibilityIdentifier("calendarDay_\(day.key)")
     }
 
+    private var loggingActions: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TrackerCompactLogActions {
+                loggingButtons
+            }
+            .disabled(selection > today)
+            Text("Log for \(DayText.full(selection))")
+                .font(.caption).foregroundStyle(.secondary)
+            if selection > today {
+                Text("Future dates can be viewed, but not recorded as observations.").font(.footnote)
+            }
+        }
+        .padding(.horizontal, 8)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("calendarLoggingActions")
+    }
+
+    @ViewBuilder
+    private var loggingButtons: some View {
+        Button { onLog(selection) } label: {
+            Label("Log period", systemImage: "drop")
+        }
+        .buttonStyle(TrackerCompactLogButtonStyle(prominent: true))
+        .accessibilityLabel("Record a period")
+        .accessibilityIdentifier("calendarLogPeriod")
+        .disabled(record(on: selection) != nil)
+        SymptomLogButton(session: session, day: selection, title: "Symptoms", compact: true)
+        SexualActivityLogButton(session: session, day: selection, compact: true)
+    }
+
     private var selectedDetails: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(DayText.full(selection)).font(.headline).accessibilityAddTraits(.isHeader)
@@ -208,18 +241,6 @@ struct TrackerCalendarView: View {
                 Text(DayText.range(estimate.earliest, estimate.latest))
                 if today > estimate.latest { Text("Estimated window passed. No new start has been recorded.") }
                 Button("How this estimate works") { showExplanation = true }.frame(minHeight: 44)
-            }
-            if selection > today {
-                Text("Future dates can be viewed, but not recorded as observations.").font(.footnote)
-            } else if record(on: selection) == nil {
-                Button { onLog(selection) } label: {
-                    Label("Record a period", systemImage: "plus").frame(minHeight: 44)
-                }
-                .buttonStyle(TrackerPrimaryButtonStyle()).accessibilityIdentifier("calendarLogPeriod")
-            }
-            if selection <= today {
-                SymptomLogButton(session: session, day: selection)
-                SexualActivityLogButton(session: session, day: selection)
             }
             ForEach(session.snapshot.symptoms.filter { $0.day == selection }) { entry in
                 Divider()

@@ -261,8 +261,10 @@ nonisolated struct PhaseSixDomainTests {
         let session = TrackerSession(repository: { repository }, clock: { today.formattingDate }, timeZone: { .gmt }, healthReader: reader)
         session.load()
         let before = session.snapshot
+        let beforeEstimate = session.overview?.estimate
+        #expect(beforeEstimate?.sourceLengths == [29, 29])
         #expect(try session.importHealthStart(sample, confirmedStart: LocalDay(key: 20260705)) != nil)
-        #expect(session.snapshot == before && session.overview?.estimate == nil)
+        #expect(session.snapshot == before && session.overview?.estimate == beforeEstimate)
         session.reviewAppleHealth(months: 12)
         await waitUntil { !session.healthImport.isBusy }
         #expect(session.snapshot == before)

@@ -99,7 +99,7 @@ struct TrackerPersistenceTests {
         let deleted = try repository.delete(id: periods[0].id)
         #expect(deleted.periods.count == 3)
         #expect(deleted.onboardingCompletedAt == now)
-        #expect(CycleCalculator.overview(periods: deleted.periods, today: try day(20260929)).estimate == nil)
+        #expect(CycleCalculator.overview(periods: deleted.periods, today: try day(20260929)).estimate?.sourceLengths == [31, 28])
     }
 
     @Test func failedUpdateAndDeleteKeepCommittedRecords() throws {

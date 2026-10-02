@@ -64,6 +64,7 @@ struct SymptomEntryView: View {
                             symptomButton(kind)
                         }
                     }
+                    .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("symptomKinds")
                 } header: {
                     Text("Symptoms")
@@ -160,13 +161,28 @@ struct SymptomEntryView: View {
 struct SymptomLogButton: View {
     let session: TrackerSession
     let day: LocalDay
+    var title = "Log symptoms"
+    var compact = false
     @State private var showEntry = false
     var body: some View {
-        Button { showEntry = true } label: {
-            Label("Log symptoms", systemImage: "plus.circle").frame(maxWidth: .infinity, minHeight: TrackerLayout.minimumTarget)
+        Group {
+            if compact {
+                entryButton.buttonStyle(TrackerCompactLogButtonStyle())
+            } else {
+                entryButton.buttonStyle(.bordered).buttonBorderShape(.capsule)
+            }
         }
-        .buttonStyle(.bordered).accessibilityIdentifier("logSymptoms")
+        .accessibilityLabel("Log symptoms").accessibilityIdentifier("logSymptoms")
         .sheet(isPresented: $showEntry) { SymptomEntryView(session: session, day: day) }
+    }
+
+    private var entryButton: some View {
+        Button { showEntry = true } label: {
+            Label(title, systemImage: "plus.circle")
+                .font((compact ? Font.footnote : Font.subheadline).weight(.semibold))
+                .frame(maxWidth: compact ? nil : .infinity,
+                       minHeight: compact ? nil : TrackerLayout.minimumTarget)
+        }
     }
 }
 

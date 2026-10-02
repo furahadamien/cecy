@@ -91,26 +91,54 @@ nonisolated enum PredictionOutcome: Equatable, Sendable {
 
 nonisolated protocol CyclePredicting: Sendable {
     func predict(intervals: [CycleInterval], latestStart: LocalDay) throws -> PredictionOutcome
+    func predict(intervals: [CycleInterval], latestStart: LocalDay, profile: LocalProfile?) throws -> PredictionOutcome
 }
 
-/// Uncalibrated baseline V1. No medical cutoffs, outlier removal, or probability claims.
+nonisolated extension CyclePredicting {
+    func predict(intervals: [CycleInterval], latestStart: LocalDay, profile: LocalProfile?) throws -> PredictionOutcome {
+        try predict(intervals: intervals, latestStart: latestStart)
+    }
+}
+
+/// Unified median window. Assumptions supply an input only when no measured interval exists.
 nonisolated struct BaselinePredictionEngine: CyclePredicting {
     func predict(intervals: [CycleInterval], latestStart: LocalDay) throws -> PredictionOutcome {
+        try predict(intervals: intervals, latestStart: latestStart, profile: nil)
+    }
+
+    func predict(intervals: [CycleInterval], latestStart: LocalDay, profile: LocalProfile?) throws -> PredictionOutcome {
+        try PredictionBacktester.validate(intervals)
+        guard intervals.last.map({ $0.nextStart == latestStart }) ?? true else { throw TrackingError.invalidData }
         let lengths = Array(intervals.suffix(6).map(\.length))
-        guard lengths.count >= 3 else { return .insufficientHistory(completedIntervals: lengths.count) }
-        let sorted = lengths.sorted()
+        let usesReportedLength = lengths.isEmpty
+        let inputs: [Int]
+        if usesReportedLength {
+            guard let days = profile?.typicalCycleDays else { return .insufficientHistory(completedIntervals: 0) }
+            guard CycleSetupPolicy.cycleDays.contains(days),
+                  profile?.typicalPeriodDays.map({ CycleSetupPolicy.periodDays.contains($0) && $0 <= days }) ?? true else {
+                throw TrackingError.invalidData
+            }
+            inputs = [days]
+        } else {
+            inputs = lengths
+        }
+        let sorted = inputs.sorted()
         guard let minimum = sorted.first, let maximum = sorted.last, minimum > 0 else { throw TrackingError.invalidData }
         guard maximum - minimum <= 14 else { return .wideVariation }
         let middle = sorted.count / 2
         let median = sorted.count.isMultiple(of: 2)
             ? (Double(sorted[middle - 1]) + Double(sorted[middle])) / 2
             : Double(sorted[middle])
+        let padding = usesReportedLength ? 3 : 2
         return .available(CyclePrediction(
             center: try latestStart.adding(days: Int(median.rounded(.toNearestOrAwayFromZero))),
-            earliest: try latestStart.adding(days: max(1, minimum - 2)),
-            latest: try latestStart.adding(days: maximum + 2),
+            earliest: try latestStart.adding(days: max(1, minimum - padding)),
+            latest: try latestStart.adding(days: maximum + padding),
             confidence: lengths.count == 6 && maximum - minimum <= 7 ? .moderate : .low,
-            sourceLengths: lengths
+            sourceLengths: lengths,
+            basis: usesReportedLength ? .usualCycle : .recordedHistory,
+            reportedCycleDays: usesReportedLength ? profile?.typicalCycleDays : nil,
+            reportedPeriodDays: usesReportedLength ? profile?.typicalPeriodDays : nil
         ))
     }
 }
@@ -139,11 +167,7 @@ nonisolated enum CycleCalculator {
             guard let last = sorted.last else {
                 return CycleOverview(latestStart: nil, currentDay: nil, intervals: [], prediction: .insufficientHistory(completedIntervals: 0))
             }
-            var prediction = try engine.predict(intervals: intervals, latestStart: last.start)
-            if case .insufficientHistory = prediction, let cycleDays = profile?.typicalCycleDays {
-                prediction = .available(try CycleSetupPolicy.starter(lastStart: last.start, cycleDays: cycleDays,
-                                                                   periodDays: profile?.typicalPeriodDays))
-            }
+            let prediction = try engine.predict(intervals: intervals, latestStart: last.start, profile: profile)
             return CycleOverview(latestStart: last.start, currentDay: last.start.days(until: today) + 1,
                                  intervals: intervals, prediction: prediction)
         } catch {

@@ -110,18 +110,31 @@ struct SexualActivityLogButton: View {
     @Environment(\.colorScheme) private var colorScheme
     let session: TrackerSession
     let day: LocalDay
+    var compact = false
     @State private var showEntry = false
 
     var body: some View {
-        Button { showEntry = true } label: {
-            Label { Text("Log sex") } icon: {
-                Image(systemName: "heart.fill").foregroundStyle(TrackerPalette(scheme: colorScheme).sexualActivity)
-            }.frame(maxWidth: .infinity, minHeight: TrackerLayout.minimumTarget)
+        Group {
+            if compact {
+                entryButton.buttonStyle(TrackerCompactLogButtonStyle())
+            } else {
+                entryButton.buttonStyle(.bordered)
+            }
         }
-        .buttonStyle(.bordered).accessibilityIdentifier("logSexualActivity")
+        .accessibilityIdentifier("logSexualActivity")
         .sheet(isPresented: $showEntry) {
             SexualActivityEntryView(session: session, day: day,
                                     entry: session.snapshot.sexualActivities.first { $0.day == day })
+        }
+    }
+
+    private var entryButton: some View {
+        Button { showEntry = true } label: {
+            Label { Text("Log sex") } icon: {
+                Image(systemName: "heart.fill").foregroundStyle(TrackerPalette(scheme: colorScheme).sexualActivity)
+            }
+            .frame(maxWidth: compact ? nil : .infinity,
+                   minHeight: compact ? nil : TrackerLayout.minimumTarget)
         }
     }
 }

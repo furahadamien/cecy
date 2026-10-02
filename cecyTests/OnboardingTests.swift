@@ -17,7 +17,7 @@ nonisolated private func onboardingFixture() throws -> OnboardingDraft {
 nonisolated struct OnboardingDomainTests {
     private let today = try! LocalDay(key: 20260929)
 
-    @Test func oneStartRequiredAndRecordedPredictionPolicyUnchanged() throws {
+    @Test func oneStartRequiredAndAvailableIntervalsUsedImmediately() throws {
         var draft = try onboardingFixture()
         try draft.validate(today: today)
         #expect(draft.overview(today: today).intervals.map(\.length) == [28, 30, 29])
@@ -25,7 +25,8 @@ nonisolated struct OnboardingDomainTests {
         #expect(draft.overview(today: today).estimate?.confidence == .low)
         draft.periods.removeFirst()
         try draft.validate(today: today)
-        #expect(draft.overview(today: today).estimate?.basis == .usualCycle)
+        #expect(draft.overview(today: today).estimate?.basis == .recordedHistory)
+        #expect(draft.overview(today: today).estimate?.sourceLengths == [30, 29])
         draft.periods = Array(draft.periods.suffix(1))
         try draft.validate(today: today)
         #expect(draft.overview(today: today).estimate?.sourceLengths == [])

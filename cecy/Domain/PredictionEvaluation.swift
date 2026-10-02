@@ -100,7 +100,7 @@ nonisolated enum PredictionBacktester {
 }
 
 nonisolated struct PredictionEvidence: Equatable, Sendable {
-    static let policy = "Median window V1 · Evidence policy V2"
+    static let policy = "Unified median window V2 · Evidence policy V2"
     let confidence: PredictionConfidence
     let reason: String
     let recentReplay: PredictionReplay
@@ -129,16 +129,22 @@ nonisolated struct PredictionEvidence: Equatable, Sendable {
     }
 }
 
-/// Same dates as V1; confidence can only be reduced by retrospective evidence.
+/// One production pipeline at every record count; replay never imports today's profile assumptions.
 nonisolated struct EvidencePredictionEngine: CyclePredicting {
     func predict(intervals: [CycleInterval], latestStart: LocalDay) throws -> PredictionOutcome {
+        try predict(intervals: intervals, latestStart: latestStart, profile: nil)
+    }
+
+    func predict(intervals: [CycleInterval], latestStart: LocalDay, profile: LocalProfile?) throws -> PredictionOutcome {
         try PredictionBacktester.validate(intervals)
         guard intervals.last.map({ $0.nextStart == latestStart }) ?? true else { throw TrackingError.invalidData }
-        let baseline = try BaselinePredictionEngine().predict(intervals: intervals, latestStart: latestStart)
+        let baseline = try BaselinePredictionEngine().predict(intervals: intervals, latestStart: latestStart, profile: profile)
         guard case .available(let prediction) = baseline else { return baseline }
         let replay = try PredictionBacktester.evaluate(intervals: intervals)
         let evidence = PredictionEvidence.assess(sourceLengths: prediction.sourceLengths, replay: replay)
         return .available(CyclePrediction(center: prediction.center, earliest: prediction.earliest, latest: prediction.latest,
-                                         confidence: evidence.confidence, sourceLengths: prediction.sourceLengths))
+                                         confidence: evidence.confidence, sourceLengths: prediction.sourceLengths,
+                                         basis: prediction.basis, reportedCycleDays: prediction.reportedCycleDays,
+                                         reportedPeriodDays: prediction.reportedPeriodDays))
     }
 }
