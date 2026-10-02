@@ -13,6 +13,7 @@ nonisolated enum AIFeature {
 }
 
 struct AIFeatureView: View {
+    @Environment(\.colorScheme) private var colorScheme
     let session: TrackerSession
     let feature: AIFeature
     @Environment(\.dismiss) private var dismiss
@@ -43,9 +44,10 @@ struct AIFeatureView: View {
     var body: some View {
         SettingsForm(title: feature.title) {
             Section {
-                Text("Optional AI wording and suggestions. Cecy calculates your facts locally. No request is sent until you choose Generate.")
+                Text("A little clarity, based on your records.").font(.title3.weight(.medium))
                 if isWellness {
-                    Text("Suggestions prioritize today’s logged symptoms, not an assumed cycle phase. Check all food suggestions against your allergies; AI cannot guarantee allergen safety.")
+                    Text("Based on today’s symptoms and preferences. Always check ingredients against your allergies.")
+                        .font(.subheadline).foregroundStyle(.secondary)
                     if severeSymptoms {
                         Label("You logged a severe symptom today. General wellness suggestions are not treatment. Consider medical advice; seek urgent care for severe or sudden concerning symptoms.", systemImage: "exclamationmark.triangle")
                             .accessibilityIdentifier("localSevereSymptomNotice")
@@ -62,16 +64,29 @@ struct AIFeatureView: View {
                             ForEach(SymptomKind.allCases, id: \.self) { Text($0.title).tag($0) }
                         }
                     }
-                    TextField("Your question", text: $question, axis: .vertical)
-                        .lineLimit(2...6).focused($typing).accessibilityIdentifier("aiQuestionText")
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Your question").font(.subheadline.weight(.medium))
+                        TextField("Type a question about your records", text: $question, axis: .vertical)
+                            .lineLimit(3...5).focused($typing)
+                            .padding(14)
+                            .background(TrackerPalette(scheme: colorScheme).background,
+                                        in: RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous)
+                                .strokeBorder(.secondary.opacity(0.5)))
+                            .accessibilityLabel("Your question")
+                            .accessibilityIdentifier("aiQuestionText")
+                        Text("\(question.count) / 100").font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
+                            .accessibilityIdentifier("questionCharacterCount")
+                    }
                     Button("Use suggested question") { question = scope.suggestedQuestion(kind: kind) }
-                    Text("\(question.count) / 2,000 characters. Only this question and the facts below are sent. Other topics stay local and ask you to choose a supported scope.")
-                        .font(.footnote).foregroundStyle(.secondary)
                 }.disabled(session.ai.isLoading)
             }
             switch preparation {
             case .success(let request):
-                Section("Locally calculated information to send") { AIContextPreview(request: request) }
+                Section {
+                    DisclosureGroup("Information used for this request") { AIContextPreview(request: request).padding(.vertical, 8) }
+                }
                 Section {
                     AIConsentControl(session: session)
                     Button(session.ai.output == nil ? "Generate" : "Generate again") {
@@ -79,13 +94,16 @@ struct AIFeatureView: View {
                         session.performAI(request)
                     }
                     .disabled(!session.canUseAI || session.ai.isLoading)
+                    .buttonStyle(TrackerPrimaryButtonStyle())
                     .accessibilityIdentifier("generateAI")
                     AIRequestStatus(coordinator: session.ai)
                 } footer: {
-                    Text("No names, exact dates, record identifiers, private notes, sexual activity or full history are included automatically. Free text is sent as typed. Results are not saved.")
+                    Text("Only your question and selected details are sent when you generate. Results are not saved.")
                 }
                 if let output = session.ai.output, session.ai.request == request {
                     Section { AIOutputView(output: output) }
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 12, leading: 0, bottom: 12, trailing: 0))
                 }
             case .failure(let error):
                 Section {
@@ -100,7 +118,12 @@ struct AIFeatureView: View {
         .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Hide keyboard") { typing = false } } }
         .onChange(of: scope) { _, _ in session.ai.cancel(); question = scope.suggestedQuestion(kind: kind) }
         .onChange(of: kind) { _, _ in session.ai.cancel(); question = scope.suggestedQuestion(kind: kind) }
-        .onChange(of: question) { _, _ in session.ai.cancel() }
+        .onChange(of: question) { _, value in
+            if value.count > AIContextBuilder.maximumQuestionLength {
+                question = String(value.prefix(AIContextBuilder.maximumQuestionLength))
+            }
+            session.ai.cancel()
+        }
         .onChange(of: session.ai.revision) { _, _ in question = ""; dismiss() }
         .onAppear { session.ai.cancel() }
         .onDisappear { session.ai.cancel() }

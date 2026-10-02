@@ -39,15 +39,15 @@ struct PrivacySettingsView: View {
             .disabled(privacy.isAuthenticating)
             Section {
                 Toggle("Include private notes", isOn: $includeNotes).accessibilityIdentifier("exportNotes")
-                Toggle("Include sexual activity", isOn: $includeSexualActivity).accessibilityIdentifier("exportSexualActivity")
+                Toggle("Include sexual activity and partner answers", isOn: $includeSexualActivity).accessibilityIdentifier("exportSexualActivity")
                 if session.snapshot.profile != nil {
                     Toggle("Include personal profile", isOn: $includeProfile).accessibilityIdentifier("exportProfile")
                 }
                 DisclosureGroup("What’s included?") {
                     Text("Dates, record IDs, flow, observation types and ratings. Private notes are optional; predictions are not included.")
                     Text("Accepted Apple Health period dates are included. Health sample identifiers and source metadata are not exported.")
-                    Text("Sexual activity is excluded unless you turn it on above. Activity notes also require Include private notes.")
-                    Text("Personal profile is optional and includes your name, birth date, measurements and preferences, including any wellness choices and food allergies. Apple identity is never exported.")
+                    Text("Sexual activity is excluded unless enabled above. Partner answers require both this option and Include personal profile. Activity notes also require Include private notes.")
+                    Text("Personal profile includes your name, birth date, gender answer, measurements and preferences, including wellness choices and food allergies. Apple identity is never exported.")
                     Text("JSON is a readable data file. Importing it back into Cecy is not supported.")
                     Text("Leaving Cecy while sharing may cancel the export.")
                 }

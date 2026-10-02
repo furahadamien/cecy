@@ -54,7 +54,7 @@ struct HistoryEntryView: View {
                 Text(drafts.isEmpty && isOnboarding ? "Continue without history" : "Save and continue")
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(TrackerPrimaryButtonStyle())
             .disabled(session.isSaving || (!isOnboarding && drafts.isEmpty))
             .accessibilityIdentifier("finishHistory")
             Text("Predictions are rough estimates, not medical advice or contraceptive guidance. You can correct saved entries later from Calendar or Insights.")

@@ -20,6 +20,19 @@ struct ProfileSettingsView: View {
             if let today = session.today {
                 if let error { Section { InlineError(message: error).accessibilityFocused($errorFocused) } }
                 Section("About you") { ProfileBasicsFields(profile: $profile, today: today) }
+                Section {
+                    DisclosureGroup {
+                        ProfileGenderFields(profile: $profile)
+                    } label: {
+                        Text("Gender · \(profile.genderIdentity?.title ?? "Not answered")")
+                            .accessibilityIdentifier("profileGenderChoices")
+                    }
+                    DisclosureGroup { ProfilePartnerFields(profile: $profile) } label: {
+                        Text("Who you have sex with").accessibilityIdentifier("profilePartnerChoices")
+                    }
+                } header: { Text("Personal details · Optional") } footer: {
+                    Text("Kept in your local profile, never used for predictions or sent for insights. Partner answers are exported only with both profile and sexual-information permission.")
+                }
                 Section { ProfileMeasurementFields(profile: $profile) } header: {
                     Text("Measurements · Optional")
                 } footer: {
@@ -38,7 +51,7 @@ struct ProfileSettingsView: View {
                     }
                     .accessibilityIdentifier("profileWellness")
                 } footer: {
-                    Text("Optional activity, exercise, food, allergy and wellness choices. Included in profile exports and explicit, consented AI wellness requests; not used for predictions.")
+                    Text("Activity, exercise, food and wellness choices. Not used for predictions.")
                 }
                 Section {
                     DisclosureGroup("Common symptoms (\(profile.commonSymptoms.count))") { ProfileSymptomFields(profile: $profile) }
@@ -54,7 +67,7 @@ struct ProfileSettingsView: View {
                     Text("Reminder changes are saved on their own screen. Save your profile edits here.")
                 }
                 Section {
-                    Label("Your records are stored on this device. Optional AI sends only the information you choose to submit.", systemImage: "iphone")
+                    Label("Records are stored on this device. Optional insights send only selected information when requested.", systemImage: "iphone")
                         .font(.footnote)
                     Text("No cloud backup or cross-device restore yet. Existing users can add a profile without re-entering period history.")
                         .font(.footnote).foregroundStyle(.secondary)

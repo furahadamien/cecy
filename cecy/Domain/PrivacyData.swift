@@ -79,8 +79,10 @@ nonisolated enum TrackerExport {
         let cycleContext: [String]
         let goals: [String]
         let wellnessPreferences: WellnessRecord?
+        let genderIdentity: String?
+        let sexualPartners: [String]?
 
-        init(_ profile: LocalProfile) throws {
+        init(_ profile: LocalProfile, includeSexualInformation: Bool = false) throws {
             try profile.validate()
             preferredName = profile.preferredName
             dateOfBirth = try profile.birthDayKey.map { civilDate(try LocalDay(key: $0)) }
@@ -93,6 +95,8 @@ nonisolated enum TrackerExport {
             cycleContext = profile.cycleContext.map(\.rawValue).sorted()
             goals = profile.goals.map(\.rawValue).sorted()
             wellnessPreferences = profile.wellnessPreferences.map(WellnessRecord.init)
+            genderIdentity = profile.genderIdentity?.rawValue
+            sexualPartners = includeSexualInformation ? profile.sexualPartners.map { $0.map(\.rawValue).sorted() } : nil
         }
     }
     struct WellnessRecord: Codable {
@@ -148,7 +152,8 @@ nonisolated enum TrackerExport {
         try SymptomValidation.validate(snapshot.symptoms)
         try SexualActivityValidation.validate(snapshot.sexualActivities)
         guard generatedAt.timeIntervalSinceReferenceDate.isFinite else { throw TrackingError.invalidData }
-        let version = includeProfile && snapshot.profile?.wellnessPreferences != nil ? 4 : (includeSexualActivity ? 3 : (includeProfile ? 2 : 1))
+        let includesIdentity = includeProfile && (snapshot.profile?.genderIdentity != nil || (includeSexualActivity && snapshot.profile?.sexualPartners != nil))
+        let version = includesIdentity ? 5 : (includeProfile && snapshot.profile?.wellnessPreferences != nil ? 4 : (includeSexualActivity ? 3 : (includeProfile ? 2 : 1)))
         let document = Document(formatVersion: version, generatedAt: generatedAt, includesPrivateNotes: includeNotes,
             periods: snapshot.periods.sorted { $0.start < $1.start }.map {
                 PeriodRecord(id: $0.id, start: civilDate($0.start), end: $0.end.map(civilDate), flow: $0.flow?.rawValue,
@@ -157,7 +162,7 @@ nonisolated enum TrackerExport {
                 ObservationRecord(id: $0.id, date: civilDate($0.day), type: $0.kind.rawValue, rating: $0.value,
                                   ratingLabel: $0.ratingLabel, notes: includeNotes ? $0.notes : nil,
                                   createdAt: $0.createdAt, updatedAt: $0.updatedAt)
-            }, profile: includeProfile ? try snapshot.profile.map(ProfileRecord.init) : nil,
+            }, profile: includeProfile ? try snapshot.profile.map { try ProfileRecord($0, includeSexualInformation: includeSexualActivity) } : nil,
             sexualActivities: includeSexualActivity ? SexualActivityValidation.sorted(snapshot.sexualActivities).map {
                 SexualActivityRecord(id: $0.id, date: civilDate($0.day), activities: $0.orderedActivities.map(\.rawValue),
                                      notes: includeNotes ? $0.notes : nil, createdAt: $0.createdAt, updatedAt: $0.updatedAt)

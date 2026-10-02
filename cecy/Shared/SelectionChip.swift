@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SelectionChip: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var contrast
     let title: String
     var symbol: String? = nil
     let selected: Bool
@@ -19,13 +20,18 @@ struct SelectionChip: View {
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                     .accessibilityHidden(true)
             }
-            .font(.subheadline)
-            .padding(.horizontal, 12).padding(.vertical, 8)
-            .frame(minHeight: 44)
+            .font(.subheadline.weight(.medium))
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .frame(minHeight: TrackerLayout.minimumTarget)
             .foregroundStyle(selected ? palette.accent : .primary)
-            .background(selected ? palette.sage : palette.surface, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(selected ? palette.accent : .secondary.opacity(0.4)))
-            .contentShape(RoundedRectangle(cornerRadius: 16))
+            .background(selected ? palette.sage : palette.background,
+                        in: RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous)
+                    .strokeBorder(selected || contrast == .increased ? palette.accent : .secondary.opacity(0.35),
+                                  lineWidth: selected ? 1.5 : 1)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)

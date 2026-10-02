@@ -1,5 +1,13 @@
 # Cecy — Implementation Plan
 
+## October 1 — visual refresh implemented; runtime acceptance blocked
+
+On `testing/on-device-fixes`, the shared visual refresh is implemented: rounded Dynamic Type typography, light/dark semantic colors, consistent cards/forms/actions, and native Liquid Glass tabs on iOS 26+ with older-OS fallbacks. A fresh unsigned iOS Release build passed in 54.2 seconds. Simulator discovery succeeded, but boot health reported **Data Migration Failed** despite exit 0; focused tests were deliberately not launched and no recovery/retry loop was attempted. Prior temporary test logs were unavailable, so no fresh unit/UI pass is claimed. See [UI_REFRESH.md](UI_REFRESH.md) for evidence and the minimal remaining checks. Runtime/accessibility/device acceptance remains open. No application-code changes, commits or pushes were made during this validation continuation.
+
+## October 1 — device-feedback refinements implemented
+
+On `testing/on-device-fixes`, implemented wrapping activity/diet/allergy choices; concise truthful external-processing disclosure; calmer insight/symptom wording and result styling; a 100-character record-question limit; activity-specific calendar icons and a horizontally scrolling Today date strip; and separate optional gender/partner onboarding steps, editable in Profile. New profile answers stay local, excluded from AI context and predictions. Export requires profile consent, plus sexual-information consent for partner answers. Existing profiles decode without invented answers. Validation: 86 focused unit/storage/transport tests passed, all 11 affected UI scenarios passed across reruns, and the unsigned iOS Release build passed; see [DEVICE_FEEDBACK_VALIDATION.md](DEVICE_FEEDBACK_VALIDATION.md). No backend changes or live gateway calls. Historical full-suite, signed-device and distribution gates remain open.
+
 ## October 1 continuation — consolidated AI verification
 
 Reviewed the existing implementation rather than restarting completed work. All five AI paths are present. A fresh combined run passed all 62 tests in eight focused unit/storage/transport suites and all four Phase 8 UI scenarios, using synthetic fixtures only. A fresh unsigned iOS Release build also passed. Results are recorded in [PHASE_8_VALIDATION.md](PHASE_8_VALIDATION.md). The AI plan now includes the actual file map and distinguishes historical proposals from implemented prototype choices. No live gateway requests, new backend resources, or resumption of the deferred full-app/device acceptance are part of this checkpoint.
@@ -26,7 +34,7 @@ This document tracks the phased implementation plan derived from the product bri
 - Complete each phase's acceptance criteria before expanding scope.
 - Optional integrations may be reordered or deferred based on product validation.
 
-Current user-directed priority: **Implement and validate all five AI handoff features, now authorized by the user.** The five iOS paths are implemented; 62 focused unit/storage/transport tests and all four AI UI scenarios passed together in the continuation run. Live contract and release acceptance remain open. See [AI validation](PHASE_8_VALIDATION.md), [AI implementation plan](PHASE_8_AI_IMPLEMENTATION_PLAN.md) and [phase order](PHASE_ORDER.md). Regression resolution and baseline/Phase 6 acceptance remain deferred, not waived; cloud sync/sharing remain deferred and subscriptions last.
+Current user-directed priority: **Visual refresh implemented; Release verified, focused runtime acceptance blocked by simulator boot health.** See [UI_REFRESH.md](UI_REFRESH.md) for the bounded validation checkpoint; resume focused testing only on a healthy simulator/device. Device-feedback refinements remain implemented; see [DEVICE_FEEDBACK_VALIDATION.md](DEVICE_FEEDBACK_VALIDATION.md). All five AI integrations remain implemented at prototype level. Live gateway/provider review and historical baseline/signed-device acceptance remain open; cloud sync/sharing remain deferred and subscriptions last.
 
 ### Progress overview
 
@@ -43,6 +51,8 @@ Current user-directed priority: **Implement and validate all five AI handoff fea
 | 7 | Subscriptions | Deferred |
 | Pre-8 | Local tracking/preferences needed by AI | Implemented; 45 focused unit/storage tests, three UI flows across reruns, Debug and unsigned iOS Release builds passed. Manual/baseline gates remain open; see LOCAL_WELLNESS_PREREQUISITES.md |
 | 8 | Optional AI enhancements | All five iOS paths implemented; 62 focused tests and four AI UI scenarios passed together, plus Debug and a fresh unsigned Release build. See PHASE_8_VALIDATION.md; live contract/prototype/device gates open |
+| Post-8 | On-device feedback: UX, activity calendars and optional identity answers | Implemented; 86 focused tests, 11 UI scenarios across reruns, and unsigned Release passed. Physical-device follow-up remains open; see DEVICE_FEEDBACK_VALIDATION.md |
+| Post-8 UI | Shared visual refresh and native Liquid Glass navigation | Implemented; fresh unsigned Release passed. Focused runtime tests blocked by simulator boot migration failure; visual/device acceptance remains open. See UI_REFRESH.md |
 | 9A | Optional personal cloud synchronization | Deferred |
 | 9B | Optional partner sharing | Deferred |
 
@@ -479,7 +489,8 @@ Record important choices and their rationale as implementation proceeds.
 
 ## Next authorized implementation scope
 
-Review [PHASE_8_AI_IMPLEMENTATION_PLAN.md](PHASE_8_AI_IMPLEMENTATION_PLAN.md) on `planning/phase-8-gpt`. After approval, implement only foundation, consent and the natural-language symptom logging vertical slice using the existing deployed gateway. No backend creation or live sensitive-data testing. Phase 6 import is implemented; baseline regression and signed-device acceptance remain deferred, not complete. No new cloud sync, partner sharing or subscription work. Update this plan for each implemented, revised or deferred milestone.
+The user-authorized device-feedback changes on `testing/on-device-fixes` are implemented with focused validation; see DEVICE_FEEDBACK_VALIDATION.md. Next, recheck them on-device and address specific reported issues. Existing live gateway, provider/privacy, historical full-suite and signed-device gates remain open. No new backend, cloud sync, partner sharing or subscriptions are authorized by this UX milestone. Update this plan for each new task or deferral.
+
 
 ### Phase 1 verification record
 

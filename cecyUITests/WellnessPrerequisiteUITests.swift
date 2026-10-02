@@ -42,11 +42,19 @@ final class WellnessPrerequisiteUITests: XCTestCase {
     }
 
     @MainActor private func choose(_ identifier: String, title: String, in app: XCUIApplication) {
-        let picker = app.buttons[identifier]
-        reveal(picker, in: app); picker.tap()
-        let item = app.buttons[title]
+        let suffix: String
+        switch title {
+        case "Moderately active": suffix = "moderatelyActive"
+        case "Very active": suffix = "veryActive"
+        case "Vegetarian": suffix = "vegetarian"
+        case "List food allergies": suffix = "listed"
+        default: XCTFail("Unknown fixture choice"); return
+        }
+        let item = app.buttons[identifier + "_" + suffix]
+        reveal(item, in: app)
         XCTAssertTrue(item.waitForExistence(timeout: 5), app.debugDescription)
         item.tap()
+        XCTAssertEqual(item.value as? String, "Selected")
     }
 
     @MainActor private func saveProfile(_ app: XCUIApplication) {
@@ -71,16 +79,16 @@ final class WellnessPrerequisiteUITests: XCTestCase {
         app.buttons["Hide keyboard"].tap()
         let add = app.buttons["addFoodAllergy"]
         reveal(add, in: app); add.tap()
-        XCTAssertTrue(app.buttons["removeFoodAllergy_0"].waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertEqual(app.buttons["foodAllergy_Peanuts"].value as? String, "Selected")
         let goal = app.buttons["wellnessGoal_manageSymptoms"]
         reveal(goal, in: app); goal.tap()
         saveProfile(app)
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["logPeriod"].waitForExistence(timeout: 15))
         openWellness(app)
-        let allergy = app.staticTexts["Peanuts"]
+        let allergy = app.buttons["foodAllergy_Peanuts"]
         reveal(allergy, in: app)
-        XCTAssertTrue(allergy.exists)
+        XCTAssertEqual(allergy.value as? String, "Selected")
         let clear = app.buttons["clearWellness"]
         reveal(clear, in: app); clear.tap()
         app.buttons["Clear preferences"].tap()
@@ -88,10 +96,10 @@ final class WellnessPrerequisiteUITests: XCTestCase {
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["logPeriod"].waitForExistence(timeout: 15))
         openWellness(app)
-        let status = app.buttons["wellnessAllergyStatus"]
+        let status = app.buttons["wellnessAllergyStatus_notAnswered"]
         reveal(status, in: app)
-        XCTAssertTrue(status.label.contains("Not answered") || (status.value as? String)?.contains("Not answered") == true)
-        XCTAssertFalse(app.staticTexts["Peanuts"].exists)
+        XCTAssertEqual(status.value as? String, "Selected")
+        XCTAssertFalse(app.buttons["foodAllergy_Peanuts"].exists)
     }
 
     @MainActor func testCancellingWellnessDoesNotChangeProfileDraft() {
@@ -104,8 +112,8 @@ final class WellnessPrerequisiteUITests: XCTestCase {
         XCTAssertFalse(app.buttons["saveProfile"].isEnabled)
         let wellness = app.buttons["profileWellness"]
         reveal(wellness, in: app); wellness.tap()
-        let activity = app.buttons["wellnessActivity"]
-        XCTAssertTrue(activity.label.contains("Not answered") || (activity.value as? String)?.contains("Not answered") == true)
+        let activity = app.buttons["wellnessActivity_unanswered"]
+        XCTAssertEqual(activity.value as? String, "Selected")
     }
 
     @MainActor func testDigestiveSymptomCanBeLoggedAndSurvivesRelaunch() {

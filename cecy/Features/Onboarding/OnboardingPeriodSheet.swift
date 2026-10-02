@@ -31,6 +31,7 @@ struct OnboardingPeriodSheet: View {
                     Section { InlineError(message: message) }
                 }
             }
+            .trackerFormStyle()
             .environment(\.calendar, LocalDay.calendar)
             .environment(\.timeZone, LocalDay.calendar.timeZone)
             .navigationTitle("Period dates").navigationBarTitleDisplayMode(.inline)

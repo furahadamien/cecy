@@ -103,6 +103,7 @@ struct PeriodEntryView: View {
                     Section { Text("This date joins your draft. Save the full list when you continue.").foregroundStyle(.secondary) }
                 }
             }
+            .trackerFormStyle()
             // Picker dates are UTC anchors for civil days, never actual event timestamps.
             .environment(\.calendar, LocalDay.calendar)
             .environment(\.timeZone, LocalDay.calendar.timeZone)

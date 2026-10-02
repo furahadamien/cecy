@@ -95,6 +95,17 @@ nonisolated struct LocalProfile: Codable, Equatable, Sendable, Identifiable {
     var goals: Set<TrackingGoal> = []
     // Synthesized optional decoding preserves existing profile payloads without guessed answers.
     var wellnessPreferences: WellnessPreferences?
+    var genderIdentity: GenderIdentity?
+    var sexualPartners: Set<SexualPartnerPreference>?
+
+    mutating func togglePartner(_ partner: SexualPartnerPreference) {
+        var choices = sexualPartners ?? []
+        if choices.remove(partner) == nil {
+            if partner.isExclusive { choices = [partner] }
+            else { choices = choices.filter { !$0.isExclusive }; choices.insert(partner) }
+        }
+        sexualPartners = choices.isEmpty ? nil : choices
+    }
 
     mutating func toggle(_ symptom: CommonSymptom) {
         if commonSymptoms.remove(symptom) != nil { return }
@@ -121,6 +132,9 @@ nonisolated struct LocalProfile: Codable, Equatable, Sendable, Identifiable {
         if commonSymptoms.contains(.none), commonSymptoms.count > 1 { throw ProfileError.selection }
         if cycleContext.contains(.none) || cycleContext.contains(.preferNotToSay), cycleContext.count > 1 { throw ProfileError.selection }
         try wellnessPreferences?.validate()
+        if let sexualPartners, sexualPartners.contains(where: \.isExclusive), sexualPartners.count > 1 {
+            throw ProfileError.selection
+        }
     }
 }
 

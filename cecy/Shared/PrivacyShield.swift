@@ -68,7 +68,7 @@ struct LockedTrackerView: View {
     var body: some View {
         VStack(spacing: 16) {
             Button("Unlock") { Task { await privacy.unlock() } }
-                .buttonStyle(.borderedProminent).frame(minHeight: 44)
+                .buttonStyle(TrackerPrimaryButtonStyle()).frame(minHeight: 44)
                 .disabled(privacy.isAuthenticating).accessibilityIdentifier("unlockCecy")
             if privacy.isAuthenticating { ProgressView().accessibilityLabel("Unlocking") }
         }

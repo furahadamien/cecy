@@ -54,7 +54,7 @@ struct ObservationsView: View {
                     TrackerCard { SymptomRecordView(session: session, entry: entry) }
                 }
             }
-            Text("These facts are calculated on your device. Optional AI explanations send selected facts only after consent. These are descriptive observations, not medical diagnoses. Pattern policy v\(CycleInsightEngine.policyVersion).")
+            Text("Calculated from your records, not medical diagnoses. Pattern policy v\(CycleInsightEngine.policyVersion).")
                 .font(.footnote).foregroundStyle(.secondary)
         }
     }

@@ -112,19 +112,19 @@ struct PreparedExport: Identifiable {
     }
 
     func setAIEnabled(_ enabled: Bool, now: Date = Date()) -> String? {
-        guard canAccess else { return "Unlock Cecy before changing AI consent." }
+        guard canAccess else { return "Unlock Cecy before changing insight consent." }
         if !enabled { aiBlocked = true }
         var candidate = preferences
         candidate.aiConsent = enabled ? AIConsentRecord(noticeVersion: AIConsentRecord.currentVersion, grantedAt: now) : nil
-        guard !enabled || candidate.aiConsent?.isCurrent == true else { return "AI consent could not be saved." }
+        guard !enabled || candidate.aiConsent?.isCurrent == true else { return "Insight consent could not be saved." }
         do {
             try storage.save(candidate)
             preferences = candidate
             aiBlocked = !enabled
             return nil
         } catch {
-            return enabled ? "AI was not enabled because consent couldn’t be saved. Try again."
-                : "AI is blocked for this session, but the change couldn’t be saved. Retry before closing Cecy."
+            return enabled ? "Insights weren’t enabled because consent couldn’t be saved. Try again."
+                : "Requests are blocked for this session, but the change couldn’t be saved. Retry before closing Cecy."
         }
     }
 

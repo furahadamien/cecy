@@ -7,28 +7,34 @@ struct CycleHistoryView: View {
 
     var body: some View {
         TrackerPage(title: "Insights", subtitle: "Your cycle history, from recorded starts.") {
-            NavigationLink {
-                AIFeatureView(session: session, feature: .question)
-            } label: { Label("Ask about your records", systemImage: "sparkles").frame(minHeight: 44) }
-            .accessibilityIdentifier("askCecy")
-            NavigationLink {
-                ObservationsView(session: session)
-            } label: {
-                Label("Observations and patterns", systemImage: "square.text.square").frame(minHeight: 44)
+            TrackerCard {
+                NavigationLink {
+                    AIFeatureView(session: session, feature: .question)
+                } label: { TrackerNavigationLabel(title: "Ask about your records", symbol: "sparkles") }
+                .accessibilityIdentifier("askCecy")
+                Divider()
+                NavigationLink {
+                    ObservationsView(session: session)
+                } label: {
+                    TrackerNavigationLabel(title: "Observations and patterns", symbol: "square.text.square")
+                }
+                .accessibilityIdentifier("manageObservations")
+                Divider()
+                NavigationLink {
+                    RecordedPeriodsView(session: session)
+                } label: {
+                    TrackerNavigationLabel(title: "Manage recorded periods", symbol: "list.bullet.rectangle")
+                }
+                .accessibilityIdentifier("managePeriods")
+                Divider()
+                NavigationLink {
+                    PredictionHistoryView(replay: session.predictionReplay)
+                } label: {
+                    TrackerNavigationLabel(title: "Prediction history check", symbol: "calendar.badge.clock")
+                }
+                .accessibilityIdentifier("predictionReplayLink")
             }
-            .accessibilityIdentifier("manageObservations")
-            NavigationLink {
-                RecordedPeriodsView(session: session)
-            } label: {
-                Label("Manage recorded periods", systemImage: "list.bullet.rectangle").frame(minHeight: 44)
-            }
-            .accessibilityIdentifier("managePeriods")
-            NavigationLink {
-                PredictionHistoryView(replay: session.predictionReplay)
-            } label: {
-                Label("Prediction history check", systemImage: "calendar.badge.clock").frame(minHeight: 44)
-            }
-            .accessibilityIdentifier("predictionReplayLink")
+            .buttonStyle(.plain)
             TrackerCard(highlighted: true) {
                 Text("Completed cycle intervals").font(.headline).accessibilityAddTraits(.isHeader)
                 Text("An interval is the number of calendar days between two recorded starts. Bleeding end dates are not needed to calculate it.")
@@ -50,16 +56,16 @@ struct CycleHistoryView: View {
             }
             ForEach(overview.intervals.reversed()) { interval in
                 TrackerCard {
-                    Text("\(interval.length) days").font(.title2.weight(.semibold))
+                    Text("\(interval.length) days").font(TrackerTypography.sectionTitle).monospacedDigit()
                     Text("Start: \(DayText.full(interval.start))")
                     Text("Next start: \(DayText.full(interval.nextStart))")
                     if session.snapshot.periods.contains(where: { $0.start == interval.start && $0.end != nil }) {
-                        NavigationLink("Your cycle summary · AI") {
+                        NavigationLink("Your cycle summary") {
                             AIFeatureView(session: session, feature: .summary(interval.start))
                         }
                         .frame(minHeight: 44).accessibilityIdentifier("cycleSummaryAI_\(interval.start.key)")
                     } else {
-                        Text("An AI summary also needs a confirmed bleeding end date.").font(.footnote).foregroundStyle(.secondary)
+                        Text("A summary needs a confirmed bleeding end date.").font(.footnote).foregroundStyle(.secondary)
                     }
                 }
                 .accessibilityElement(children: .contain)
