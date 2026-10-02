@@ -278,7 +278,7 @@ final class TrackerSession {
         activityIndex = DayActivityIndex(snapshot: snapshot)
         self.today = today
         overview = CycleCalculator.overview(periods: snapshot.periods, today: today, engine: EvidencePredictionEngine(), profile: snapshot.profile)
-        cycleForecast = overview.map { CycleForecast.calculate(overview: $0, profile: snapshot.profile, periods: snapshot.periods) } ?? CycleForecast()
+        cycleForecast = overview.map { CycleForecast.calculate(overview: $0, profile: snapshot.profile, periods: snapshot.periods, asOf: today) } ?? CycleForecast()
         predictionReplay = try? PredictionBacktester.evaluate(periods: snapshot.periods, today: today)
         statistics = try? CycleStatistics.calculate(periods: snapshot.periods, today: today)
         privacy.trackingChanged(prediction: overview?.estimate, now: clock(), timeZone: zone())
@@ -423,21 +423,21 @@ final class TrackerSession {
             return TrackerSession(repository: {
                 let repository = try SwiftDataPeriodRepository.local(url: url)
                 let fixture = ProcessInfo.processInfo.environment["CECY_UI_FIXTURE"]
-                if fixture == "history" || fixture == "patterns" || fixture == "wellness" || fixture == "ai" || fixture == "sparse",
+                if fixture == "history" || fixture == "patterns" || fixture == "wellness" || fixture == "ai" || fixture == "sparse" || fixture == "oldStart",
                    try repository.load().onboardingCompletedAt == nil {
-                    let keys = fixture == "sparse" ? [20260902] : fixture == "patterns" || fixture == "ai" ? [20260410, 20260509, 20260607, 20260705, 20260804, 20260902]
+                    let keys = fixture == "oldStart" ? [20260101] : fixture == "sparse" ? [20260902] : fixture == "patterns" || fixture == "ai" ? [20260410, 20260509, 20260607, 20260705, 20260804, 20260902]
                         : [20260607, 20260705, 20260804, 20260902]
                     let periods = try keys.map { key in
                         let start = try LocalDay(key: key)
                         return Period(start: start, end: fixture == "ai" ? try start.adding(days: 4) : nil)
                     }
                     _ = try repository.add(periods, completingOnboarding: true, today: LocalDay(key: 20260929), now: fixed)
-                    if fixture == "wellness" || fixture == "ai" || fixture == "sparse" {
+                    if fixture == "wellness" || fixture == "ai" || fixture == "sparse" || fixture == "oldStart" {
                         var profile = LocalProfile()
                         profile.preferredName = "Synthetic Alex"
                         profile.birthDayKey = 19950512
                         profile.typicalPeriodDays = 5
-                        if fixture == "sparse" {
+                        if fixture == "sparse" || fixture == "oldStart" {
                             profile.typicalCycleDays = 28
                             _ = try repository.addSymptoms([SymptomEntry(day: LocalDay(key: 20260929), kind: .cramps, value: 2)],
                                                            today: LocalDay(key: 20260929), now: fixed)

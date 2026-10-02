@@ -3,10 +3,14 @@ import SwiftUI
 struct ProjectedCycleDetails: View {
     @Environment(\.colorScheme) private var colorScheme
     let cycle: ProjectedCycle
+    var notBefore: LocalDay? = nil
 
     var body: some View {
         let palette = TrackerPalette(scheme: colorScheme)
         VStack(alignment: .leading, spacing: 10) {
+            if let notice = cycle.referenceNotice {
+                Text(notice).font(.footnote).accessibilityIdentifier("forecastReferenceNotice")
+            }
             if let ovulation = cycle.ovulation {
                 Label(cycle.isLaterProjection ? "Possible ovulation · Projection" : "Possible ovulation · Estimate",
                       systemImage: "circle.dotted")
@@ -42,7 +46,7 @@ struct ProjectedCycleDetails: View {
                   systemImage: "circle.dashed")
                 .font(.subheadline.weight(.semibold)).foregroundStyle(palette.recorded)
             Text("Around \(DayText.short(cycle.period.center))").font(.subheadline.weight(.semibold))
-            Text("Start window: \(DayText.range(cycle.period.earliest, cycle.period.latest))").font(.subheadline)
+            Text("\(notBefore == nil ? "Start window" : "Remaining start window"): \(DayText.range(max(notBefore ?? cycle.period.earliest, cycle.period.earliest), cycle.period.latest))").font(.subheadline)
             if let bleeding = cycle.bleeding, let duration = cycle.bleedingDuration {
                 Label("Expected bleeding dates", systemImage: "drop")
                     .font(.subheadline.weight(.semibold)).foregroundStyle(palette.recorded)
@@ -77,24 +81,20 @@ struct UpcomingCycleForecastView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Upcoming cycle forecast").font(.headline).accessibilityAddTraits(.isHeader)
-            if let cycle = forecast.cycles.first {
-                ProjectedCycleDetails(cycle: cycle)
-                if today > cycle.period.latest {
-                    Text("This start window has passed; no new start is assumed. Record your actual dates to update it.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
+            if let cycle = forecast.nextPeriod(onOrAfter: today) {
+                ProjectedCycleDetails(cycle: cycle, notBefore: today)
                 if let next = forecast.nextOvulation(onOrAfter: today), next.index != cycle.index {
-                    DisclosureGroup("Next projected ovulation") { ProjectedCycleDetails(cycle: next) }
+                    DisclosureGroup("Next projected ovulation") { ProjectedCycleDetails(cycle: next, notBefore: today) }
                 }
             } else {
                 Text(forecast.ovulationUnavailableReason
-                     ?? "There is no upcoming estimated ovulation date within this three-cycle forecast. Keep your actual period starts up to date. A passed estimate does not confirm ovulation occurred.")
+                     ?? "There is not enough usable information for an upcoming forecast. Review actual period starts or your typical cycle length.")
                     .font(.subheadline)
             }
             DisclosureGroup("How this forecast works") {
-                Text("Up to six recent cycle lengths determine the period estimate; your typical cycle length is used when no measured interval exists. Confirmed end dates refine bleeding duration. Up to three cycles are projected, accumulating start uncertainty each cycle. More data may widen rather than narrow estimates. These ranges are not measured probabilities, and period confidence does not establish ovulation accuracy.")
+                Text("Up to six recent cycle lengths determine the period estimate; confirmed end dates refine bleeding duration. Upcoming projections remain visible as time passes without creating missing records. If history cannot support an estimate, a saved typical length can provide an explicitly labelled reference. More data may widen rather than narrow estimates; these ranges are not measured probabilities.")
                 Text(OvulationNotice.explanation)
-                Text("A missed period estimate is not advanced, and future projections never create records. Record each actual start to update both forecasts.")
+                Text("A projected date does not mean missed periods occurred. Your original record-based estimate, statistics and reminders stay separate from these calendar projections. Record actual starts and bleeding days to refine the forecast.")
             }.font(.footnote)
         }
         .accessibilityElement(children: .contain)

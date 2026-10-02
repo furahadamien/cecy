@@ -1,5 +1,11 @@
 # Cecy — Implementation Plan
 
+## October 2 — historical logging and future-facing period estimates
+
+Calendar period entry now edits existing records or explicitly offers New period versus Add bleeding days. Confirmed ranges update the same record; future starts, ends, symptoms and activity logging remain forbidden. Forecast generation now includes three upcoming centers relative to the actual current day, retaining original nearby projections without creating missing records. Today’s next-period card no longer shows a past center; conflicting history can retain an explicitly labelled Low-confidence reference from a saved typical length. Primary evidence, statistics and reminders remain separate and unchanged. See [HISTORICAL_LOGGING_FIX.md](HISTORICAL_LOGGING_FIX.md) and [ADAPTIVE_CYCLE_FORECAST.md](ADAPTIVE_CYCLE_FORECAST.md) for the revised policy and its limitations.
+
+Validation: all 53 selected unit/persistence tests in nine suites and all three new UI scenarios passed together, including bleeding-range relaunch persistence, editing an existing period, old-start forecasts, retained records after historical insertion and disabled future logging. Debug app/test compilation and unsigned iOS Release build passed (47.3 seconds). Runs were bounded; no retry loop or live requests. Physical-device/accessibility, full regression, older logging-label automation and clinical/release gates remain open. No commits or pushes.
+
 ## October 2 — concise Today period-start card
 
 Renamed the card to “Estimated next period start” and removed its gray secondary explanatory paragraphs. Date range, confidence, starter basis, current/overdue status and primary unavailable messages remain; the existing detail link retains the full explanation. No prediction or storage changes. Swift syntax and diff checks passed; no build or simulator rerun for this copy-only follow-up. Previous validation does not establish device acceptance of this edit. Nothing committed or pushed.
