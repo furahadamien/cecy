@@ -37,28 +37,42 @@ struct AIFeatureView: View {
     }
     private var isQuestion: Bool { if case .question = feature { true } else { false } }
     private var isWellness: Bool { if case .wellness = feature { true } else { false } }
-    private var severeSymptoms: Bool {
-        session.snapshot.symptoms.contains { $0.day == session.today && $0.value == 3 && $0.kind != .sleepQuality && $0.kind != .energyLevel }
+    private var wellnessOutput: AIOutput? {
+        guard isWellness, session.canUseAI, case .success(let request) = preparation,
+              let value = session.ai.wellness(for: request) else { return nil }
+        return .wellness(value)
     }
 
     var body: some View {
         SettingsForm(title: feature.title) {
+            if isWellness {
+                Section { WellnessSafetyNotice(symptoms: session.snapshot.symptoms, today: session.today) }
+            }
+            if let wellnessOutput {
+                Section { AIOutputView(output: wellnessOutput) }
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+            }
             Section {
-                Text("A little clarity, based on your records.").font(.title3.weight(.medium))
+                if !isWellness { Text("A little clarity, based on your records.").font(.title3.weight(.medium)) }
                 if isWellness {
+                    NavigationLink("Edit wellness preferences") { ProfileSettingsView(session: session) }
+                        .accessibilityIdentifier("wellnessPreferencesLink")
                     Text("Based on today’s symptoms and preferences. Always check ingredients against your allergies.")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                    if severeSymptoms {
-                        Label("You logged a severe symptom today. General wellness suggestions are not treatment. Consider medical advice; seek urgent care for severe or sudden concerning symptoms.", systemImage: "exclamationmark.triangle")
-                            .accessibilityIdentifier("localSevereSymptomNotice")
-                    }
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
             }
             if isQuestion {
                 Section("Choose the records to discuss") {
-                    Picker("Scope", selection: $scope) {
-                        ForEach(CycleQuestionScope.allCases) { Text($0.title).tag($0) }
-                    }.accessibilityIdentifier("aiQuestionScope")
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 8) {
+                            ForEach(CycleQuestionScope.allCases) { choice in
+                                SelectionChip(title: choice.title, selected: scope == choice) { scope = choice }
+                                    .accessibilityIdentifier("aiQuestionScope_\(choice.rawValue)")
+                            }
+                        }.padding(.vertical, 4)
+                    }
+                    .accessibilityIdentifier("aiQuestionScope")
                     if scope != .cycleLengths {
                         Picker("Symptom", selection: $kind) {
                             ForEach(SymptomKind.allCases, id: \.self) { Text($0.title).tag($0) }
@@ -89,7 +103,7 @@ struct AIFeatureView: View {
                 }
                 Section {
                     AIConsentControl(session: session)
-                    Button(session.ai.output == nil ? "Generate" : "Generate again") {
+                    Button(session.ai.output == nil && wellnessOutput == nil ? "Generate" : "Generate again") {
                         typing = false
                         session.performAI(request)
                     }
@@ -100,7 +114,7 @@ struct AIFeatureView: View {
                 } footer: {
                     Text("Only your question and selected details are sent when you generate. Results are not saved.")
                 }
-                if let output = session.ai.output, session.ai.request == request {
+                if !isWellness, let output = session.ai.output, session.ai.request == request {
                     Section { AIOutputView(output: output) }
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets(top: 12, leading: 0, bottom: 12, trailing: 0))
@@ -139,7 +153,7 @@ struct AIContextPreview: View {
             case .insight(let value):
                 Text(verbatim: value.facts.metric)
                 if let old = value.facts.previousMetric, let recent = value.facts.recentMetric {
-                    Text("Previous: \(old.formatted()) days; recent: \(recent.formatted()) days.")
+                    Text("Previous: \(old.formatted(.number.precision(.fractionLength(1)))) days; recent: \(recent.formatted(.number.precision(.fractionLength(1)))) days.")
                     Text("\(value.facts.previousRecordCount ?? 0) previous and \(value.facts.recentRecordCount ?? 0) recent records.")
                 }
                 if let count = value.facts.startsAnalyzed {
@@ -161,16 +175,16 @@ struct AIContextPreview: View {
                 Text("Goals: \(value.userGoals.isEmpty ? "none selected" : value.userGoals.joined(separator: ", ").replacingOccurrences(of: "_", with: " "))")
             case .summary(let value):
                 Text("Recorded interval: \(value.cycleLength) days")
-                Text("Recent recorded average: \(value.averageCycleLength.formatted()) days")
+                Text("Recent recorded average: \(value.averageCycleLength.formatted(.number.precision(.fractionLength(1)))) days")
                 Text("Confirmed bleeding duration: \(value.periodLength) days inclusive")
                 ForEach(value.observations, id: \.self) { Text(verbatim: $0) }
             case .question(let value):
                 let facts = value.facts
                 if let count = facts.cyclesAnalyzed { Text("\(count) eligible recorded cycles/starts analyzed") }
                 if let mean = facts.averageCycleLength {
-                    Text("Mean interval: \(mean.formatted()) days")
+                    Text("Mean interval: \(mean.formatted(.number.precision(.fractionLength(1)))) days")
                     Text("Range: \(facts.minimumCycleLength ?? 0)–\(facts.maximumCycleLength ?? 0) days")
-                    if let deviation = facts.populationStandardDeviationDays { Text("Population standard deviation: \(deviation.formatted()) days") }
+                    if let deviation = facts.populationStandardDeviationDays { Text("Population standard deviation: \(deviation.formatted(.number.precision(.fractionLength(1)))) days") }
                 }
                 if let days = facts.recordedDays { Text("\(facts.symptom?.kind.title ?? "Symptom"): \(days) recorded days in the last \(facts.daysAnalyzed ?? 90) calendar days, including today") }
                 if let count = facts.matchingStarts {

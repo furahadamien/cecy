@@ -63,8 +63,8 @@ struct ProfileMeasurementFields: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Measurement units").font(.headline)
             Picker("Measurement units", selection: $profile.measurementSystem) {
-                Text("cm / kg").tag(MeasurementSystem.metric)
-                Text("ft + in / lb").tag(MeasurementSystem.imperial)
+                Text("Metric").tag(MeasurementSystem.metric)
+                Text("Imperial").tag(MeasurementSystem.imperial)
             }
             .pickerStyle(.segmented)
             .accessibilityIdentifier("profileUnits")
@@ -78,6 +78,7 @@ private struct MeasurementWheelField: View {
     let kind: MeasurementPickerKind
     let units: MeasurementSystem
     @Binding var value: Double?
+    @State private var isExpanded = false
     @ScaledMetric(relativeTo: .body) private var wheelHeight = 160.0
 
     private var valueText: String {
@@ -93,17 +94,21 @@ private struct MeasurementWheelField: View {
                 }
                 Spacer()
                 if value != nil {
-                    Button("Clear") { value = nil }.frame(minWidth: 44, minHeight: 44)
+                    Button("Clear") { value = nil; isExpanded = false }.frame(minWidth: 44, minHeight: 44)
                         .accessibilityLabel("Clear \(kind.title.lowercased())")
                         .accessibilityIdentifier("\(kind.identifier)Clear")
-                } else {
-                    Button("Add") { value = kind.suggestedCanonicalValue }
+                }
+                if !isExpanded {
+                    Button(value == nil ? "Add" : "Edit") {
+                        if value == nil { value = kind.suggestedCanonicalValue }
+                        isExpanded = true
+                    }
                         .frame(minWidth: 44, minHeight: 44)
-                        .accessibilityLabel("Add \(kind.title.lowercased())")
-                        .accessibilityIdentifier("\(kind.identifier)Add")
+                        .accessibilityLabel("\(value == nil ? "Add" : "Edit") \(kind.title.lowercased())")
+                        .accessibilityIdentifier("\(kind.identifier)\(value == nil ? "Add" : "Edit")")
                 }
             }
-            if value != nil {
+            if value != nil && isExpanded {
                 Picker(kind.title, selection: Binding(get: {
                     kind.index(for: value ?? kind.suggestedCanonicalValue, system: units)
                 }, set: { index in
@@ -119,10 +124,15 @@ private struct MeasurementWheelField: View {
                 .accessibilityLabel(kind.title)
                 .accessibilityHint("Swipe up or down to change this optional measurement.")
                 .accessibilityIdentifier(kind.identifier)
+                Button("Done") { isExpanded = false }
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .accessibilityLabel("Done choosing \(kind.title.lowercased())")
+                    .accessibilityIdentifier("\(kind.identifier)Done")
             }
         }
         .padding(.vertical, 8)
         .buttonStyle(.borderless)
+        .onChange(of: units) { _, _ in isExpanded = false }
     }
 }
 

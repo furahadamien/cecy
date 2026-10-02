@@ -35,6 +35,9 @@ struct CycleHistoryView: View {
                 .accessibilityIdentifier("predictionReplayLink")
             }
             .buttonStyle(.plain)
+            if let today = session.today {
+                InsightChartsView(intervals: overview.intervals, symptoms: session.snapshot.symptoms, today: today)
+            }
             TrackerCard(highlighted: true) {
                 Text("Completed cycle intervals").font(.headline).accessibilityAddTraits(.isHeader)
                 Text("An interval is the number of calendar days between two recorded starts. Bleeding end dates are not needed to calculate it.")
@@ -101,14 +104,10 @@ private struct RecordedPeriodsView: View {
             if session.snapshot.periods.isEmpty {
                 Text("No periods recorded. Add a start or previous dates from Today.")
             }
-            LazyVStack(spacing: 16) {
+            LazyVStack(spacing: 10) {
                 ForEach(session.snapshot.periods.reversed()) { period in
-                    TrackerCard {
-                        Text(DayText.full(period.start)).font(.headline)
-                        Text(period.end.map { "Ended \(DayText.full($0))" } ?? "End not recorded")
-                        if let duration = period.duration { Text("\(duration) days, inclusive") }
-                        PeriodExtraDetails(period: period)
-                        PeriodRecordActions(session: session, period: period)
+                    TrackerCard(padding: 14) {
+                        PeriodRecordSummary(session: session, period: period)
                     }
                 }
             }

@@ -9,6 +9,12 @@ struct TodayView: View {
     @State private var showExplanation = false
     @State private var selection: LocalDay
 
+    private var wellness: WellnessRecommendation? {
+        guard session.canUseAI,
+              let request = try? AIContextBuilder.wellness(snapshot: session.snapshot, today: today) else { return nil }
+        return session.ai.wellness(for: request)
+    }
+
     init(session: TrackerSession, today: LocalDay, overview: CycleOverview, onLog: @escaping (LocalDay) -> Void, onHistory: @escaping () -> Void) {
         self.session = session
         self.today = today
@@ -88,26 +94,36 @@ struct TodayView: View {
             Text("A count from recorded dates—not an estimate of cycle phase. Missing records can affect the result.")
                 .font(.footnote).foregroundStyle(.secondary)
             TrackerCard {
+                Text("For today").font(.headline).accessibilityAddTraits(.isHeader)
+                if let wellness {
+                    WellnessSafetyNotice(symptoms: session.snapshot.symptoms, today: today)
+                    VStack(alignment: .leading, spacing: 12) {
+                        if let movement = wellness.movementSuggestions.first { wellnessRow("Movement", text: movement, symbol: "figure.walk") }
+                        if let food = wellness.foodSuggestions.first { wellnessRow("Food", text: food, symbol: "fork.knife") }
+                        wellnessRow("Hydration", text: wellness.hydrationSuggestion, symbol: "drop")
+                        if let recovery = wellness.recoverySuggestions.first { wellnessRow("Recovery", text: recovery, symbol: "leaf") }
+                        AISafetyNotice(message: wellness.safetyMessage)
+                    }.accessibilityIdentifier("todayWellnessSuggestions")
+                } else {
+                    Text("Food, movement and recovery ideas based on today’s logs. Generate when you’re ready.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
                 NavigationLink {
                     AIFeatureView(session: session, feature: .wellness)
                 } label: {
-                    Label("For today · Optional wellness suggestions", systemImage: "sparkles")
+                    Label(wellness == nil ? "Get today’s suggestions" : "View all suggestions", systemImage: "sparkles")
                         .frame(minHeight: 44)
                 }
                 .accessibilityIdentifier("dailyWellnessAI")
-                Text("Review today’s symptoms and your preferences before requesting food, movement and recovery ideas.")
-                    .font(.footnote).foregroundStyle(.secondary)
+                NavigationLink("Edit wellness preferences") { ProfileSettingsView(session: session) }
+                    .frame(minHeight: 44).font(.subheadline)
+                    .accessibilityIdentifier("todayWellnessPreferences")
             }
             if let insight = session.insights.first { InsightCard(insight: insight) }
             if let message = session.insightMessage { InlineError(message: message) }
             if let latest = session.snapshot.periods.last {
-                TrackerCard {
-                    Text("Latest recorded period").font(.headline)
-                    Text(DayText.full(latest.start))
-                    Text(latest.end.map { "Ended \(DayText.full($0))" }
-                         ?? "End not recorded. If this period is ongoing, you can add its end later.")
-                    PeriodExtraDetails(period: latest)
-                    PeriodRecordActions(session: session, period: latest).id(latest.id)
+                TrackerCard(padding: 14) {
+                    PeriodRecordSummary(session: session, period: latest, title: "Latest recorded period")
                 }
             }
         }
@@ -116,6 +132,13 @@ struct TodayView: View {
             if let estimate = overview.estimate {
                 PredictionExplanation(estimate: estimate, sources: Array(overview.intervals.suffix(6)), replay: session.predictionReplay)
             }
+        }
+    }
+
+    private func wellnessRow(_ title: String, text: String, symbol: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label(title, systemImage: symbol).font(.subheadline.weight(.semibold))
+            Text(verbatim: text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
         }
     }
 }

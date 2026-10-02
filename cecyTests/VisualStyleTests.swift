@@ -12,7 +12,9 @@ struct VisualStyleTests {
         // Native glass adapts its own material; it needs device-level visual review.
         for background in [palette.background, palette.surface, palette.sage] {
             #expect(contrast(palette.accent, background) >= 4.5)
+            #expect(contrast(palette.sexualActivity, background) >= 4.5)
         }
+        #expect(contrast(palette.sexualActivity, palette.recordedSurface) >= 4.5)
         #expect(contrast(palette.recorded, palette.recordedSurface) >= 4.5)
         #expect(contrast(.white, palette.action) >= 4.5)
     }

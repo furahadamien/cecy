@@ -49,9 +49,9 @@ struct ObservationsView: View {
                 if session.snapshot.symptoms.isEmpty { Text("No observations recorded yet.") }
             }
             Text("Recorded observations").font(.title2).accessibilityAddTraits(.isHeader)
-            LazyVStack(spacing: 16) {
+            LazyVStack(spacing: 10) {
                 ForEach(session.snapshot.symptoms.reversed()) { entry in
-                    TrackerCard { SymptomRecordView(session: session, entry: entry) }
+                    TrackerCard(padding: 14) { SymptomRecordView(session: session, entry: entry) }
                 }
             }
             Text("Calculated from your records, not medical diagnoses. Pattern policy v\(CycleInsightEngine.policyVersion).")
