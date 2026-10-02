@@ -19,6 +19,8 @@ struct PreparedExport: Identifiable {
     var canAccess: Bool { isReady && !isLocked }
     private(set) var aiBlocked = false
     var aiEnabled: Bool { !aiBlocked && preferences.aiConsent?.isCurrent == true }
+    private var dailyInsightsBlocked = false
+    var dailyInsightsEnabled: Bool { aiEnabled && !dailyInsightsBlocked && preferences.dailyInsightsEnabled == true }
 
     @ObservationIgnored private let storage: any PrivacyPreferenceStoring
     @ObservationIgnored private let authentication: any DeviceAuthenticating
@@ -116,6 +118,7 @@ struct PreparedExport: Identifiable {
         if !enabled { aiBlocked = true }
         var candidate = preferences
         candidate.aiConsent = enabled ? AIConsentRecord(noticeVersion: AIConsentRecord.currentVersion, grantedAt: now) : nil
+        if !enabled { candidate.dailyInsightsEnabled = false; dailyInsightsBlocked = true }
         guard !enabled || candidate.aiConsent?.isCurrent == true else { return "Insight consent could not be saved." }
         do {
             try storage.save(candidate)
@@ -125,6 +128,37 @@ struct PreparedExport: Identifiable {
         } catch {
             return enabled ? "Insights weren’t enabled because consent couldn’t be saved. Try again."
                 : "Requests are blocked for this session, but the change couldn’t be saved. Retry before closing Cecy."
+        }
+    }
+
+    func setDailyInsightsEnabled(_ enabled: Bool) -> String? {
+        guard canAccess, !enabled || aiEnabled else { return "Enable optional insights before enabling daily preparation." }
+        if !enabled { dailyInsightsBlocked = true }
+        var candidate = preferences
+        candidate.dailyInsightsEnabled = enabled
+        do {
+            try storage.save(candidate)
+            preferences = candidate
+            dailyInsightsBlocked = !enabled
+            return nil
+        } catch {
+            return enabled ? "Daily preparation could not be enabled. No request was sent."
+                : "Daily requests are blocked for this session. Retry saving before closing Cecy."
+        }
+    }
+
+    func reserveDailyInsightAttempt(on day: LocalDay) -> Bool {
+        guard canAccess, dailyInsightsEnabled,
+              preferences.dailyInsightAttemptDay != day.key else { return false }
+        var candidate = preferences
+        candidate.dailyInsightAttemptDay = day.key
+        do {
+            try storage.save(candidate)
+            preferences = candidate
+            return true
+        } catch {
+            message = "Daily insights were not requested because the daily limit could not be saved."
+            return false
         }
     }
 
@@ -199,6 +233,9 @@ struct PreparedExport: Identifiable {
         aiBlocked = true
         var candidate = preferences
         candidate.aiConsent = nil
+        candidate.dailyInsightsEnabled = nil
+        candidate.dailyInsightAttemptDay = nil
+        dailyInsightsBlocked = true
         candidate.dailyReminder = false
         candidate.windowReminder = false
         candidate.reminderHour = 20

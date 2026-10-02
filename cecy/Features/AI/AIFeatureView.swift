@@ -70,6 +70,16 @@ struct AIFeatureView: View {
                 }
             }
             if isQuestion {
+                if let today = session.today {
+                    Section {
+                        ForEach(PreparedRecordAnswers.build(snapshot: session.snapshot, today: today)) { item in
+                            DisclosureGroup(item.question) {
+                                Text(item.answer).font(.subheadline)
+                            }.accessibilityIdentifier("preparedAnswer_\(item.id)")
+                        }
+                    } header: { Text("Ready answers") }
+                    footer: { Text("Calculated on this device from recorded facts. No request needed.") }
+                }
                 Section("Choose the records to discuss") {
                     ScrollView(.horizontal) {
                         HStack(spacing: 8) {
@@ -130,12 +140,16 @@ struct AIFeatureView: View {
                     .accessibilityIdentifier("generateAI")
                     AIRequestStatus(coordinator: session.ai)
                 } footer: {
-                    Text("Only your question and selected details are sent when you generate. Results are not saved.")
+                    Text("Your question and selected details are sent when you generate. Daily summaries require separate automatic-preparation consent. Ready answers stay on-device. Generated results are not saved.")
                 }
                 if !isWellness, let output = session.ai.output, session.ai.request == request {
                     Section { AIOutputView(output: output) }
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets(top: 12, leading: 0, bottom: 12, trailing: 0))
+                } else if case .records = feature, request == session.dailyInsightRequest,
+                          let output = session.dailyInsightOutput {
+                    Section { AIOutputView(output: output) }
+                        .listRowBackground(Color.clear)
                 }
             case .failure(let error):
                 Section {

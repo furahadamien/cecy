@@ -21,7 +21,7 @@ struct AIConsentView: View {
                     .accessibilityIdentifier("enableAI")
                     Button("Not now") { dismiss() }.accessibilityIdentifier("declineAI")
                 } footer: {
-                    Text("Enabling sends nothing. You choose when to submit. Turn off in Settings → Privacy and export.")
+                    Text("Enabling sends nothing. Requests are manual unless you separately enable daily preparation. Turn off in Settings → Privacy and export.")
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -95,9 +95,9 @@ struct AIPrivacySection: View {
                 Button("Turn off insights", role: .destructive) { error = session.setAIEnabled(false) }
                     .accessibilityIdentifier("disableAI")
             }
-            AIConsentControl(session: session)
+            DailyInsightsPreference(session: session)
             if let error { InlineError(message: error) }
-            Text("Only requests you submit use external processing. Turning off clears pending results, not confirmed records. Generated text is not saved or exported.")
+            Text("Requests are manual unless daily preparation is enabled separately. Turning off clears pending results, not confirmed records. Generated text is not saved or exported.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
     }

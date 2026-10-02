@@ -68,6 +68,11 @@ struct TrackerSettingsView: View {
                     .accessibilityIdentifier("appearanceStatus")
             }
             Section("About") {
+                NavigationLink { ContactSupportView() } label: {
+                    SettingsRow(title: "Contact support", systemImage: "envelope",
+                                detail: SupportContact.email)
+                }
+                .accessibilityIdentifier("contactSupport")
                 NavigationLink { PredictionSettingsInfoView() } label: {
                     SettingsRow(title: "How predictions work", systemImage: "calendar",
                                 detail: "Estimates, not guarantees")

@@ -45,7 +45,7 @@ final class DeviceFeedbackRoundFiveUITests: XCTestCase {
         let legend = app.otherElements["todayCalendarLegend"]
         XCTAssertTrue(legend.waitForExistence(timeout: 5))
         let items = legend.staticTexts.allElementsBoundByIndex
-        XCTAssertEqual(items.count, 4)
+        XCTAssertEqual(items.count, 5)
         if let first = items.first {
             for item in items {
                 XCTAssertEqual(item.frame.midY, first.frame.midY, accuracy: 2)

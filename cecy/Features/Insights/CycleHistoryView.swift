@@ -7,6 +7,7 @@ struct CycleHistoryView: View {
 
     var body: some View {
         TrackerPage(title: "Insights", subtitle: "Your cycle history, from recorded starts.") {
+            DailyInsightsCard(session: session)
             TrackerCard {
                 NavigationLink {
                     AIFeatureView(session: session, feature: .records)

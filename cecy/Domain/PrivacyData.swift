@@ -15,9 +15,14 @@ nonisolated struct PrivacyPreferences: Codable, Equatable, Sendable {
     var appearance: AppAppearance?
     // Missing in legacy files means no AI consent, never an implicit opt-in.
     var aiConsent: AIConsentRecord?
+    // Nil in existing installations means automatic external requests are off.
+    var dailyInsightsEnabled: Bool?
+    // Attempt is reserved before sending, preventing repeat requests after relaunch/failure.
+    var dailyInsightAttemptDay: Int?
 
     func validate() throws {
         guard version == 1, (0...23).contains(reminderHour), (0...59).contains(reminderMinute) else { throw TrackingError.invalidData }
+        if let dailyInsightAttemptDay { _ = try LocalDay(key: dailyInsightAttemptDay) }
     }
 }
 

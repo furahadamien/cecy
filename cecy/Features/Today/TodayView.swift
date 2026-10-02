@@ -26,8 +26,12 @@ struct TodayView: View {
 
     var body: some View {
         TrackerPage(title: "Today") {
-            ActivityCalendarStrip(today: today, activityIndex: session.activityIndex, prediction: overview.estimate, selection: $selection)
+            ActivityCalendarStrip(today: today, activityIndex: session.activityIndex,
+                                  forecast: session.cycleForecast, selection: $selection)
             TodayCalendarLegend()
+            ForEach(session.cycleForecast.cycles.filter { selection != today && $0.contains(selection) }) { cycle in
+                TrackerCard { ProjectedCycleDetails(cycle: cycle) }
+            }
             if selection != today {
                 TrackerCard {
                     Text(DayText.full(selection)).font(.headline).accessibilityIdentifier("selectedTodayDate")
@@ -97,6 +101,7 @@ struct TodayView: View {
             }
             Text("A count from recorded dates—not an estimate of cycle phase. Missing records can affect the result.")
                 .font(.footnote).foregroundStyle(.secondary)
+            TrackerCard { UpcomingCycleForecastView(forecast: session.cycleForecast, today: today) }
             TrackerCard {
                 Text("For today").font(.headline).accessibilityAddTraits(.isHeader)
                 if let wellness {
@@ -236,6 +241,7 @@ struct PredictionExplanation: View {
                 NavigationLink("Prediction history check") { PredictionHistoryView(replay: replay) }
                     .frame(minHeight: 44).accessibilityIdentifier("predictionReplayLink")
                 }
+                Text(OvulationNotice.explanation).font(.footnote)
                 Text("This is an uncalibrated estimate, not medical advice. Missing records affect it. Do not use it for contraception or diagnosis.")
                     .font(.footnote).foregroundStyle(.secondary)
             }

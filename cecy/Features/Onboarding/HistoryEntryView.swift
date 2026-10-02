@@ -45,11 +45,14 @@ struct HistoryEntryView: View {
             }
             if let error { InlineError(message: error).accessibilityFocused($errorFocused) }
             Button {
-                error = session.save(drafts, completingOnboarding: isOnboarding)
-                if error == nil {
-                    drafts = []
-                    if !isOnboarding { dismiss() }
-                } else { errorFocused = true }
+                let values = drafts
+                Task {
+                    error = await session.withPredictionUpdate { session.save(values, completingOnboarding: isOnboarding) }
+                    if error == nil {
+                        drafts = []
+                        if !isOnboarding { dismiss() }
+                    } else { errorFocused = true }
+                }
             } label: {
                 Text(drafts.isEmpty && isOnboarding ? "Continue without history" : "Save and continue")
                     .frame(maxWidth: .infinity, minHeight: 44)
@@ -76,7 +79,7 @@ struct HistoryEntryView: View {
                 return nil
             }
         }
-        .interactiveDismissDisabled(!drafts.isEmpty || session.isSaving)
+        .interactiveDismissDisabled(!drafts.isEmpty || session.isSaving || session.isUpdatingPredictions)
         .confirmationDialog("Discard your unsaved dates?", isPresented: $confirmDiscard, titleVisibility: .visible) {
             Button("Discard dates", role: .destructive) { dismiss() }
             Button("Keep editing", role: .cancel) { }

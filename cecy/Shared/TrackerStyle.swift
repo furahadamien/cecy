@@ -55,6 +55,7 @@ private struct TrackerFormStyle: ViewModifier {
             .scrollContentBackground(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .background(TrackerPalette(scheme: colorScheme).background.ignoresSafeArea())
+            .predictionUpdateProgress()
     }
 }
 
@@ -142,6 +143,7 @@ struct TrackerPage<Content: View>: View {
         }
         .fontDesign(.rounded)
         .background(TrackerPalette(scheme: colorScheme).background.ignoresSafeArea())
+        .predictionUpdateProgress()
     }
 }
 
