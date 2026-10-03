@@ -15,19 +15,13 @@ final class PhaseThreeUITests: XCTestCase {
     }
 
     @MainActor private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
-        if element.isHittable { return }
-        for _ in 0..<4 { app.swipeDown() }
-        for _ in 0..<12 {
-            if element.isHittable { return }
-            app.swipeUp()
-        }
-        XCTAssertTrue(element.isHittable, app.debugDescription)
+        UIViewport.reveal(element, in: app)
     }
 
     @MainActor private func choose(_ identifier: String, _ title: String, in app: XCUIApplication) {
         let picker = app.buttons[identifier]
-        XCTAssertTrue(picker.waitForExistence(timeout: 5), app.debugDescription)
         reveal(picker, in: app)
+        XCTAssertTrue(picker.exists, app.debugDescription)
         picker.tap()
         app.buttons[title].firstMatch.tap()
     }
@@ -39,8 +33,9 @@ final class PhaseThreeUITests: XCTestCase {
     }
 
     @MainActor private func note(in app: XCUIApplication) -> XCUIElement {
-        let field = app.textFields["symptomNotes"]
-        return field.exists ? field : app.textViews["symptomNotes"]
+        // A lazy field may not exist yet; do not permanently choose the wrong
+        // UIKit element type before scrolling materializes the input.
+        app.descendants(matching: .any).matching(identifier: "symptomNotes").firstMatch
     }
 
     @MainActor private func observations(in app: XCUIApplication) {

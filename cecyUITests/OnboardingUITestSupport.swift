@@ -92,7 +92,7 @@ import XCTest
         XCTAssertTrue(app.buttons["onboardingContinue"].waitForExistence(timeout: 10))
         next(in: app)
         let name = app.textFields["profileName"]
-        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        XCTAssertTrue(name.waitForExistence(timeout: 5), app.debugDescription)
         name.tap(); name.typeText("Synthetic Alex")
         birthday(in: app)
         next(in: app)
@@ -128,7 +128,8 @@ import XCTest
         XCTAssertTrue(app.buttons["continueWithApple"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["onboardingHeading"].label, "Let's save your profile")
         let storageNote = app.staticTexts["onboardingLocalProfileNote"]
-        XCTAssertEqual(storageNote.label, "Your data stays on your device, we never store it in the cloud")
+        XCTAssertEqual(storageNote.label, "Your records are stored on this device. Optional AI insights send selected information for online processing only with your consent.")
+        XCTAssertFalse(app.staticTexts["Your data stays on your device, we never store it in the cloud"].exists)
         XCTAssertGreaterThan(storageNote.frame.minY, app.staticTexts["onboardingHeading"].frame.maxY)
         XCTAssertLessThan(storageNote.frame.maxY, app.buttons["continueWithApple"].frame.minY)
         let back = app.navigationBars.buttons["onboardingBack"]
@@ -151,8 +152,10 @@ import XCTest
         reachApple(in: app)
         let apple = app.buttons["continueWithApple"]
         reveal(apple, in: app); apple.tap()
-        XCTAssertTrue(app.staticTexts["creatingAccountMessage"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 10))
+        let progress = app.staticTexts["creatingAccountMessage"]
+        // Check immediately: the first polling interval can miss the 1.2-second presentation.
+        XCTAssertTrue(progress.exists || progress.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 10), app.debugDescription)
     }
 }
 
@@ -224,7 +227,7 @@ final class OnboardingUITests: XCTestCase {
         app.pickerWheels.firstMatch.adjust(toPickerWheelValue: "180 cm")
         XCTAssertEqual(app.staticTexts["profileHeightValue"].label, "180 cm")
         app.buttons["profileHeightDone"].tap()
-        XCTAssertEqual(app.pickerWheels.count, 0)
+        XCTAssertTrue(app.pickerWheels.firstMatch.waitForNonExistence(timeout: 5))
         units.buttons["Imperial"].tap()
         XCTAssertTrue(app.staticTexts["profileHeightValue"].label.contains("ft"))
         units.buttons["Metric"].tap()
@@ -235,14 +238,18 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["profileHeightValue"].label, "5 ft 7 in")
         app.buttons["profileHeightClear"].tap()
         XCTAssertEqual(app.staticTexts["profileHeightValue"].label, "Not added")
-        XCTAssertEqual(app.pickerWheels.count, 0)
+        XCTAssertTrue(app.pickerWheels.firstMatch.waitForNonExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["profileWeightValue"].label, "Not added")
         app.buttons["profileWeightAdd"].tap()
+        OnboardingUITestSupport.reveal(app.buttons["profileWeightDone"], in: app)
         app.pickerWheels.firstMatch.adjust(toPickerWheelValue: "150 lb")
         XCTAssertEqual(app.staticTexts["profileWeightValue"].label, "150 lb")
+        OnboardingUITestSupport.reveal(app.buttons["profileWeightDone"], in: app)
         app.buttons["profileWeightDone"].tap()
-        XCTAssertEqual(app.pickerWheels.count, 0)
+        XCTAssertTrue(app.pickerWheels.firstMatch.waitForNonExistence(timeout: 5))
+        OnboardingUITestSupport.reveal(units, in: app)
         units.buttons["Metric"].tap()
+        OnboardingUITestSupport.reveal(app.buttons["profileWeightEdit"], in: app)
         app.buttons["profileWeightEdit"].tap()
         app.pickerWheels.firstMatch.adjust(toPickerWheelValue: "70 kg")
         XCTAssertEqual(app.staticTexts["profileWeightValue"].label, "70 kg")
@@ -292,7 +299,9 @@ final class OnboardingUITests: XCTestCase {
         app.alerts.buttons["Cancel"].tap()
         XCTAssertFalse(app.staticTexts["signedOutScreen"].exists)
         logout.tap()
-        app.alerts.buttons["confirmLogout"].tap()
+        let confirm = app.alerts.buttons["confirmLogout"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
         XCTAssertTrue(app.staticTexts["signedOutScreen"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["logPeriod"].exists)
         app.terminate(); app.launch()

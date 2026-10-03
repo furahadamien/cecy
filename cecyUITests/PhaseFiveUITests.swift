@@ -18,11 +18,7 @@ final class PhaseFiveUITests: XCTestCase {
         return app
     }
     @MainActor private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
-        if element.isHittable { return }
-        // Navigation can restore a previous scroll offset; search from the top, not only downward.
-        for _ in 0..<4 { app.swipeDown() }
-        for _ in 0..<12 { if element.isHittable { return }; app.swipeUp() }
-        XCTAssertTrue(element.isHittable, app.debugDescription)
+        UIViewport.reveal(element, in: app)
     }
     @MainActor private func privacy(in app: XCUIApplication) {
         app.tabBars.buttons["Settings"].tap()
@@ -70,11 +66,16 @@ final class PhaseFiveUITests: XCTestCase {
         app.navigationBars.buttons.element(boundBy: 0).tap()
 
         let about = app.buttons["aboutCecy"]
-        reveal(about, in: app); about.tap()
-        XCTAssertTrue(app.staticTexts["Internal prototype"].waitForExistence(timeout: 5))
+        reveal(about, in: app)
+        XCTAssertTrue(about.label.contains("Version"))
+        about.tap()
+        XCTAssertTrue(app.navigationBars["About Cecy"].waitForExistence(timeout: 5))
+        let disclosure = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Records and calculations stay on-device.")).firstMatch
+        reveal(disclosure, in: app)
+        XCTAssertTrue(disclosure.label.contains("only with consent and a request"))
         app.navigationBars.buttons.element(boundBy: 0).tap()
-        reveal(privacyLink, in: app); privacyLink.tap()
-        XCTAssertEqual(app.staticTexts["lockState"].label, "Off")
+        UIViewport.reveal(privacyLink, in: app, searchEarlierFirst: true); privacyLink.tap()
+        XCTAssertTrue(["Off", "Status, Off"].contains(app.staticTexts["lockState"].label))
         let storage = app.buttons["storageSettings"]
         reveal(storage, in: app); storage.tap()
         XCTAssertTrue(app.navigationBars["Storage and backups"].waitForExistence(timeout: 5))
@@ -89,7 +90,7 @@ final class PhaseFiveUITests: XCTestCase {
             XCTAssertGreaterThanOrEqual(row.frame.height, 44)
         }
         let privacyLink = app.buttons["privacySettings"]
-        reveal(privacyLink, in: app); privacyLink.tap()
+        UIViewport.reveal(privacyLink, in: app, searchEarlierFirst: true); privacyLink.tap()
         let notes = app.switches["exportNotes"]
         reveal(notes, in: app)
         XCTAssertEqual(notes.value as? String, "0")
@@ -155,12 +156,15 @@ final class PhaseFiveUITests: XCTestCase {
         reveal(reminders, in: app); reminders.tap()
         let toggle = app.switches["dailyReminder"]
         XCTAssertEqual(toggle.value as? String, "0")
-        toggle.switches.firstMatch.exists ? toggle.switches.firstMatch.tap() : toggle.tap()
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        XCTAssertEqual(toggle.value as? String, "1")
         XCTAssertTrue(app.staticTexts["reminderDraftStatus"].exists)
         app.buttons["saveReminders"].tap()
         let savedDaily = app.staticTexts["savedDailyReminder"]
-        let saved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "On"), object: savedDaily)
-        XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 5), .completed)
+        reveal(savedDaily, in: app)
+        let saved = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label IN %@", ["On", "Daily check-in, On"]), object: savedDaily)
+        XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 5), .completed, app.debugDescription)
         XCTAssertFalse(app.staticTexts["reminderDraftStatus"].exists)
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["logPeriod"].waitForExistence(timeout: 10))
@@ -180,6 +184,7 @@ final class PhaseFiveUITests: XCTestCase {
         app.tabBars.buttons["Settings"].tap()
         reveal(reminders, in: app); reminders.tap()
         XCTAssertEqual(app.switches["dailyReminder"].value as? String, "0")
-        XCTAssertEqual(app.staticTexts["savedDailyReminder"].label, "Off")
+        reveal(app.staticTexts["savedDailyReminder"], in: app)
+        XCTAssertTrue(["Off", "Daily check-in, Off"].contains(app.staticTexts["savedDailyReminder"].label))
     }
 }

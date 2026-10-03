@@ -56,7 +56,11 @@ struct TrackerCalendarView: View {
                                 ForEach(days) { day in
                                     VStack(alignment: .leading, spacing: 12) {
                                         dayButton(day, asList: true)
-                                        if day == selection { selectedDetails.padding(8) }
+                                        if day == selection {
+                                            // Keep selected-date actions ahead of the remaining month at large text sizes.
+                                            loggingActions
+                                            selectedDetails.padding(8)
+                                        }
                                     }
                                     .id(day.key)
                                 }
@@ -74,7 +78,7 @@ struct TrackerCalendarView: View {
                                     ForEach(days) { day in dayButton(day, asList: false) }
                                 }
                             }
-                            loggingActions
+                            if !listLayout { loggingActions }
                             VStack(alignment: .leading, spacing: 8) {
                                 Label("Recorded start or confirmed bleeding day", systemImage: "drop.fill")
                                     .foregroundStyle(palette.recorded)
@@ -281,6 +285,7 @@ struct TrackerCalendarView: View {
             }
         }
         .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("selectedCalendarDetails")
     }
 }
 

@@ -80,7 +80,7 @@ struct TrackerSettingsView: View {
                 .accessibilityIdentifier("predictionSettings")
                 NavigationLink { AboutCecyView() } label: {
                     SettingsRow(title: "About Cecy", systemImage: "info.circle",
-                                detail: "Version \(cecyVersion) · Prototype")
+                                detail: "Version \(cecyVersion)")
                 }
                 .accessibilityIdentifier("aboutCecy")
             }
@@ -168,8 +168,10 @@ private struct AboutCecyView: View {
         SettingsForm(title: "About Cecy") {
             Section("Cecy") {
                 LabeledContent("Version", value: cecyVersion)
+                #if DEBUG
                 LabeledContent("Release", value: "Internal prototype")
                 Text("Use synthetic records for now. Device privacy and accessibility verification are still pending before public release.")
+                #endif
             }
             Section("On your device") {
                 Text("Records and calculations stay on-device. Apple Health import is optional and read-only. Optional insights send selected information to Azure and OpenAI only with consent and a request. No health-data cloud sync or analytics.")

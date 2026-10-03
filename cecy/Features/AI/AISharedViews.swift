@@ -10,7 +10,7 @@ struct AIConsentView: View {
                 Section("Your choice") {
                     Text("Cecy uses AI through its Azure service and OpenAI. When you make a request, selected text, cycle facts or wellness preferences—including allergies—are sent for processing, not your full history.")
                     Text("Records stay stored on this device. External processing follows provider data policies. Avoid identifying details in your text; a sent request cannot be recalled.")
-                    Text("Suggestions can be wrong and are not medical advice. Manual tracking always works without this optional prototype service.")
+                    Text("Suggestions can be wrong and are not medical advice. Manual tracking always works without this optional online service.")
                 }
                 Section {
                     if let error { InlineError(message: error) }
@@ -119,7 +119,7 @@ struct AIOutputView: View {
                     Text(verbatim: value.title).font(.title3.weight(.semibold))
                     Text(verbatim: value.explanation)
                 }
-                TrackerCard { Text("In your records").font(.headline); Text(verbatim: value.supportingObservation) }
+                TrackerCard { Text("AI interpretation · Check against your records").font(.headline); Text(verbatim: value.supportingObservation) }
                 AISafetyNotice(message: value.safetyMessage)
             case .wellness(let value):
                 list("Movement", value.movementSuggestions, symbol: "figure.walk")

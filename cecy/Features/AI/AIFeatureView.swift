@@ -48,6 +48,13 @@ struct AIFeatureView: View {
 
     var body: some View {
         SettingsForm(title: feature.title) {
+            if case .insight(let insight) = feature, session.insights.contains(insight) {
+                Section("Calculated on this device") {
+                    InsightCard(insight: insight)
+                        .accessibilityElement(children: .contain)
+                        .accessibilityIdentifier("aiLocalInsight")
+                }
+            }
             if isWellness {
                 Section { WellnessSafetyNotice(symptoms: session.snapshot.symptoms, today: session.today) }
             }

@@ -26,11 +26,7 @@ final class cecyUITests: XCTestCase {
 
     @MainActor
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
-        for _ in 0..<8 {
-            if element.isHittable { return }
-            app.swipeUp()
-        }
-        XCTAssertTrue(element.isHittable)
+        UIViewport.reveal(element, in: app)
     }
 
     @MainActor
@@ -45,7 +41,17 @@ final class cecyUITests: XCTestCase {
         let log = app.buttons["logPeriod"]
         reveal(log, in: app)
         log.tap()
-        app.buttons["savePeriod"].tap()
+        let form = app.navigationBars["Record a period"]
+        XCTAssertTrue(form.waitForExistence(timeout: 5))
+        let save = app.buttons["savePeriod"]
+        // Setup recorded a start without an end: explicitly distinguish a new period from more bleeding.
+        XCTAssertFalse(save.isEnabled)
+        let newPeriod = app.buttons["newPeriodEntry"]
+        XCTAssertTrue(newPeriod.waitForExistence(timeout: 5))
+        newPeriod.tap()
+        XCTAssertTrue(save.isEnabled)
+        save.tap()
+        XCTAssertTrue(form.waitForNonExistence(timeout: 8), app.debugDescription)
         XCTAssertTrue(app.staticTexts["cycleDay"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["cycleDay"].label, "Day 1")
         app.terminate()
@@ -72,7 +78,7 @@ final class cecyUITests: XCTestCase {
         let app = launch(history: true)
         XCTAssertTrue(app.staticTexts["cycleDay"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.staticTexts["cycleDay"].label, "Day 28")
-        XCTAssertTrue(app.staticTexts["predictionWindow"].label.contains("Sep 28"))
+        XCTAssertTrue(app.staticTexts["predictionWindow"].label.contains("Sep 29"))
         app.tabBars.buttons["Calendar"].tap()
         let second = app.buttons["calendarDay_20260902"]
         XCTAssertTrue(second.label.contains("Recorded period start"))
@@ -88,12 +94,20 @@ final class cecyUITests: XCTestCase {
         let log = app.buttons["logPeriod"]
         reveal(log, in: app)
         log.tap()
+        XCTAssertTrue(app.buttons["newPeriodEntry"].waitForExistence(timeout: 5))
+        app.buttons["newPeriodEntry"].tap()
+        XCTAssertTrue(app.buttons["savePeriod"].isEnabled)
         app.buttons["savePeriod"].tap()
+        XCTAssertTrue(app.navigationBars["Record a period"].waitForNonExistence(timeout: 8))
         reveal(log, in: app)
         log.tap()
+        XCTAssertTrue(app.navigationBars["Edit period"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["savePeriod"].isEnabled)
-        XCTAssertTrue(app.staticTexts["validationError"].exists)
         app.buttons["Cancel"].tap()
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Insights"].waitForExistence(timeout: 10))
+        app.tabBars.buttons["Insights"].tap()
+        XCTAssertEqual(app.staticTexts["intervalCount"].label, "4 completed intervals")
     }
 
     @MainActor
@@ -134,8 +148,9 @@ final class cecyUITests: XCTestCase {
         reveal(recorded, in: app)
         XCTAssertGreaterThanOrEqual(recorded.frame.height, 44)
         recorded.tap()
-        let endDetail = app.staticTexts["End not recorded. No later bleeding days are assumed."]
+        let endDetail = app.otherElements["selectedCalendarDetails"].staticTexts["End not recorded"].firstMatch
         reveal(endDetail, in: app)
         XCTAssertTrue(endDetail.exists)
+        XCTAssertTrue(recorded.label.contains("Recorded period start"))
     }
 }

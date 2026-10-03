@@ -14,19 +14,7 @@ final class DeviceFeedbackRoundThreeUITests: XCTestCase {
         return app
     }
     @MainActor private func reveal(_ element: XCUIElement, app: XCUIApplication) {
-        for _ in 0..<12 {
-            let top = app.navigationBars.firstMatch.exists ? app.navigationBars.firstMatch.frame.maxY : app.frame.minY + 64
-            let bottom = app.tabBars.firstMatch.isHittable ? app.tabBars.firstMatch.frame.minY : app.frame.maxY - 25
-            if element.exists && element.isHittable && element.frame.minY >= top && element.frame.maxY <= bottom { return }
-            let container = app.collectionViews.allElementsBoundByIndex.last(where: { $0.isHittable })
-                ?? app.scrollViews.allElementsBoundByIndex.first(where: { $0.isHittable && $0.identifier != "todayDateStrip" }) ?? app
-            if element.exists && element.frame.maxY > top && element.frame.minY < bottom {
-                let delta = element.frame.minY < top ? top + 16 - element.frame.minY : bottom - 16 - element.frame.maxY
-                let start = app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: app.frame.midX, dy: delta > 0 ? top + 24 : bottom - 24))
-                start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: delta)), withVelocity: .slow, thenHoldForDuration: 0.1)
-            } else if element.exists && element.frame.minY < top { container.swipeDown() } else { container.swipeUp() }
-        }
-        XCTFail("Could not reveal \(element)\n\(app.debugDescription)")
+        UIViewport.reveal(element, in: app)
     }
     @MainActor private func tap(_ identifier: String, app: XCUIApplication) {
         let button = app.buttons[identifier]
@@ -77,8 +65,11 @@ final class DeviceFeedbackRoundThreeUITests: XCTestCase {
     @MainActor func testFlowChipsSaveAndHealthGoalPersists() {
         let app = launch()
         tap("logPeriod", app: app)
+        XCTAssertFalse(app.buttons["savePeriod"].isEnabled)
+        tap("newPeriodEntry", app: app)
         tap("periodFlow_heavy", app: app)
         XCTAssertEqual(app.buttons["periodFlow_heavy"].value as? String, "Selected")
+        XCTAssertTrue(app.buttons["savePeriod"].isEnabled)
         tap("savePeriod", app: app)
         XCTAssertTrue(app.navigationBars["Record a period"].waitForNonExistence(timeout: 5))
         let flow = app.staticTexts["Heavy flow"]
@@ -86,6 +77,7 @@ final class DeviceFeedbackRoundThreeUITests: XCTestCase {
         XCTAssertTrue(flow.exists)
         app.tabBars.buttons["Settings"].tap()
         tap("profileSettings", app: app)
+        XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 5))
         let goals = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Tracking goals (")).firstMatch
         reveal(goals, app: app); goals.tap()
         tap("goal_healthAndWellness", app: app)

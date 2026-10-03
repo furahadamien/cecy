@@ -137,7 +137,7 @@ final class TrackerSession {
     func cancelSetup() { setupRevision += 1 }
 
     func logOut() -> String? {
-        guard privacy.canAccess, !isSaving, !privacy.isAuthenticating, !privacy.isChangingReminders,
+        guard privacy.canAccess, !isSaving, !isUpdatingPredictions, !privacy.isAuthenticating, !privacy.isChangingReminders,
               !account.isSigningIn else { return "Finish the current action before logging out." }
         do { try account.signOut() }
         catch { return "Logout couldn’t be saved securely. You are still signed in. Try again." }
@@ -339,14 +339,24 @@ final class TrackerSession {
     }
 
     func deleteAllAndWait() async -> String? {
-        guard privacy.canAccess, !isSaving else { return "Unlock Cecy and try again." }
+        guard privacy.canAccess, !isSaving, !isUpdatingPredictions else {
+            return "Finish the current update or unlock Cecy before deleting records."
+        }
         ai.invalidate()
         dailyAI.invalidate()
         healthImport.stop()
         if account.requiresSignIn { return await resetWhileSignedOut() }
+        // Keep the mutation gate closed across the notification-service suspension.
+        isSaving = true
+        defer { isSaving = false }
         do {
             try privacy.prepareForReset()
             await privacy.reminders.flush()
+            guard !Task.isCancelled else {
+                return "Deletion was cancelled. Records remain unchanged; reminders may already be disabled."
+            }
+            // deleteAll's synchronous transaction owns the gate from here; no suspension intervenes.
+            isSaving = false
             return deleteAll()
         } catch {
             return "Deletion did not finish. Records remain unchanged; reminders may already be disabled. Try again."
@@ -373,6 +383,9 @@ final class TrackerSession {
     }
 
     func deleteAll() -> String? {
+        guard !isSaving, !isUpdatingPredictions else {
+            return "Finish the current update before deleting records."
+        }
         ai.invalidate()
         dailyAI.invalidate()
         healthImport.stop()

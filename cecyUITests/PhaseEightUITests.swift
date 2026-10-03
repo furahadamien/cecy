@@ -107,16 +107,50 @@ final class PhaseEightUITests: XCTestCase {
         back(app)
         tap("manageObservations", app: app)
         tap("explainInsight_v1.timing.headache", app: app)
+        let localInsight = app.otherElements["aiLocalInsight"]
+        XCTAssertTrue(localInsight.waitForExistence(timeout: 5))
+        let originalFacts = localInsight.staticTexts.allElementsBoundByIndex.map(\.label)
+        XCTAssertGreaterThanOrEqual(originalFacts.count, 3)
         tap("generateAI", app: app)
         output("Synthetic insight explanation", app: app)
+        output("AI interpretation · Check against your records", app: app)
+        reveal(localInsight.staticTexts.firstMatch, app: app)
+        XCTAssertEqual(localInsight.staticTexts.allElementsBoundByIndex.map(\.label), originalFacts)
+    }
+
+    @MainActor func testLocalInsightSurvivesDeclinedConsentAndFailedExplanation() {
+        let app = launch(mode: "failure")
+        app.tabBars.buttons["Insights"].tap()
+        tap("manageObservations", app: app)
+        tap("explainInsight_v1.timing.headache", app: app)
+        let localInsight = app.otherElements["aiLocalInsight"]
+        XCTAssertTrue(localInsight.waitForExistence(timeout: 5))
+        let originalFacts = localInsight.staticTexts.allElementsBoundByIndex.map(\.label)
+        XCTAssertGreaterThanOrEqual(originalFacts.count, 3)
+        tap("reviewAIConsent", app: app)
+        tap("declineAI", app: app)
+        XCTAssertFalse(app.buttons["generateAI"].isEnabled)
+        reveal(localInsight.staticTexts.firstMatch, app: app)
+        XCTAssertEqual(localInsight.staticTexts.allElementsBoundByIndex.map(\.label), originalFacts)
+        consent(app)
+        tap("generateAI", app: app)
+        XCTAssertTrue(app.staticTexts["aiError"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.otherElements["aiOutput"].exists)
+        reveal(localInsight.staticTexts.firstMatch, app: app)
+        XCTAssertEqual(localInsight.staticTexts.allElementsBoundByIndex.map(\.label), originalFacts)
     }
     @MainActor func testNetworkFailurePreservesDescriptionAndManualTracking() {
         let app = launch(mode: "failure")
         describe(app)
         consent(app)
+        XCTAssertTrue(app.buttons["normalizeSymptoms"].isEnabled)
         tap("normalizeSymptoms", app: app)
-        XCTAssertTrue(app.staticTexts["aiError"].waitForExistence(timeout: 10))
-        let field = app.textViews["aiSymptomText"].exists ? app.textViews["aiSymptomText"] : app.textFields["aiSymptomText"]
+        let failure = app.staticTexts["aiError"]
+        UIViewport.reveal(failure, in: app)
+        XCTAssertTrue(failure.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.progressIndicators["aiLoading"].exists)
+        let field = app.descendants(matching: .any).matching(identifier: "aiSymptomText").firstMatch
+        UIViewport.reveal(field, in: app, searchEarlierFirst: true)
         XCTAssertTrue((field.value as? String)?.contains("Synthetic fatigue") == true)
         tap("aiManualFallback", app: app)
         let fatigue = app.buttons.matching(NSPredicate(format: "label == %@", "Fatigue")).firstMatch
