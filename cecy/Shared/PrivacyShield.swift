@@ -44,14 +44,16 @@ struct PrivacyShield: UIViewRepresentable {
             overlay.windowLevel = .alert + 1
             let controller = UIViewController()
             controller.view.backgroundColor = .systemBackground
-            let label = UILabel()
-            label.text = "Cecy · Private"
-            label.font = .preferredFont(forTextStyle: .title2)
-            label.adjustsFontForContentSizeCategory = true
-            label.translatesAutoresizingMaskIntoConstraints = false
-            controller.view.addSubview(label)
-            NSLayoutConstraint.activate([label.centerXAnchor.constraint(equalTo: controller.view.centerXAnchor),
-                                         label.centerYAnchor.constraint(equalTo: controller.view.centerYAnchor)])
+            let icon = UIImageView(image: UIImage(named: "LaunchIcon"))
+            icon.contentMode = .scaleAspectFit
+            icon.isAccessibilityElement = true
+            icon.accessibilityLabel = "Cecy"
+            icon.translatesAutoresizingMaskIntoConstraints = false
+            controller.view.addSubview(icon)
+            NSLayoutConstraint.activate([icon.centerXAnchor.constraint(equalTo: controller.view.centerXAnchor),
+                                         icon.centerYAnchor.constraint(equalTo: controller.view.centerYAnchor),
+                                         icon.widthAnchor.constraint(equalToConstant: 120),
+                                         icon.heightAnchor.constraint(equalToConstant: 120)])
             overlay.rootViewController = controller
             cover = overlay
             overlay.isHidden = active && UIApplication.shared.applicationState == .active
@@ -67,6 +69,12 @@ struct LockedTrackerView: View {
     let privacy: TrackerPrivacy
     var body: some View {
         VStack(spacing: 16) {
+            Image("LaunchIcon")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 120, height: 120)
+                .accessibilityLabel("Cecy")
+                .accessibilityIdentifier("lockedCecyIcon")
             Button("Unlock") { Task { await privacy.unlock() } }
                 .buttonStyle(TrackerPrimaryButtonStyle()).frame(minHeight: 44)
                 .disabled(privacy.isAuthenticating).accessibilityIdentifier("unlockCecy")

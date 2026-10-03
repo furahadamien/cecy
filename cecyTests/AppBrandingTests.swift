@@ -43,7 +43,7 @@ struct AppBrandingTests {
         CGSize(width: 768, height: 1024),
         CGSize(width: 1024, height: 768)
     ])
-    func launchArtworkPreservesTextAndFits(size: CGSize) throws {
+    func launchArtworkPreservesTaglineAndFits(size: CGSize) throws {
         let controller = try #require(UIStoryboard(name: "LaunchScreen", bundle: .main).instantiateInitialViewController())
         let view = try #require(controller.view)
         view.frame = CGRect(origin: .zero, size: size)
@@ -52,16 +52,15 @@ struct AppBrandingTests {
 
         let imageView = try #require(view.subviews.compactMap { $0 as? UIImageView }.first)
         let labels = view.subviews.compactMap { $0 as? UILabel }
-        let brand = try #require(labels.first { $0.text == "cecy" })
+        #expect(!labels.contains { $0.text?.lowercased() == "cecy" })
         let tagline = try #require(labels.first { $0.text == "Your rhythm. Your records." })
         #expect(imageView.image != nil)
         #expect(imageView.contentMode == .scaleAspectFit)
         #expect(!imageView.isAccessibilityElement)
         #expect(imageView.frame.size == CGSize(width: 120, height: 120))
         #expect(abs(imageView.center.x - view.bounds.midX) < 1)
-        #expect(imageView.frame.maxY < brand.frame.minY)
-        #expect(brand.frame.maxY < tagline.frame.minY)
-        for element in [imageView, brand, tagline] {
+        #expect(abs(tagline.frame.minY - imageView.frame.maxY - 24) < 1)
+        for element in [imageView, tagline] {
             #expect(!element.hasAmbiguousLayout)
             #expect(view.bounds.contains(element.frame))
         }

@@ -112,11 +112,17 @@ final class PhaseFiveUITests: XCTestCase {
         app.launch()
         let unlock = app.buttons["unlockCecy"]
         XCTAssertTrue(unlock.waitForExistence(timeout: 10))
+        let icon = app.images["lockedCecyIcon"]
+        XCTAssertTrue(icon.exists)
+        XCTAssertEqual(icon.label, "Cecy")
+        XCTAssertGreaterThanOrEqual(icon.frame.width, 120)
+        XCTAssertFalse(app.staticTexts["Cecy · Private"].exists)
         XCTAssertEqual(unlock.label, "Unlock")
         XCTAssertFalse(app.staticTexts["Cecy is locked"].exists)
         XCTAssertFalse(app.staticTexts["Device-owner authentication"].exists)
         XCTAssertTrue(unlock.isEnabled)
         unlock.tap()
+        XCTAssertTrue(icon.exists)
         XCTAssertFalse(app.buttons["logPeriod"].exists)
         app.terminate(); app.launchEnvironment["CECY_UI_AUTH"] = "success"; app.launch()
         // Launch and foreground return authenticate without a button tap.

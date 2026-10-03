@@ -16,19 +16,14 @@
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <imageView userInteractionEnabled="NO" contentMode="scaleAspectFit" image="LaunchIcon" translatesAutoresizingMaskIntoConstraints="NO" id="launch-icon">
-                                <rect key="frame" x="136.5" y="310" width="120" height="120"/>
+                                <rect key="frame" x="136.5" y="342" width="120" height="120"/>
                                 <constraints>
                                     <constraint firstAttribute="width" constant="120" id="icon-width"/>
                                     <constraint firstAttribute="height" constant="120" id="icon-height"/>
                                 </constraints>
                             </imageView>
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="cecy" textAlignment="center" translatesAutoresizingMaskIntoConstraints="NO" id="brand">
-                                <rect key="frame" x="136.5" y="454" width="120" height="52"/>
-                                <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="44"/>
-                                <color key="textColor" name="AccentColor"/>
-                            </label>
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="Your rhythm. Your records." textAlignment="center" numberOfLines="0" translatesAutoresizingMaskIntoConstraints="NO" id="tagline">
-                                <rect key="frame" x="24" y="522" width="345" height="20"/>
+                                <rect key="frame" x="24" y="486" width="345" height="20"/>
                                 <fontDescription key="fontDescription" type="system" pointSize="16"/>
                                 <color key="textColor" name="AccentColor"/>
                             </label>
@@ -37,10 +32,8 @@
                         <color key="backgroundColor" name="LaunchBackground"/>
                         <constraints>
                             <constraint firstItem="launch-icon" firstAttribute="centerX" secondItem="launch-view" secondAttribute="centerX" id="icon-x"/>
-                            <constraint firstItem="brand" firstAttribute="top" secondItem="launch-icon" secondAttribute="bottom" constant="24" id="icon-bottom"/>
-                            <constraint firstItem="brand" firstAttribute="centerX" secondItem="launch-view" secondAttribute="centerX" id="brand-x"/>
-                            <constraint firstItem="brand" firstAttribute="centerY" secondItem="launch-view" secondAttribute="centerY" constant="54" id="brand-y"/>
-                            <constraint firstItem="tagline" firstAttribute="top" secondItem="brand" secondAttribute="bottom" constant="16" id="tagline-top"/>
+                            <constraint firstItem="launch-icon" firstAttribute="centerY" secondItem="launch-view" secondAttribute="centerY" constant="-24" id="icon-y"/>
+                            <constraint firstItem="tagline" firstAttribute="top" secondItem="launch-icon" secondAttribute="bottom" constant="24" id="tagline-top"/>
                             <constraint firstItem="tagline" firstAttribute="leading" secondItem="launch-safe" secondAttribute="leading" constant="24" id="tagline-leading"/>
                             <constraint firstItem="launch-safe" firstAttribute="trailing" secondItem="tagline" secondAttribute="trailing" constant="24" id="tagline-trailing"/>
                         </constraints>
