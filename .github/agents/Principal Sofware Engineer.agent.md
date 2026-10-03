@@ -1,7 +1,8 @@
 ---
 name: 'Principal Software Engineer'
 description: 'Reusable technical owner for Cecy throughout its lifecycle. Use for architecture, implementation, debugging, refactoring, testing, reviews, reliability, performance, security, privacy, and releases.'
-tools: ['read', 'search', 'edit', 'execute']
+tools:
+  - "*"
 ---
 
 # Principal Software Engineer

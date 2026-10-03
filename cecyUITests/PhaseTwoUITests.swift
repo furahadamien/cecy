@@ -17,10 +17,20 @@ final class PhaseTwoUITests: XCTestCase {
 
     @MainActor private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
         for _ in 0..<10 {
-            if element.isHittable { return }
-            app.swipeUp()
+            let top = app.navigationBars.firstMatch.exists ? app.navigationBars.firstMatch.frame.maxY : app.frame.minY
+            let bottom = app.keyboards.firstMatch.exists ? app.keyboards.firstMatch.frame.minY
+                : app.tabBars.firstMatch.exists ? app.tabBars.firstMatch.frame.minY : app.frame.maxY
+            if element.exists && element.isHittable && element.frame.minY >= top && element.frame.maxY <= bottom { return }
+            // A full-screen swipe starts on the keyboard when it is open, not on the form.
+            let downward = element.exists && element.frame.minY < top
+            let height = bottom - top
+            guard height > 0 else { break }
+            let start = app.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: app.frame.midX, dy: top + height * (downward ? 0.25 : 0.75)))
+            let end = start.withOffset(CGVector(dx: 0, dy: height * (downward ? 0.5 : -0.5)))
+            start.press(forDuration: 0.05, thenDragTo: end)
         }
-        XCTAssertTrue(element.isHittable)
+        XCTFail("Could not fully reveal \(element)\n\(app.debugDescription)")
     }
 
     @MainActor private func notes(in app: XCUIApplication) -> XCUIElement {
@@ -108,8 +118,10 @@ final class PhaseTwoUITests: XCTestCase {
         XCTAssertFalse(app.buttons["confirmReset"].isEnabled)
         confirmation.tap()
         confirmation.typeText("DELETE")
+        XCTAssertEqual(confirmation.value as? String, "DELETE")
         let commit = app.buttons["confirmReset"]
         reveal(commit, in: app)
+        XCTAssertTrue(commit.isEnabled)
         commit.tap()
         XCTAssertTrue(app.buttons["onboardingContinue"].waitForExistence(timeout: 10))
         app.terminate()

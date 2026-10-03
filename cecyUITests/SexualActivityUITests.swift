@@ -18,13 +18,7 @@ final class SexualActivityUITests: XCTestCase {
     }
 
     @MainActor private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
-        if element.isHittable { return }
-        for _ in 0..<4 { app.swipeDown() }
-        for _ in 0..<12 {
-            if element.isHittable { return }
-            app.swipeUp()
-        }
-        XCTAssertTrue(element.isHittable, app.debugDescription)
+        UIViewport.reveal(element, in: app)
     }
 
     @MainActor private func tap(_ identifier: String, in app: XCUIApplication) {
@@ -48,8 +42,14 @@ final class SexualActivityUITests: XCTestCase {
         XCTAssertTrue(summary.waitForExistence(timeout: 5))
         XCTAssertEqual(summary.label, "Vaginal sex, Oral sex")
         tap("editSexualActivity_20260929", in: app)
+        XCTAssertTrue(app.buttons["sexualActivityKind_oralSex"].isSelected)
         tap("sexualActivityKind_oralSex", in: app)
-        app.buttons["Cancel"].tap(); app.buttons["Discard changes"].tap()
+        XCTAssertFalse(app.buttons["sexualActivityKind_oralSex"].isSelected)
+        XCTAssertTrue(app.buttons["saveSexualActivity"].isEnabled)
+        app.buttons["Cancel"].tap()
+        let discard = app.alerts.buttons["Discard changes"].firstMatch
+        XCTAssertTrue(discard.waitForExistence(timeout: 5))
+        discard.tap()
         XCTAssertEqual(summary.label, "Vaginal sex, Oral sex")
         tap("editSexualActivity_20260929", in: app)
         tap("sexualActivityKind_oralSex", in: app)
@@ -88,7 +88,10 @@ final class SexualActivityUITests: XCTestCase {
         reveal(day, in: app)
         XCTAssertTrue(day.label.contains("1 recorded observations"))
         tap("calendarDay_20260930", in: app)
-        XCTAssertFalse(app.buttons["logSexualActivity"].exists)
+        let futureLog = app.buttons["logSexualActivity"]
+        reveal(futureLog, in: app)
+        XCTAssertTrue(futureLog.exists)
+        XCTAssertFalse(futureLog.isEnabled)
     }
 
     @MainActor func testActivityChoicesSupportLargestTextAndExportDefaultsOff() {

@@ -91,7 +91,11 @@ final class DeviceFeedbackRoundFiveUITests: XCTestCase {
             XCTAssertEqual(button.frame.height, 44, accuracy: 1)
             XCTAssertGreaterThanOrEqual(button.frame.width, 44)
             XCTAssertLessThan(button.frame.width, 150)
-            XCTAssertLessThanOrEqual(button.staticTexts[title].frame.height, 24)
+            let text = button.staticTexts[title]
+            XCTAssertTrue(text.exists)
+            // SwiftUI can expose the full control as the text's accessibility frame.
+            XCTAssertGreaterThanOrEqual(text.frame.minY, button.frame.minY)
+            XCTAssertLessThanOrEqual(text.frame.maxY, button.frame.maxY)
             button.tap()
             XCTAssertTrue(app.navigationBars[sheet].waitForExistence(timeout: 5))
             app.navigationBars.buttons["Cancel"].tap()
@@ -133,7 +137,8 @@ final class DeviceFeedbackRoundFiveUITests: XCTestCase {
         for (button, title) in [(period, "Log period"), (symptoms, "Symptoms"), (sex, "Log sex")] {
             let text = button.staticTexts[title]
             XCTAssertTrue(text.exists)
-            XCTAssertLessThanOrEqual(text.frame.height, 24, "The default-size label should occupy one line")
+            XCTAssertGreaterThanOrEqual(text.frame.minY, button.frame.minY)
+            XCTAssertLessThanOrEqual(text.frame.maxY, button.frame.maxY)
             XCTAssertGreaterThanOrEqual(text.frame.minX, button.frame.minX)
             XCTAssertLessThanOrEqual(text.frame.maxX, button.frame.maxX)
         }
@@ -150,8 +155,11 @@ final class DeviceFeedbackRoundFiveUITests: XCTestCase {
         app.navigationBars.buttons["Cancel"].tap()
         tap("calendarDay_20260902", app: app)
         reveal(period, app: app)
-        XCTAssertFalse(period.isEnabled)
+        XCTAssertTrue(period.isEnabled)
         XCTAssertTrue(symptoms.isEnabled && sex.isEnabled)
+        period.tap()
+        XCTAssertTrue(app.navigationBars["Edit period"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons["Cancel"].tap()
         tap("calendarDay_20260930", app: app)
         reveal(period, app: app)
         XCTAssertFalse(period.isEnabled || symptoms.isEnabled || sex.isEnabled)

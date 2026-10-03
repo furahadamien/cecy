@@ -66,8 +66,15 @@ final class DeviceFeedbackRoundFourUITests: XCTestCase {
         reveal(period, app: app)
         XCTAssertGreaterThanOrEqual(period.frame.height, 44)
         XCTAssertGreaterThan(period.frame.minY, app.staticTexts["predictionWindow"].frame.maxY)
-        XCTAssertGreaterThanOrEqual(symptoms.frame.minY, period.frame.maxY)
-        XCTAssertGreaterThanOrEqual(app.buttons["logSexualActivity"].frame.minY, symptoms.frame.maxY)
+        let activity = app.buttons["logSexualActivity"]
+        // Ordinary text uses a compact row; accessibility sizes are tested separately below.
+        for action in [symptoms, activity] {
+            XCTAssertGreaterThanOrEqual(action.frame.height, 44)
+            XCTAssertGreaterThan(action.frame.minY, app.staticTexts["predictionWindow"].frame.maxY)
+            XCTAssertTrue(action.isHittable)
+        }
+        XCTAssertFalse(period.frame.intersects(symptoms.frame))
+        XCTAssertFalse(symptoms.frame.intersects(activity.frame))
         tap("logSymptoms", app: app)
         XCTAssertTrue(app.buttons["symptomKind_cramps"].waitForExistence(timeout: 5))
     }

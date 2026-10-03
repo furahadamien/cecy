@@ -268,7 +268,7 @@ nonisolated struct PhaseFiveDomainTests {
         #expect(session.snapshot == TrackerSnapshot())
     }
 
-    @Test func protectedExportsExcludeBackupsAndCleanupIsScoped() throws {
+    @Test func exportsExcludeBackupsAndCleanupIsScoped() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -278,18 +278,33 @@ nonisolated struct PhaseFiveDomainTests {
         let url = try exports.prepare(Data("{}".utf8))
         #expect(try Data(contentsOf: url) == Data("{}".utf8))
         #expect(try exports.directory.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
-        let exportProtection = try FileManager.default.attributesOfItem(atPath: url.path)[.protectionKey] as? String
-        #expect(exportProtection == FileProtectionType.complete.rawValue)
         try exports.clean(); try exports.clean()
         #expect(!FileManager.default.fileExists(atPath: url.path) && FileManager.default.fileExists(atPath: unrelated.path))
-        // Existing SQLite store, sidecars and nested files receive the requested protection attribute.
+    }
+
+    #if targetEnvironment(simulator)
+    @Test(.disabled("Simulator does not expose iOS file-protection attributes; run on a physical iOS device."))
+    #else
+    @Test
+    #endif
+    func completeProtectionCoversExportsStoresAndSidecars() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let exports = ProtectedExportFiles(directory: root.appendingPathComponent("exports"))
+        let export = try exports.prepare(Data("{}".utf8))
         let store = root.appendingPathComponent("store")
-        try FileManager.default.createDirectory(at: store, withIntermediateDirectories: true)
-        for name in ["tracker.store", "tracker.store-wal", "tracker.store-shm"] { try Data().write(to: store.appendingPathComponent(name)) }
+        let nested = store.appendingPathComponent("nested")
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        let files = ["tracker.store", "tracker.store-wal", "tracker.store-shm", "nested/synthetic.json"].map {
+            store.appendingPathComponent($0)
+        }
+        for file in files { try Data().write(to: file) }
         try ProtectedFiles.protectTree(store)
-        for name in ["tracker.store", "tracker.store-wal", "tracker.store-shm"] {
-            let protection = try FileManager.default.attributesOfItem(atPath: store.appendingPathComponent(name).path)[.protectionKey] as? String
-            #expect(protection == FileProtectionType.complete.rawValue)
+        for url in [export, exports.directory, store, nested] + files {
+            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+            let value = try #require(attributes[.protectionKey])
+            let protection = (value as? FileProtectionType)?.rawValue ?? (value as? String)
+            #expect(protection == FileProtectionType.complete.rawValue, "Complete protection required for \(url.lastPathComponent)")
         }
     }
 

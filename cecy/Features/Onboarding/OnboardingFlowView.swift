@@ -362,7 +362,7 @@ private struct OnboardingApplePage<Content: View>: View {
                         .padding(.horizontal, 8)
                         .padding(.top, 36)
 
-                    Text("Your data stays on your device, we never store it in the cloud")
+                    Text("Your records are stored on this device. Optional AI insights send selected information for online processing only with your consent.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

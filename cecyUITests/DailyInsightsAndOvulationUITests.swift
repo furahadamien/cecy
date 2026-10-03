@@ -36,9 +36,16 @@ final class DailyInsightsAndOvulationUITests: XCTestCase {
         XCTAssertTrue(date.label.contains("Possible ovulation"))
         XCTAssertTrue(app.buttons["calendarDay_20260929"].label.contains("estimate"))
         date.tap()
-        let detail = app.staticTexts["Possible ovulation · Estimate"]
-        reveal(detail, app: app)
+        let details = app.otherElements["selectedCalendarDetails"]
+        let detail = details.staticTexts["Possible ovulation · Estimate"].firstMatch
+        UIViewport.reveal(detail, in: app)
         XCTAssertTrue(detail.isHittable)
+        let uncertainty = details.buttons["ovulationUncertainty_0"]
+        UIViewport.reveal(uncertainty, in: app)
+        uncertainty.tap()
+        let caution = details.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "No dates are identified as safe days.")).firstMatch
+        UIViewport.reveal(caution, in: app)
+        XCTAssertTrue(caution.isHittable)
     }
 
     @MainActor func testBleedingAndFertileWindowsRemainDistinctAcrossCalendars() {

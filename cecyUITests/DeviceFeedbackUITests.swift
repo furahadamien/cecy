@@ -45,8 +45,13 @@ final class DeviceFeedbackUITests: XCTestCase {
         XCTAssertLessThan(abs(today.frame.midX - app.frame.midX), 25)
         XCTAssertTrue(today.label.contains("Cramps"))
         let strip = app.scrollViews["todayDateStrip"]
-        strip.swipeLeft()
-        XCTAssertTrue(app.buttons["todayDate_20261001"].exists)
+        // A full fling can skip October 1 and evict it from the lazy strip.
+        let start = strip.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5))
+        let end = strip.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.5))
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
+        let october = app.buttons["todayDate_20261001"]
+        XCTAssertTrue(october.waitForExistence(timeout: 5))
+        XCTAssertTrue(october.isHittable)
         tap("stripReturnToToday", app: app)
         let future = app.buttons["todayDate_20260930"]
         XCTAssertTrue(future.isHittable); future.tap()
