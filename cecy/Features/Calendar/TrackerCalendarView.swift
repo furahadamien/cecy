@@ -61,7 +61,7 @@ struct TrackerCalendarView: View {
                                     .id(day.key)
                                 }
                             } else {
-                                LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 44), spacing: 2), count: 7), spacing: 8) {
+                                LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 44), spacing: 2, alignment: .top), count: 7), spacing: 8) {
                                     // Sibling ForEach ranges share the grid's identity space.
                                     ForEach(0..<7, id: \.self) { index in
                                         Text(weekdays[index]).font(.caption).accessibilityHidden(true)
@@ -175,40 +175,47 @@ struct TrackerCalendarView: View {
         let recorded = record(on: day) != nil
         let predicted = session.cycleForecast.period(on: day) != nil || session.cycleForecast.bleeding(on: day) != nil
         let ovulation = session.cycleForecast.ovulation(on: day) != nil
+        let shape = RoundedRectangle(cornerRadius: asList ? 12 : 22, style: .continuous)
         return Button { selection = day } label: {
             VStack(alignment: asList ? .leading : .center, spacing: 4) {
-                HStack(spacing: 2) {
-                    Text(asList ? DayText.full(day) : day.day.formatted())
-                        .fontWeight(selection == day ? .bold : .regular)
-                        .underline(selection == day)
-                    if day == today { Image(systemName: "circle.fill").font(.system(size: 4)).accessibilityHidden(true) }
+                VStack(alignment: asList ? .leading : .center, spacing: 4) {
+                    HStack(spacing: 2) {
+                        Text(asList ? DayText.full(day) : day.day.formatted())
+                            .fontWeight(selection == day ? .bold : .regular)
+                            .underline(selection == day)
+                        if day == today { Image(systemName: "circle.fill").font(.system(size: 4)).accessibilityHidden(true) }
+                    }
+                    if asList {
+                        Text(status(day)).font(.footnote)
+                    }
                 }
-                if asList {
-                    Text(status(day)).font(.footnote)
-                } else {
+                .frame(maxWidth: asList ? .infinity : 44, minHeight: 44, alignment: asList ? .leading : .center)
+                .padding(.horizontal, asList ? 8 : 0)
+                .background(recorded ? palette.recordedSurface : (selection == day ? palette.sage : .clear), in: shape)
+                .overlay {
+                    if predicted {
+                        shape
+                            .strokeBorder(palette.recorded, style: StrokeStyle(lineWidth: 2, dash: [3, 3]))
+                            .padding(CalendarOutlineMetrics.outerInset)
+                    }
+                    if ovulation {
+                        shape
+                            .strokeBorder(palette.accent, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [1, 4]))
+                            .padding(predicted ? CalendarOutlineMetrics.nestedInset : CalendarOutlineMetrics.outerInset)
+                    } else if !predicted, selection == day {
+                        shape
+                            .strokeBorder(palette.accent, lineWidth: 1.5)
+                            .padding(CalendarOutlineMetrics.outerInset)
+                    }
+                }
+                // Activity markers sit outside the date badge, as on Today.
+                if !asList {
                     DayActivityIcons(markers: DayActivityMarker.calendar(
                         recorded: DayActivityMarker.recorded(on: day, in: session.snapshot),
                         forecast: session.cycleForecast, day: day))
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 44, alignment: asList ? .leading : .center)
-            .padding(.horizontal, asList ? 8 : 0)
-            .background(recorded ? palette.recordedSurface : (selection == day ? palette.sage : .clear),
-                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay {
-                if predicted {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(palette.recorded, style: StrokeStyle(lineWidth: 2, dash: [3, 3]))
-                }
-                if ovulation {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(palette.accent, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [1, 4]))
-                        .padding(predicted ? 3 : 0)
-                } else if !predicted, selection == day {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(palette.accent, lineWidth: 1.5)
-                }
-            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

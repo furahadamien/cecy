@@ -1,5 +1,11 @@
 # Cecy — Implementation Plan
 
+## October 2 — calendar outline spacing and onboarding copy
+
+Inset period/ovulation outlines in both month calendars and accessibility lists, leaving at least six points between neighboring outlines even when cells have no spacing. Today’s compact strip no longer expands rings beyond its date circles; tap targets and icon rows are unchanged. The welcome CTA now says “Get started”; subsequent steps retain Continue/Back to review. The Apple page adds “Your profile is saved on this device.” directly beneath the heading in secondary Dynamic Type text. Prediction, storage, consent and authentication behavior are unchanged.
+
+Validation: five geometry/marker unit tests and four UI scenarios passed together in one focused run (including compact/large-text calendar layouts and the new welcome/final-page copy). Debug app/test compilation and a separate unsigned iOS Release build succeeded. No live Apple authorization or network features were exercised. Device visual/VoiceOver and prior regression/release gates remain open. No commits or pushes.
+
 ## October 2 — historical logging and future-facing period estimates
 
 Calendar period entry now edits existing records or explicitly offers New period versus Add bleeding days. Confirmed ranges update the same record; future starts, ends, symptoms and activity logging remain forbidden. Forecast generation now includes three upcoming centers relative to the actual current day, retaining original nearby projections without creating missing records. Today’s next-period card no longer shows a past center; conflicting history can retain an explicitly labelled Low-confidence reference from a saved typical length. Primary evidence, statistics and reminders remain separate and unchanged. See [HISTORICAL_LOGGING_FIX.md](HISTORICAL_LOGGING_FIX.md) and [ADAPTIVE_CYCLE_FORECAST.md](ADAPTIVE_CYCLE_FORECAST.md) for the revised policy and its limitations.
