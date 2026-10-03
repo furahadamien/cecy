@@ -104,8 +104,7 @@ struct OnboardingFlowView: View {
                 Group {
                     if step == .apple {
                         OnboardingApplePage(title: step.title, step: step.rawValue + 1,
-                                            totalSteps: Step.allCases.count,
-                                            isSigningIn: session.account.isSigningIn, onBack: goBack) {
+                                            totalSteps: Step.allCases.count) {
                             fields
                         }
                     } else {
@@ -130,7 +129,7 @@ struct OnboardingFlowView: View {
                                         .accessibilityIdentifier("onboardingSkip")
                                 }
                                 Button { advance() } label: {
-                                     Text(editingReview ? "Back to review" : "Continue")
+                                     Text(editingReview ? "Back to review" : step == .welcome ? "Get started" : "Continue")
                                         .frame(maxWidth: .infinity, minHeight: 44)
                                 }
                                     .buttonStyle(TrackerPrimaryButtonStyle()).accessibilityIdentifier("onboardingContinue")
@@ -141,9 +140,9 @@ struct OnboardingFlowView: View {
                     .background(step == .apple ? Color(uiColor: .systemBackground) : TrackerPalette(scheme: colorScheme).background)
                 }
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar(step == .apple ? .hidden : .visible, for: .navigationBar)
+                .toolbar(.visible, for: .navigationBar)
                 .toolbar {
-                    if step != .welcome && step != .apple {
+                    if step != .welcome {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("Back", action: goBack).accessibilityIdentifier("onboardingBack")
                                 .disabled(session.account.isSigningIn)
@@ -347,8 +346,6 @@ private struct OnboardingApplePage<Content: View>: View {
     let title: String
     let step: Int
     let totalSteps: Int
-    let isSigningIn: Bool
-    let onBack: () -> Void
     @ViewBuilder var content: Content
     @AccessibilityFocusState private var headingFocused: Bool
 
@@ -356,26 +353,6 @@ private struct OnboardingApplePage<Content: View>: View {
         GeometryReader { geometry in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 28) {
-                        Button(action: onBack) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 24, weight: .regular))
-                                .frame(width: 44, height: 44)
-                                .background(Color(uiColor: .systemBackground), in: Circle())
-                                .shadow(color: .black.opacity(0.07), radius: 16, y: 6)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Back")
-                        .accessibilityIdentifier("onboardingBack")
-                        .disabled(isSigningIn)
-
-                        ProgressView(value: Double(step), total: Double(totalSteps))
-                            .tint(.primary)
-                            .accessibilityLabel("Onboarding progress")
-                            .accessibilityValue("Step \(step) of \(totalSteps)")
-                    }
-                    .padding(.top, 12)
-
                     Text(title)
                         .font(.largeTitle.weight(.bold))
                         .fixedSize(horizontal: false, vertical: true)
@@ -384,6 +361,14 @@ private struct OnboardingApplePage<Content: View>: View {
                         .accessibilityFocused($headingFocused)
                         .padding(.horizontal, 8)
                         .padding(.top, 36)
+
+                    Text("Your data stays on your device, we never store it in the cloud")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 8)
+                        .padding(.top, 12)
+                        .accessibilityIdentifier("onboardingLocalProfileNote")
 
                     Spacer(minLength: 64)
                     content
@@ -396,6 +381,14 @@ private struct OnboardingApplePage<Content: View>: View {
         }
         .foregroundStyle(.primary)
         .background(Color(uiColor: .systemBackground))
+        .safeAreaInset(edge: .top, spacing: 0) {
+            ProgressView(value: Double(step), total: Double(totalSteps))
+                .accessibilityLabel("Onboarding progress")
+                .accessibilityValue("Step \(step) of \(totalSteps)")
+                .padding(.horizontal, 24).padding(.vertical, 12)
+                .background(Color(uiColor: .systemBackground))
+        }
+        .navigationTitle("Cecy")
         .onAppear { headingFocused = true }
     }
 }

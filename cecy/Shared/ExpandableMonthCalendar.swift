@@ -86,11 +86,12 @@ struct ExpandableMonthCalendar: View {
                             RoundedRectangle(cornerRadius: 22)
                                 .strokeBorder(palette.recorded,
                                               style: StrokeStyle(lineWidth: 2, dash: [3, 3]))
+                                .padding(CalendarOutlineMetrics.outerInset)
                         }
                         if ovulation != nil {
                             RoundedRectangle(cornerRadius: 22)
                                 .strokeBorder(palette.accent, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [1, 4]))
-                                .padding(predicted ? 3 : 0)
+                                .padding(predicted ? CalendarOutlineMetrics.nestedInset : CalendarOutlineMetrics.outerInset)
                         }
                     }
                 DayActivityIcons(markers: DayActivityMarker.calendar(recorded: markers, forecast: forecast, day: day))

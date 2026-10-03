@@ -36,7 +36,8 @@ import XCTest
     static func next(in app: XCUIApplication) {
         let next = app.buttons["onboardingContinue"]
         XCTAssertTrue(next.waitForExistence(timeout: 5))
-        XCTAssertEqual(next.label, "Continue")
+        let isWelcome = app.staticTexts["onboardingHeading"].label == "Understand your cycle."
+        XCTAssertEqual(next.label, isWelcome ? "Get started" : "Continue")
         XCTAssertFalse(app.buttons["continueWithApple"].exists)
         let earlyAccountCopy = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@", "Apple", "account"))
         XCTAssertEqual(earlyAccountCopy.count, 0)
@@ -126,7 +127,14 @@ import XCTest
         next(in: app)
         XCTAssertTrue(app.buttons["continueWithApple"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["onboardingHeading"].label, "Let's save your profile")
-        XCTAssertTrue(app.buttons["onboardingBack"].isHittable)
+        let storageNote = app.staticTexts["onboardingLocalProfileNote"]
+        XCTAssertEqual(storageNote.label, "Your data stays on your device, we never store it in the cloud")
+        XCTAssertGreaterThan(storageNote.frame.minY, app.staticTexts["onboardingHeading"].frame.maxY)
+        XCTAssertLessThan(storageNote.frame.maxY, app.buttons["continueWithApple"].frame.minY)
+        let back = app.navigationBars.buttons["onboardingBack"]
+        XCTAssertEqual(back.label, "Back")
+        XCTAssertTrue(back.isHittable)
+        XCTAssertEqual(app.buttons.matching(identifier: "onboardingBack").count, 1)
         XCTAssertTrue(app.progressIndicators["Onboarding progress"].exists)
         let apple = app.buttons["continueWithApple"]
         XCTAssertEqual(apple.label, "Sign up with Apple")

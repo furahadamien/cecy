@@ -1,5 +1,10 @@
 import SwiftUI
 
+nonisolated enum CalendarOutlineMetrics {
+    static let outerInset: CGFloat = 3
+    static let nestedInset: CGFloat = 7
+}
+
 struct DayActivityIcons: View {
     @Environment(\.colorScheme) private var colorScheme
     let markers: [DayActivityMarker]
@@ -101,11 +106,10 @@ struct ActivityCalendarStrip: View {
                                     .overlay {
                                         if predicted {
                                             Circle().strokeBorder(palette.recorded, style: StrokeStyle(lineWidth: 2, dash: [3, 3]))
-                                                .padding(-3)
                                         }
                                         if ovulation != nil {
                                             Circle().strokeBorder(palette.accent, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [1, 4]))
-                                                .padding(predicted ? 1 : -3)
+                                                .padding(predicted ? CalendarOutlineMetrics.nestedInset - CalendarOutlineMetrics.outerInset : 0)
                                         }
                                     }
                                 DayActivityIcons(markers: DayActivityMarker.calendar(recorded: markers, forecast: forecast, day: day),
