@@ -40,8 +40,11 @@ final class PhaseTwoUITests: XCTestCase {
 
     @MainActor func testEditMetadataEndAndCancelSurviveRelaunch() {
         let app = launch()
+        let day = app.buttons["dailyLog_20260902"]
+        UIViewport.reveal(day, in: app); day.tap()
         let edit = app.buttons["editPeriod"].firstMatch
         reveal(edit, in: app)
+        XCTAssertTrue(edit.label.contains("Edit period range"))
         edit.tap()
         let endToggle = app.switches["includeEndDate"]
         XCTAssertTrue(endToggle.waitForExistence(timeout: 5))
@@ -53,6 +56,7 @@ final class PhaseTwoUITests: XCTestCase {
         note.tap()
         note.typeText("Synthetic saved note")
         app.buttons["savePeriod"].tap()
+        XCTAssertTrue(app.navigationBars["Edit period"].waitForNonExistence(timeout: 10))
         app.terminate()
         app.launch()
         XCTAssertTrue(app.staticTexts["cycleDay"].waitForExistence(timeout: 10))
@@ -61,6 +65,7 @@ final class PhaseTwoUITests: XCTestCase {
         reveal(duration, in: app)
         XCTAssertEqual(duration.label, "Average: 1.0 days")
         app.tabBars.buttons["Today"].tap()
+        UIViewport.reveal(day, in: app); day.tap()
         reveal(edit, in: app)
         edit.tap()
         let savedNote = notes(in: app)
@@ -70,6 +75,7 @@ final class PhaseTwoUITests: XCTestCase {
         savedNote.typeText(" discarded")
         app.buttons["Cancel"].tap()
         app.buttons["Discard changes"].tap()
+        XCTAssertTrue(app.navigationBars["Edit period"].waitForNonExistence(timeout: 10))
         reveal(edit, in: app)
         edit.tap()
         let unchanged = notes(in: app)
@@ -79,13 +85,18 @@ final class PhaseTwoUITests: XCTestCase {
 
     @MainActor func testDeleteCancelThenConfirmRecalculates() {
         let app = launch()
+        let day = app.buttons["dailyLog_20260902"]
+        UIViewport.reveal(day, in: app); day.tap()
         let delete = app.buttons["deletePeriod"].firstMatch
         reveal(delete, in: app)
+        XCTAssertEqual(delete.label, "Delete entire period")
         delete.tap()
+        XCTAssertTrue(app.alerts.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "not just the selected day")).firstMatch.exists)
         app.buttons["Keep period"].tap()
         XCTAssertTrue(delete.exists)
         delete.tap()
         app.buttons["Delete recorded period"].tap()
+        XCTAssertTrue(delete.waitForNonExistence(timeout: 10))
         app.terminate()
         app.launch()
         XCTAssertTrue(app.staticTexts["cycleDay"].waitForExistence(timeout: 10))

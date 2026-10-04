@@ -39,7 +39,7 @@ final class DeviceFeedbackRoundFourUITests: XCTestCase {
         element.tap()
     }
 
-    @MainActor func testTodayLoggingStaysBelowPredictionAndCalendarKeepsMarkers() {
+    @MainActor func testTodayLoggingStaysBelowDaysAndCalendarKeepsMarkers() {
         let app = launch()
         let period = app.buttons["logPeriod"]
         let symptoms = app.buttons["logSymptoms"]
@@ -65,12 +65,14 @@ final class DeviceFeedbackRoundFourUITests: XCTestCase {
         XCTAssertTrue(period.isEnabled && symptoms.isEnabled)
         reveal(period, app: app)
         XCTAssertGreaterThanOrEqual(period.frame.height, 44)
-        XCTAssertGreaterThan(period.frame.minY, app.staticTexts["predictionWindow"].frame.maxY)
+        XCTAssertGreaterThanOrEqual(period.frame.minY, app.scrollViews["todayDateStrip"].frame.maxY)
+        XCTAssertLessThan(period.frame.maxY, app.staticTexts["periodCountdown"].frame.minY)
         let activity = app.buttons["logSexualActivity"]
         // Ordinary text uses a compact row; accessibility sizes are tested separately below.
         for action in [symptoms, activity] {
             XCTAssertGreaterThanOrEqual(action.frame.height, 44)
-            XCTAssertGreaterThan(action.frame.minY, app.staticTexts["predictionWindow"].frame.maxY)
+            XCTAssertGreaterThanOrEqual(action.frame.minY, app.scrollViews["todayDateStrip"].frame.maxY)
+            XCTAssertLessThan(action.frame.maxY, app.staticTexts["periodCountdown"].frame.minY)
             XCTAssertTrue(action.isHittable)
         }
         XCTAssertFalse(period.frame.intersects(symptoms.frame))

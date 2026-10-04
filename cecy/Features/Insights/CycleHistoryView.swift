@@ -115,9 +115,7 @@ private struct RecordedPeriodsView: View {
             }
             LazyVStack(spacing: 10) {
                 ForEach(session.snapshot.periods.reversed()) { period in
-                    TrackerCard(padding: 14) {
-                        PeriodRecordSummary(session: session, period: period)
-                    }
+                    PeriodRecordSummary(session: session, period: period)
                 }
             }
         }

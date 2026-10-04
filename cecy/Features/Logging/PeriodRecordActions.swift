@@ -13,13 +13,13 @@ struct PeriodRecordActions: View {
         VStack(alignment: .leading, spacing: 8) {
             let layout = dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout(spacing: 20))
             layout {
-            Button { editing = true } label: { Label("Edit period", systemImage: "pencil") }
+            Button { editing = true } label: { Label("Edit period range", systemImage: "pencil") }
                 .frame(minHeight: 44).accessibilityIdentifier("editPeriod")
                 .accessibilityHint(period.end == nil ? "Edit details or add an end date." : "Edit recorded details.")
-            Button(role: .destructive) { confirmDelete = true } label: { Label("Delete", systemImage: "trash") }
+            Button(role: .destructive) { confirmDelete = true } label: { Label("Delete entire period", systemImage: "trash") }
                 .frame(minHeight: 44).accessibilityIdentifier("deletePeriod")
-                .accessibilityLabel("Delete period")
-            }.font(.subheadline).buttonStyle(.bordered).buttonBorderShape(.capsule)
+                .accessibilityLabel("Delete entire period")
+            }.buttonStyle(RecordActionButtonStyle())
             if let error { InlineError(message: error).accessibilityFocused($errorFocused) }
         }
         .disabled(session.isSaving)
@@ -39,7 +39,7 @@ struct PeriodRecordActions: View {
             }
             Button("Keep period", role: .cancel) { }
         } message: {
-            Text("The period starting \(DayText.full(period.start)), including its flow and note, will be removed. Cycle calculations will change. This cannot be undone.")
+            Text("The entire recorded period \(DayText.range(period.start, period.end ?? period.start)), including its flow and note, will be removed—not just the selected day. Cycle calculations will change. This cannot be undone.")
         }
     }
 }
@@ -52,7 +52,7 @@ struct PeriodRecordSummary: View {
 
     var body: some View {
         let accent = TrackerPalette(scheme: colorScheme).recorded
-        VStack(alignment: .leading, spacing: 12) {
+        RecordedEntryCard(accent: accent) {
             RecordHeader(title: title, date: period.end.map { DayText.range(period.start, $0) } ?? DayText.full(period.start),
                          symbol: "drop.fill", accent: accent)
             SelectionFlowLayout {
@@ -61,7 +61,6 @@ struct PeriodRecordSummary: View {
                 if let flow = period.flow { RecordBadge(title: flow.title + " flow", symbol: flow.symbol, accent: accent) }
             }
             if let note = period.notes { DisclosureGroup("Private note") { Text(note) }.font(.subheadline) }
-            Divider()
             PeriodRecordActions(session: session, period: period).id(period.id)
         }
     }

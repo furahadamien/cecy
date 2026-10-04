@@ -28,50 +28,37 @@ struct TodayView: View {
         TrackerPage(title: "Today") {
             ActivityCalendarStrip(today: today, activityIndex: session.activityIndex,
                                   forecast: session.cycleForecast, selection: $selection)
+            TrackerCompactLogActions {
+                Button { onLog(selection) } label: {
+                    Label("Log period", systemImage: "drop")
+                }
+                .buttonStyle(TrackerCompactLogButtonStyle(prominent: true))
+                .accessibilityLabel("Log period and bleeding days")
+                .accessibilityIdentifier("logPeriod")
+                SymptomLogButton(session: session, day: selection, title: "Symptoms", compact: true)
+                SexualActivityLogButton(session: session, day: selection, compact: true)
+            }
+            .disabled(selection > today)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Log for \(DayText.full(selection))")
+            .accessibilityIdentifier("todayLogActions")
             TodayCalendarLegend()
             ForEach(session.cycleForecast.cycles.filter { selection != today && $0.contains(selection) }) { cycle in
                 TrackerCard { ProjectedCycleDetails(cycle: cycle) }
             }
-            if selection != today {
-                TrackerCard {
-                    Text(DayText.full(selection)).font(.headline).accessibilityIdentifier("selectedTodayDate")
-                    if selection > today { Text("Future dates are for viewing only.").font(.subheadline) }
-                    let markers = session.activityIndex.markers(on: selection)
-                    if markers.isEmpty { Text("No records for this date.").foregroundStyle(.secondary) }
-                    ForEach(session.snapshot.periods.filter { $0.contains(selection) }) { period in
-                        Label("Period started \(DayText.full(period.start))", systemImage: "drop.fill")
-                        PeriodRecordActions(session: session, period: period)
-                    }
-                    ForEach(session.snapshot.symptoms.filter { $0.day == selection }) { entry in
-                        SymptomRecordView(session: session, entry: entry)
-                    }
-                    ForEach(session.snapshot.sexualActivities.filter { $0.day == selection }) { entry in
-                        SexualActivityRecordView(session: session, entry: entry)
-                    }
-                }
-            }
-            if let confirmation = session.confirmation {
-                TrackerCard {
-                    Label(confirmation, systemImage: "checkmark.circle")
-                        .accessibilityIdentifier("saveConfirmation")
-                    Button("Dismiss confirmation") { session.confirmation = nil }
-                }
-                .onAppear { AccessibilityNotification.Announcement(confirmation).post() }
-            }
             TrackerCard(highlighted: true) {
-                Label("Your recorded cycle", systemImage: "leaf").font(.subheadline.weight(.medium))
+                Label("Until your next period", systemImage: "leaf").font(.subheadline.weight(.medium))
+                let countdown = TodayPeriodCountdown(outcome: overview.prediction, today: today)
+                Text(countdown.title)
+                    .font(TrackerTypography.metric).monospacedDigit()
+                    .accessibilityIdentifier("periodCountdown")
                 if let day = overview.currentDay, let start = overview.latestStart {
                     Text("Day \(day)")
-                        .font(TrackerTypography.metric).monospacedDigit()
+                        .font(.subheadline).foregroundStyle(.secondary).monospacedDigit()
                         .accessibilityIdentifier("cycleDay")
-                    Text("Since your recorded start on \(DayText.full(start)).")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                } else if case .unavailable(let reason) = overview.prediction {
-                    InlineError(message: reason.localizedDescription)
-                } else {
-                    Text("Your cycle history starts here.").font(TrackerTypography.sectionTitle)
-                    Text("Record a period start or add dates you remember.").foregroundStyle(.secondary)
+                        .accessibilityHint("Current cycle, counted from your recorded start on \(DayText.full(start))")
                 }
+                Text(countdown.detail).font(.footnote).foregroundStyle(.secondary)
             }
             TrackerCard {
                 PredictionSummary(outcome: overview.prediction, today: today, forecast: session.cycleForecast)
@@ -81,29 +68,10 @@ struct TodayView: View {
                 }
             }
             TrackerCard {
-                Text(selection == today ? "Log for today" : "Log for \(DayText.short(selection))")
-                    .font(.headline).accessibilityAddTraits(.isHeader)
-                TrackerCompactLogActions {
-                    Button { onLog(selection) } label: {
-                        Label("Log period", systemImage: "drop")
-                    }
-                    .buttonStyle(TrackerCompactLogButtonStyle(prominent: true))
-                    .accessibilityLabel("Log period and bleeding days")
-                    .accessibilityIdentifier("logPeriod")
-                    SymptomLogButton(session: session, day: selection, title: "Symptoms", compact: true)
-                    SexualActivityLogButton(session: session, day: selection, compact: true)
-                }
-                .disabled(selection > today)
-                NavigationLink("Sexual activity history") { SexualActivityHistoryView(session: session) }
-                    .frame(minHeight: 44).accessibilityIdentifier("sexualActivityHistory")
-                Button("Add previous periods", action: onHistory)
-                    .frame(maxWidth: .infinity, minHeight: 44).buttonStyle(.bordered)
-            }
-            Text("A count from recorded dates—not an estimate of cycle phase. Missing records can affect the result.")
-                .font(.footnote).foregroundStyle(.secondary)
-            TrackerCard { UpcomingCycleForecastView(forecast: session.cycleForecast, today: today) }
-            TrackerCard {
                 Text("For today").font(.headline).accessibilityAddTraits(.isHeader)
+                if session.privacy.dailyInsightsEnabled {
+                    DailyInsightsContent(session: session)
+                }
                 if let wellness {
                     WellnessSafetyNotice(symptoms: session.snapshot.symptoms, today: today)
                     VStack(alignment: .leading, spacing: 12) {
@@ -127,14 +95,26 @@ struct TodayView: View {
                 NavigationLink("Edit wellness preferences") { ProfileSettingsView(session: session) }
                     .frame(minHeight: 44).font(.subheadline)
                     .accessibilityIdentifier("todayWellnessPreferences")
+                DisclosureGroup("Daily preparation") { DailyInsightsPreference(session: session) }
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("forTodayCard")
+            TrackerCard { UpcomingCycleForecastView(forecast: session.cycleForecast, today: today) }
+            DailyLogCard(session: session, selectedDay: selection, today: today)
+            if let confirmation = session.confirmation {
+                TrackerCard {
+                    Label(confirmation, systemImage: "checkmark.circle")
+                        .accessibilityIdentifier("saveConfirmation")
+                    Button("Dismiss confirmation") { session.confirmation = nil }
+                }
+                .onAppear { AccessibilityNotification.Announcement(confirmation).post() }
+            }
+            NavigationLink("Sexual activity history") { SexualActivityHistoryView(session: session) }
+                .frame(minHeight: 44).accessibilityIdentifier("sexualActivityHistory")
+            Button("Add previous periods", action: onHistory)
+                .frame(maxWidth: .infinity, minHeight: 44).buttonStyle(.bordered)
             if let insight = session.insights.first { InsightCard(insight: insight) }
             if let message = session.insightMessage { InlineError(message: message) }
-            if let latest = session.snapshot.periods.last {
-                TrackerCard(padding: 14) {
-                    PeriodRecordSummary(session: session, period: latest, title: "Latest recorded period")
-                }
-            }
         }
         .onChange(of: today) { old, new in if selection == old { selection = new } }
         .sheet(isPresented: $showExplanation) {
@@ -154,6 +134,38 @@ struct TodayView: View {
         VStack(alignment: .leading, spacing: 4) {
             Label(title, systemImage: symbol).font(.subheadline.weight(.semibold))
             Text(verbatim: text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// Presentation only: never rolls a missed estimate into an unrecorded new cycle.
+@MainActor struct TodayPeriodCountdown {
+    let title: String
+    let detail: String
+
+    init(outcome: PredictionOutcome, today: LocalDay) {
+        switch outcome {
+        case .available(let estimate):
+            let days = today.days(until: estimate.center)
+            if days > 0 {
+                title = days == 1 ? "About 1 day" : "About \(days) days"
+            } else if days == 0 {
+                title = "Estimated today"
+            } else if today <= estimate.latest {
+                title = "Within estimated window"
+            } else {
+                title = "Estimated window passed"
+            }
+            detail = "Possible start: \(DayText.range(estimate.earliest, estimate.latest)). An estimate, not a deadline. Missing records can affect it."
+        case .insufficientHistory:
+            title = "More history needed"
+            detail = "Record a period start and your usual cycle length, or add previous starts, for an estimate."
+        case .wideVariation:
+            title = "Timing uncertain"
+            detail = "Your recorded intervals vary too much for a reliable countdown. Your current cycle day still counts from recorded dates."
+        case .unavailable(let reason):
+            title = "Estimate unavailable"
+            detail = reason.localizedDescription
         }
     }
 }

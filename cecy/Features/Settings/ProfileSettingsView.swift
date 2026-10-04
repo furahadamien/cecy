@@ -161,30 +161,52 @@ struct AccountSettingsView: View {
 }
 
 struct SignedOutAccountView: View {
+    @Environment(\.colorScheme) private var colorScheme
     let session: TrackerSession
     @State private var showReset = false
 
     var body: some View {
-        SettingsForm(title: "Welcome back") {
-            Section {
-                Label("You’re logged out", systemImage: "lock.shield")
-                    .font(.headline).accessibilityIdentifier("signedOutScreen")
-                Text("Reconnect with the same Apple Account to open any profile saved on this device. Logging out does not delete it.")
-            }
-            if session.account.identityLoaded, let identity = session.account.identity {
-                AppleSignInSection(session: session, profileID: identity.profileID, purpose: .reconnect) { session.load() }
-            } else {
-                Section {
-                    Text(session.account.message ?? "Your Apple identity couldn’t be read securely.")
-                    Button("Try again") { session.account.reload(); session.load() }
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(spacing: 24) {
+                    VStack(spacing: 12) {
+                        Text("Welcome back").font(TrackerTypography.pageTitle).accessibilityAddTraits(.isHeader)
+                        if session.account.identityLoaded, session.account.identity != nil {
+                            Text("A profile is already saved on this device. Continue with the same Apple Account to open it.")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                                .accessibilityIdentifier("signedOutScreen")
+                        }
+                    }
+                    .multilineTextAlignment(.center)
+                    Spacer(minLength: 24)
+                    if session.account.identityLoaded, let identity = session.account.identity {
+                        AppleSignInSection(session: session, profileID: identity.profileID,
+                                           purpose: .reconnect, showsExplanation: false) { session.load() }
+                    } else {
+                        VStack(spacing: 16) {
+                            Text(session.account.message ?? "Your Apple identity couldn’t be read securely.")
+                                .accessibilityIdentifier("signedOutScreen")
+                            Button("Try again") { session.account.reload(); session.load() }
+                                .frame(minHeight: 44)
+                        }
+                    }
+                    Spacer(minLength: 24)
+                    Button(role: .destructive) { showReset = true } label: {
+                        Text("Delete local data and start over")
+                            .font(.footnote).foregroundStyle(.secondary)
+                            .padding(.horizontal, 12).frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                        .buttonStyle(.plain)
+                        .disabled(session.account.isSigningIn || session.isSaving)
+                        .accessibilityIdentifier("signedOutReset")
                 }
+                .frame(maxWidth: 440)
+                .frame(minHeight: max(0, geometry.size.height - 40))
+                .padding(20)
+                .frame(maxWidth: .infinity)
             }
-            Section {
-                Text("Logging out doesn’t delete records, disable your reminders or turn off app lock. The account binding stays in this device’s Keychain to prevent another Apple Account opening your records.")
-                    .font(.footnote).foregroundStyle(.secondary)
-                Button("Delete local data and start over", role: .destructive) { showReset = true }
-                    .accessibilityIdentifier("signedOutReset")
-            }
+            .background(TrackerPalette(scheme: colorScheme).background.ignoresSafeArea())
         }
         .sheet(isPresented: $showReset) { DeleteAllDataView(session: session) }
     }

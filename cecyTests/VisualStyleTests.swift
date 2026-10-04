@@ -16,6 +16,7 @@ struct VisualStyleTests {
         }
         #expect(contrast(palette.sexualActivity, palette.recordedSurface) >= 4.5)
         #expect(contrast(palette.recorded, palette.recordedSurface) >= 4.5)
+        #expect(contrast(palette.recorded, palette.surface) >= 4.5)
         #expect(contrast(.white, palette.action) >= 4.5)
     }
 
