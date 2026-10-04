@@ -118,34 +118,39 @@ struct AccountSettingsView: View {
         SettingsForm(title: "Apple Account") {
             Section {
                 LabeledContent("Status", value: status).accessibilityIdentifier("appleAccountStatus")
-                Text("Your Apple identity is stored securely on this device. Cecy has no cloud account database or health-data sync yet.")
+                Text("Your Apple Account identifies you so you can access your records on this device.")
+                    .font(.footnote).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("appleAccountIdentityExplanation")
             }
             if let profile = session.snapshot.profile {
                 if session.account.state != .authorized && session.account.state != .unchecked {
-                    AppleSignInSection(session: session, profileID: profile.id, purpose: .connect) {}
+                    AppleSignInSection(session: session, profileID: profile.id, purpose: .connect,
+                                       showsExplanation: false) {}
                 }
             } else {
                 Section {
-                    Text("Save your local profile before linking an Apple Account. Your existing records won’t change.")
                     NavigationLink("Add profile") { ProfileSettingsView(session: session) }
                 }
             }
-            if session.account.identity != nil {
-                Section {
-                    Button(role: .destructive) { confirmLogout = true } label: {
-                        Label("Log out", systemImage: "rectangle.portrait.and.arrow.right").frame(minHeight: 44)
-                    }
-                    .disabled(session.isSaving || session.account.isSigningIn || session.privacy.isAuthenticating || session.privacy.isChangingReminders)
-                    .accessibilityIdentifier("logOut")
-                    if let logoutError { InlineError(message: logoutError) }
-                } footer: {
-                    Text("Keeps your local records. Sign in with the same Apple Account to reopen them.")
-                }
+            if let logoutError {
+                Section { InlineError(message: logoutError) }
             }
-            Section("Change or remove your account") {
-                Text("Use Delete all data in Settings to remove the local Apple link and health records. To use a different Apple Account, remove the local data first.")
-                Text("This does not delete your Apple Account or revoke Apple’s authorization. You can stop using Apple sign-in for Cecy in your Apple Account settings.")
-                Text("Revoking authorization never automatically deletes local health records.")
+        }
+        .safeAreaInset(edge: .bottom) {
+            if session.account.identity != nil {
+                Button(role: .destructive) { confirmLogout = true } label: {
+                    Label("Log out", systemImage: "rectangle.portrait.and.arrow.right")
+                        .frame(minHeight: 44)
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.red)
+                .disabled(session.isSaving || session.account.isSigningIn || session.privacy.isAuthenticating || session.privacy.isChangingReminders)
+                .accessibilityIdentifier("logOut")
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 36)
             }
         }
         .navigationBarTitleDisplayMode(.inline)

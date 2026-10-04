@@ -29,6 +29,38 @@ final class TodayDetailsAndWelcomeUITests: XCTestCase {
         tap(app.buttons["continueWithApple"], in: app)
         let logout = app.buttons["logOut"]
         XCTAssertTrue(logout.waitForExistence(timeout: 5))
+        app.navigationBars["Apple Account"].buttons.element(boundBy: 0).tap()
+        let account = app.buttons["accountSettings"]
+        XCTAssertTrue(account.waitForExistence(timeout: 5))
+        XCTAssertTrue(account.label.contains("Connected"))
+        XCTAssertFalse(account.label.contains("Identity only"))
+        tap(account, in: app)
+        let status = app.descendants(matching: .any)["appleAccountStatus"].firstMatch
+        XCTAssertTrue(status.exists)
+        let explanation = app.staticTexts["appleAccountIdentityExplanation"]
+        XCTAssertTrue(explanation.exists)
+        XCTAssertEqual(explanation.label, "Your Apple Account identifies you so you can access your records on this device.")
+        XCTAssertGreaterThanOrEqual(explanation.frame.minY, status.frame.maxY)
+        XCTAssertTrue(logout.isHittable)
+        XCTAssertGreaterThanOrEqual(logout.frame.height, 44)
+        XCTAssertEqual(logout.frame.midX, app.frame.midX, accuracy: 2)
+        XCTAssertGreaterThan(logout.frame.minY, app.frame.height * 0.65)
+        XCTAssertLessThanOrEqual(logout.frame.maxY, app.tabBars.firstMatch.frame.minY - 32)
+        XCTAssertFalse(app.buttons["continueWithApple"].exists)
+        XCTAssertFalse(app.staticTexts["appleSignInPurpose"].exists)
+        for removedText in ["Your Apple identity is stored securely", "Keeps your local records",
+                            "Change or remove your account", "Use Delete all data in Settings",
+                            "This does not delete your Apple Account", "Revoking authorization"] {
+            XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", removedText)).firstMatch.exists)
+        }
+        tap(logout, in: app)
+        let confirmation = app.alerts["Log out of Cecy?"]
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
+        confirmation.buttons["Cancel"].tap()
+        XCTAssertTrue(confirmation.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(status.exists)
+        XCTAssertTrue(logout.isEnabled)
+        XCTAssertFalse(app.staticTexts["signedOutScreen"].exists)
         tap(logout, in: app)
         app.alerts.buttons["confirmLogout"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["signedOutScreen"].waitForExistence(timeout: 5))

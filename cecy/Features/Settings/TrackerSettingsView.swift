@@ -26,7 +26,7 @@ struct TrackerSettingsView: View {
                 }.accessibilityIdentifier("profileSettings")
                 NavigationLink { AccountSettingsView(session: session) } label: {
                     SettingsRow(title: "Apple Account", systemImage: "person.badge.key",
-                                detail: session.account.identity == nil ? "Not linked" : "Identity only · No cloud sync")
+                                detail: session.account.identity == nil ? "Not linked" : "Connected")
                 }.accessibilityIdentifier("accountSettings")
             }
             Section {
