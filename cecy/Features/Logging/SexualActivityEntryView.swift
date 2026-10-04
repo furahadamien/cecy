@@ -154,19 +154,18 @@ struct SexualActivityRecordView: View {
     @State private var error: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        RecordedEntryCard(accent: TrackerPalette(scheme: colorScheme).sexualActivity) {
             RecordHeader(title: "Sexual activity", date: DayText.full(entry.day), symbol: "heart.fill",
                          accent: TrackerPalette(scheme: colorScheme).sexualActivity)
             Text(entry.summary).font(.subheadline).accessibilityIdentifier("sexualActivitySummary_\(entry.day.key)")
             if let notes = entry.notes { DisclosureGroup("Private note") { Text(notes) }.font(.footnote) }
-            Divider()
             let layout = dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout(spacing: 16))
             layout {
             Button("Edit activity") { editing = true }.frame(minHeight: 44)
                 .accessibilityIdentifier("editSexualActivity_\(entry.day.key)")
             Button("Delete activity", role: .destructive) { deleting = true }.frame(minHeight: 44)
                 .accessibilityIdentifier("deleteSexualActivity_\(entry.day.key)")
-            }.font(.subheadline).buttonStyle(.bordered).buttonBorderShape(.capsule)
+            }.buttonStyle(RecordActionButtonStyle())
             if let error { InlineError(message: error) }
         }
         .sheet(isPresented: $editing) { SexualActivityEntryView(session: session, day: entry.day, entry: entry) }
@@ -192,7 +191,7 @@ struct SexualActivityHistoryView: View {
                 Text("No sexual activity recorded yet.")
             }
             ForEach(session.snapshot.sexualActivities.reversed()) { entry in
-                TrackerCard { SexualActivityRecordView(session: session, entry: entry) }
+                SexualActivityRecordView(session: session, entry: entry)
             }
         }
         .navigationBarTitleDisplayMode(.inline)

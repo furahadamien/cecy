@@ -16,12 +16,13 @@ struct AppleSignInSection: View {
     let session: TrackerSession
     let profileID: UUID
     var purpose: Purpose = .saveDetails
+    var showsExplanation = true
     let onSuccess: () -> Void
     @State private var requestToken: UUID?
 
     var body: some View {
         Group {
-            if purpose == .saveDetails {
+            if purpose == .saveDetails || !showsExplanation {
                 VStack(spacing: 16) {
                     authorizationControls
                 }
@@ -72,7 +73,7 @@ struct AppleSignInSection: View {
         }
         .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
         .frame(height: 50)
-        .clipShape(RoundedRectangle(cornerRadius: purpose == .saveDetails ? 25 : 8))
+        .clipShape(RoundedRectangle(cornerRadius: purpose == .saveDetails || !showsExplanation ? 25 : 8, style: .continuous))
         .accessibilityIdentifier("continueWithApple")
         .disabled(session.account.isSigningIn || session.isSaving)
     }

@@ -99,7 +99,7 @@ struct TrackerCalendarView: View {
                             .accessibilityElement(children: .contain)
                             .accessibilityIdentifier("calendarLegend")
                         }
-                        if !listLayout { TrackerCard(padding: 14) { selectedDetails } }
+                        if !listLayout { selectedDetails }
                         TrackerCard { UpcomingCycleForecastView(forecast: session.cycleForecast, today: today) }
                     }
                     .frame(width: max(0, contentWidth), alignment: .leading)
@@ -276,11 +276,9 @@ struct TrackerCalendarView: View {
                 Button("How this estimate works") { showExplanation = true }.frame(minHeight: 44)
             }
             ForEach(session.snapshot.symptoms.filter { $0.day == selection }) { entry in
-                Divider()
                 SymptomRecordView(session: session, entry: entry)
             }
             ForEach(session.snapshot.sexualActivities.filter { $0.day == selection }) { entry in
-                Divider()
                 SexualActivityRecordView(session: session, entry: entry)
             }
         }

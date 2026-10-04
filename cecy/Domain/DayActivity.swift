@@ -56,6 +56,29 @@ nonisolated struct DayActivityIndex: Equatable, Sendable {
         observations = values
     }
 
+    /// A bounded page of actual logs, including confirmed bleeding days only.
+    func loggedDays(before boundary: LocalDay? = nil, limit: Int = 30) -> [LocalDay] {
+        guard limit > 0 else { return [] }
+        var days = Set(observations.keys.filter { day in boundary.map { day < $0 } ?? true }
+            .sorted(by: >).prefix(limit))
+        for period in periods.reversed() {
+            var day = period.end ?? period.start
+            if let boundary, day >= boundary {
+                guard let previous = try? boundary.adding(days: -1) else { continue }
+                day = previous
+            }
+            for _ in 0..<limit {
+                guard day >= period.start else { break }
+                days.insert(day)
+                guard day > period.start, let previous = try? day.adding(days: -1) else { break }
+                day = previous
+            }
+            days = Set(days.sorted(by: >).prefix(limit))
+            if days.count == limit, let oldest = days.min(), period.start <= oldest { break }
+        }
+        return days.sorted(by: >)
+    }
+
     func markers(on day: LocalDay) -> [DayActivityMarker] {
         var lower = 0
         var upper = periods.count

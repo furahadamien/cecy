@@ -41,7 +41,23 @@ struct DailyInsightsCard: View {
         TrackerCard {
             Label("Today’s insights", systemImage: "sun.max").font(.headline)
                 .accessibilityAddTraits(.isHeader)
+            DailyInsightsContent(session: session)
+            DisclosureGroup("Daily preparation") { DailyInsightsPreference(session: session) }
+                .accessibilityIdentifier("dailyPreparationOptions")
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("dailyInsightsCard")
+    }
+}
+
+/// Both tabs observe the same coordinator; presentation never starts a second request.
+struct DailyInsightsContent: View {
+    let session: TrackerSession
+
+    var body: some View {
+        Group {
             if let output = session.dailyInsightOutput {
+                Text("AI-generated daily insights").font(.caption).foregroundStyle(.secondary)
                 AIOutputView(output: output)
             } else if let today = session.today {
                 let answers = PreparedRecordAnswers.build(snapshot: session.snapshot, today: today)
@@ -54,10 +70,6 @@ struct DailyInsightsCard: View {
                 Text("Your local facts are ready. You can generate an explanation manually if today’s automatic request is unavailable.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            DisclosureGroup("Daily preparation") { DailyInsightsPreference(session: session) }
-                .accessibilityIdentifier("dailyPreparationOptions")
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("dailyInsightsCard")
     }
 }
