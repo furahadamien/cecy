@@ -74,6 +74,7 @@ nonisolated enum AccountError: Error, LocalizedError {
     private(set) var identityLoaded = false
     var requiresSignIn: Bool { !identityLoaded || identity?.signedOut == true }
     var message: String?
+    @ObservationIgnored var onSuccessfulLink: (() -> Void)?
     @ObservationIgnored private let store: any AppleIdentityStoring
     @ObservationIgnored private let checksAppleCredentials: Bool
     @ObservationIgnored private var pendingRequest: UUID?
@@ -141,6 +142,7 @@ nonisolated enum AccountError: Error, LocalizedError {
         state = .authorized
         revision += 1
         message = nil
+        onSuccessfulLink?()
     }
 
     func markRevoked() {
