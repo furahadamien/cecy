@@ -73,6 +73,7 @@ struct TrackerRootView: View {
             if scenePhase == .active { await session.privacy.unlockAutomatically() }
             if session.privacy.canAccess && session.phase == .loading { session.load() }
             if session.privacy.canAccess { await session.account.checkCredentialState() }
+            if scenePhase == .active { session.resumeRegistry() }
         }
         .task(id: DailyPreloadKey(active: scenePhase == .active, allowed: session.canUseAI,
                                   enabled: session.privacy.dailyInsightsEnabled,
@@ -81,8 +82,12 @@ struct TrackerRootView: View {
             if scenePhase == .active { session.preloadDailyInsights() }
         }
         .onChange(of: session.privacy.canAccess) { _, accessible in
-            if accessible { session.account.reload(); session.load() }
+            if accessible {
+                session.account.reload(); session.load()
+                if scenePhase == .active { session.resumeRegistry() }
+            }
             else {
+                session.registry.pause()
                 session.cancelPredictionUpdatePresentation()
                 session.healthImport.stop(); session.ai.invalidate(); session.dailyAI.invalidate()
             }
@@ -106,12 +111,14 @@ struct TrackerRootView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active {
+                session.registry.pause()
                 session.cancelPredictionUpdatePresentation()
                 session.ai.invalidate()
             }
             if phase != .active, session.dailyAI.isLoading { session.dailyAI.cancel() }
             if phase == .active {
                 session.refresh()
+                session.resumeRegistry()
                 Task { await session.privacy.unlockAutomatically() }
             }
             if phase == .background {

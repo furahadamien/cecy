@@ -21,6 +21,8 @@ final class TrackerSession {
     var confirmation: String?
     let privacy: TrackerPrivacy
     let account: AppleAccount
+    let registry: UserRegistryCoordinator
+    @ObservationIgnored private var registryAuthorization: AppleIdentity?
     let healthImport: HealthImportReview
     let ai: AIRequestCoordinator
     let dailyAI: AIRequestCoordinator
@@ -52,15 +54,37 @@ final class TrackerSession {
     init(repository: @escaping @MainActor () throws -> any PeriodRepository = { try SwiftDataPeriodRepository.production() },
          clock: @escaping () -> Date = Date.init, timeZone: @escaping () -> TimeZone = { .current },
          privacy: TrackerPrivacy? = nil, account: AppleAccount? = nil,
-         healthReader: (any HealthFlowReading)? = nil, aiService: any AIService = UnavailableAIService()) {
+         healthReader: (any HealthFlowReading)? = nil, aiService: any AIService = UnavailableAIService(),
+         registry: UserRegistryCoordinator? = nil) {
         makeRepository = repository
         self.clock = clock
         zone = timeZone
         self.privacy = privacy ?? .isolated()
         self.account = account ?? AppleAccount()
+        self.registry = registry ?? UserRegistryCoordinator()
         healthImport = HealthImportReview(reader: healthReader ?? UnavailableHealthReader())
         ai = AIRequestCoordinator(service: aiService)
         dailyAI = AIRequestCoordinator(service: aiService)
+        self.account.onSuccessfulLink = { [weak self] in
+            guard let self else { return }
+            registryAuthorization = self.account.identity
+            enqueueRegistryActivation()
+        }
+    }
+
+    private func enqueueRegistryActivation() {
+        guard privacy.canAccess, phase == .loaded, snapshot.onboardingCompletedAt != nil,
+              let identity = registryAuthorization, account.identity == identity,
+              let profile = snapshot.profile, profile.id == identity.profileID else { return }
+        if registry.activate(appleUserID: identity.userID, displayName: profile.preferredName) {
+            registryAuthorization = nil
+        }
+    }
+
+    func resumeRegistry() {
+        guard privacy.canAccess else { return }
+        enqueueRegistryActivation()
+        registry.resume()
     }
 
     /// UI entry point: present before synchronous local work, and keep its completion
@@ -122,6 +146,10 @@ final class TrackerSession {
             let loaded = try repository.load()
             let day = try LocalDay(date: clock(), timeZone: zone())
             publish(loaded, today: day)
+            if loaded == TrackerSnapshot(), account.identityLoaded, account.identity == nil {
+                registry.completeDeletion()
+            }
+            enqueueRegistryActivation()
         } catch {
             phase = .failed
             dailyAI.invalidate()
@@ -141,6 +169,7 @@ final class TrackerSession {
               !account.isSigningIn else { return "Finish the current action before logging out." }
         do { try account.signOut() }
         catch { return "Logout couldn’t be saved securely. You are still signed in. Try again." }
+        registryAuthorization = nil
         cancelSetup()
         healthImport.stop()
         ai.invalidate()
@@ -242,6 +271,7 @@ final class TrackerSession {
             try checkAccess()
             let completed = try repository.completeOnboarding(profileID: draft.profile.id, today: day, now: now)
             publish(completed, today: day)
+            enqueueRegistryActivation()
             confirmation = reminderResult == .permissionUnavailable
                 ? "Setup complete. Notifications weren’t enabled; you can change this in Settings."
                 : "Your profile is ready."
@@ -350,6 +380,8 @@ final class TrackerSession {
         isSaving = true
         defer { isSaving = false }
         do {
+            try registry.prepareDeletion(appleUserID: account.identity?.userID)
+            registryAuthorization = nil
             try privacy.prepareForReset()
             await privacy.reminders.flush()
             guard !Task.isCancelled else {
@@ -368,14 +400,19 @@ final class TrackerSession {
         isSaving = true
         defer { isSaving = false }
         do {
+            // Never discard an unreadable identity: it may be needed to deactivate the registry.
+            guard account.identityLoaded else { throw AccountError.storage }
+            try registry.prepareDeletion(appleUserID: account.identity?.userID)
+            registryAuthorization = nil
             try privacy.prepareForReset()
             await privacy.reminders.flush()
-            guard privacy.canAccess else { throw ProfileError.notReady }
+            guard privacy.canAccess, !Task.isCancelled else { throw ProfileError.notReady }
             let repository = try makeRepository()
             _ = try repository.deleteAll()
             try account.removeLocalIdentity()
             self.repository = repository
             publish(TrackerSnapshot(), today: try LocalDay(date: clock(), timeZone: zone()))
+            registry.completeDeletion()
             return nil
         } catch {
             return "Reset did not finish. Local records may already be deleted, but the Apple link may remain. Retry to finish cleanup."
@@ -389,12 +426,18 @@ final class TrackerSession {
         ai.invalidate()
         dailyAI.invalidate()
         healthImport.stop()
-        return mutate(confirmation: nil,
-                failure: "Deletion did not finish. Tracker records remain unchanged; reminders or the local Apple link may already be cleared. Please try again.") { repository, _, _ in
+        let error = mutate(confirmation: nil,
+                failure: "Deletion did not finish. Local records may already be deleted. Retry to finish account cleanup.") { repository, _, _ in
+            try self.registry.prepareDeletion(appleUserID: self.account.identity?.userID)
+            self.registryAuthorization = nil
             try self.privacy.prepareForReset()
+            // Keep the Apple identity recoverable until the health-store transaction commits.
+            let empty = try repository.deleteAll()
             try self.account.removeLocalIdentity()
-            return try repository.deleteAll()
+            return empty
         }
+        if error == nil { registry.completeDeletion() }
+        return error
     }
 
     private func mutate(confirmation: String?, failure: String,
@@ -476,7 +519,8 @@ final class TrackerSession {
                aiService: FixtureAIService(mode: ProcessInfo.processInfo.environment["CECY_UI_AI"] ?? "unavailable"))
         }
         #endif
-        return TrackerSession(privacy: .production(), account: .production(), healthReader: HealthKitService(), aiService: RemoteAIService())
+        return TrackerSession(privacy: .production(), account: .production(), healthReader: HealthKitService(), aiService: RemoteAIService(),
+                              registry: UserRegistryCoordinator(service: RemoteUserRegistryService(), store: KeychainRegistryOperationStore()))
     }
 }
 
