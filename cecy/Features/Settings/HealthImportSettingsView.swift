@@ -4,6 +4,8 @@ struct HealthImportSettingsView: View {
     let session: TrackerSession
     @State private var months = 12
     @State private var selected: HealthFlowSample?
+    @State private var showAccessHelp = false
+    @AccessibilityFocusState private var reviewResultFocused: Bool
     private var review: HealthImportReview { session.healthImport }
 
     var body: some View {
@@ -18,14 +20,25 @@ struct HealthImportSettingsView: View {
                     Text("Last 12 months").tag(12)
                 }.disabled(review.isBusy)
                 if review.isAvailable {
-                    Button("Review Apple Health samples") { session.reviewAppleHealth(months: months) }
+                    Button(review.state == .empty || review.state == .failed ? "Check again" : "Review Apple Health samples") {
+                        session.reviewAppleHealth(months: months)
+                    }
                         .disabled(review.isBusy).accessibilityIdentifier("reviewAppleHealth")
+                    if review.state == .empty {
+                        Text("Review finished. No readable menstrual-flow records were returned.")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("healthReviewResult")
+                            .accessibilityFocused($reviewResultFocused)
+                    }
+                    Button("How to enable Health access") { showAccessHelp = true }
+                        .accessibilityIdentifier("healthAccessHelp")
                 } else {
                     Text("Apple Health isn’t available on this device. Local tracking works without it.")
                         .accessibilityIdentifier("healthUnavailable")
                 }
                 if review.isBusy {
-                    ProgressView(review.state == .requesting ? "Opening permission request…" : "Reading samples…")
+                    ProgressView(review.state == .requesting ? "Checking Health access…" : "Reading samples…")
+                        .accessibilityIdentifier("healthReviewProgress")
                 }
                 if review.state != .off {
                     Button("Stop and clear review", role: .cancel) { review.stop() }
@@ -34,11 +47,14 @@ struct HealthImportSettingsView: View {
             } footer: {
                 Text("Optional and manual. No background sync. Only menstrual flow is requested—not sexual activity, measurements or other symptoms.")
             }
-            if let message = review.message { Section { InlineError(message: message) } }
+            if let message = review.message {
+                Section { InlineError(message: message).accessibilityFocused($reviewResultFocused) }
+            }
             if review.state == .empty {
                 Section("No readable flow samples") {
                     Text("There may be no matching records, or read access may be limited or off. An empty result does not tell Cecy which. Local records haven’t changed.")
-                    Text("Review Cecy’s access in the Health app or choose another date range.")
+                    Text("If you already answered Apple’s permission prompt, it won’t appear again. Change Cecy’s read access in Health, then return here and tap Check again.")
+                    Text("Only recorded menstrual flow can be imported—not predicted periods. Check that Health has records within the selected date range.")
                 }.accessibilityIdentifier("healthEmpty")
             }
             if review.state == .review {
@@ -80,6 +96,7 @@ struct HealthImportSettingsView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showAccessHelp) { HealthAccessHelpView() }
         .sheet(item: $selected) { sample in
             if let today = session.today {
                 HealthStartReviewView(session: session, sample: sample, today: today,
@@ -88,6 +105,7 @@ struct HealthImportSettingsView: View {
         }
         .onChange(of: review.state) { _, state in
             if state != .review { selected = nil }
+            reviewResultFocused = state == .empty || state == .failed
         }
         .onDisappear { review.stop() }
     }
@@ -103,6 +121,39 @@ struct HealthImportSettingsView: View {
                 Text("Source marked cycle start").font(.caption).foregroundStyle(.secondary)
             }
         }.fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+private struct HealthAccessHelpView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            SettingsForm(title: "Health access") {
+                Section {
+                    Text("Apple Health uses permissions on this device. There’s no separate account to connect.")
+                        .accessibilityIdentifier("healthAccessExplanation")
+                }
+                Section("Enable menstrual-flow reading") {
+                    Text("1. Open the Health app and tap your profile picture.")
+                    Text("2. Under Privacy, tap Apps or Apps and Services, then Cecy.")
+                    Text("3. Turn on Menstruation (Menstrual Flow) under the data Cecy is allowed to read.")
+                        .accessibilityIdentifier("healthReadPermissionStep")
+                    Text("4. Return to Cecy and tap Check again (or Review Apple Health samples).")
+                }
+                Section("Still no samples?") {
+                    Text("In Health, open Browse (or Search) → Cycle Tracking → Menstruation and check for recorded bleeding in your selected date range. Predicted dates aren’t records.")
+                    Text("If Cecy isn’t listed in Health, return here and tap Review Apple Health samples first. If Health is restricted on your device, those restrictions may need to be changed.")
+                    Text("Cecy cannot tell whether read access was denied. Reviewing never changes your existing records or writes to Health.")
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }.accessibilityIdentifier("closeHealthAccessHelp")
+                }
+            }
+        }
     }
 }
 
