@@ -206,6 +206,25 @@ nonisolated struct PhaseSixDomainTests {
         #expect(review.state == .failed && reader.requests == 1)
     }
 
+    @Test func repeatedEmptyReviewCanRecoverWhenSamplesBecomeReadable() async {
+        let reader = FakeHealthReader()
+        let review = HealthImportReview(reader: reader)
+        for count in 1...2 {
+            review.begin(months: 12, now: Date(), timeZone: .gmt, canAccess: { true })
+            await waitUntil { !review.isBusy }
+            #expect(review.state == .empty && review.message == nil)
+            #expect(reader.requests == count && reader.reads == count)
+        }
+        let sample = flowSample()
+        reader.values = [sample]
+        review.begin(months: 12, now: Date(), timeZone: .gmt, canAccess: { true })
+        await waitUntil { !review.isBusy }
+        #expect(reader.requests == 3 && reader.reads == 3)
+        #expect(review.state == .review && review.samples == [sample])
+        review.stop()
+        #expect(review.samples.isEmpty)
+    }
+
     @Test func identityUsesUUIDNotDateAndStopRejectsLateRead() async {
         let reader = FakeHealthReader()
         let first = flowSample()
