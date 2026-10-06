@@ -40,6 +40,8 @@ final class PhaseTwoUITests: XCTestCase {
 
     @MainActor func testEditMetadataEndAndCancelSurviveRelaunch() {
         let app = launch()
+        UIViewport.reveal(app.buttons["dailyLogHistory"], in: app)
+        app.buttons["dailyLogHistory"].tap()
         let day = app.buttons["dailyLog_20260902"]
         UIViewport.reveal(day, in: app); day.tap()
         let edit = app.buttons["editPeriod"].firstMatch
@@ -65,6 +67,8 @@ final class PhaseTwoUITests: XCTestCase {
         reveal(duration, in: app)
         XCTAssertEqual(duration.label, "Average: 1.0 days")
         app.tabBars.buttons["Today"].tap()
+        UIViewport.reveal(app.buttons["dailyLogHistory"], in: app)
+        app.buttons["dailyLogHistory"].tap()
         UIViewport.reveal(day, in: app); day.tap()
         reveal(edit, in: app)
         edit.tap()
@@ -85,6 +89,8 @@ final class PhaseTwoUITests: XCTestCase {
 
     @MainActor func testDeleteCancelThenConfirmRecalculates() {
         let app = launch()
+        UIViewport.reveal(app.buttons["dailyLogHistory"], in: app)
+        app.buttons["dailyLogHistory"].tap()
         let day = app.buttons["dailyLog_20260902"]
         UIViewport.reveal(day, in: app); day.tap()
         let delete = app.buttons["deletePeriod"].firstMatch

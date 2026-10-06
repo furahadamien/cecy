@@ -63,9 +63,8 @@ final class CycleExperienceUITests: XCTestCase {
     @MainActor func testCalendarSymptomsShareActionsAndDeleteAfterConfirmation() {
         let app = launch()
         tap("logSymptoms", in: app)
-        let search = app.textFields["symptomSearch"]
-        XCTAssertTrue(search.waitForExistence(timeout: 5))
-        search.tap(); search.typeText("Headache")
+        XCTAssertTrue(app.navigationBars["Log symptoms"].waitForExistence(timeout: 10))
+        // This test covers grouped editing/deletion; search has separate coverage.
         tap("symptomKind_headache", in: app)
         app.buttons["saveSymptom"].tap()
         XCTAssertTrue(app.buttons["saveSymptom"].waitForNonExistence(timeout: 10))
@@ -127,8 +126,8 @@ final class CycleExperienceUITests: XCTestCase {
         XCTAssertTrue(app.buttons["saveSymptom"].waitForNonExistence(timeout: 10))
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["logSymptoms"].waitForExistence(timeout: 10))
-        tap("dailyLog_20260929", in: app)
-        tap("editSymptom_nightSweats", in: app)
+        tap("editDaySymptoms", in: app)
+        tap("chooseDaySymptom_nightSweats", in: app)
         XCTAssertTrue(app.navigationBars["Edit observation"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["selectedSymptoms"].label.contains("Night sweats"))
     }
