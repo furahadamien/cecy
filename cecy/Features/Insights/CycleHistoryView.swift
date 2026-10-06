@@ -7,7 +7,7 @@ struct CycleHistoryView: View {
 
     var body: some View {
         TrackerPage(title: "Insights", subtitle: "Your cycle history, from recorded starts.") {
-            DailyInsightsCard(session: session)
+            if let today = session.today { ForTodayCard(session: session, today: today) }
             TrackerCard {
                 NavigationLink {
                     AIFeatureView(session: session, feature: .records)
@@ -111,7 +111,7 @@ private struct RecordedPeriodsView: View {
                 Button("Dismiss confirmation") { session.confirmation = nil }
             }
             if session.snapshot.periods.isEmpty {
-                Text("No periods recorded. Add a start or previous dates from Today.")
+                Text("No periods recorded. Add a start or previous dates from Calendar.")
             }
             LazyVStack(spacing: 10) {
                 ForEach(session.snapshot.periods.reversed()) { period in

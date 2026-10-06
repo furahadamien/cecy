@@ -28,7 +28,7 @@ nonisolated enum CycleQuestionScope: String, CaseIterable, Identifiable, Sendabl
     func suggestedQuestion(kind: SymptomKind) -> String {
         switch self {
         case .cycleLengths: "How long and variable are my recorded cycles?"
-        case .symptomFrequency: "How many days did I log \(kind.title.lowercased()) in the last 90 days?"
+        case .symptomFrequency: "How many days did I log \((kind == .energyLevel ? kind.timingTitle : kind.title).lowercased()) in the last 90 days?"
         case .beforePeriod: "Did I log \(kind.timingTitle.lowercased()) in the three days before my periods?"
         case .nearStart: "Did I log \(kind.timingTitle.lowercased()) on my period start day or the next two days?"
         }
@@ -59,12 +59,12 @@ nonisolated enum AIContextBuilder {
         return .symptoms(SymptomNormalizationContext(text: text))
     }
     static func validateText(_ text: String) throws {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.count <= 2_000 else { throw AIContextError.invalidText }
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.unicodeScalars.count <= 2_000 else { throw AIContextError.invalidText }
     }
 
     static func validateQuestion(_ text: String) throws {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              text.count <= maximumQuestionLength else { throw AIContextError.invalidQuestion }
+              text.count <= maximumQuestionLength, text.unicodeScalars.count <= 1_000 else { throw AIContextError.invalidQuestion }
     }
 
     static func insight(_ insight: CycleInsight) throws -> AIRequest {
@@ -73,9 +73,9 @@ nonisolated enum AIContextBuilder {
         switch insight.category {
         case .symptomTiming:
             guard let raw = insight.id.split(separator: ".").last, let kind = SymptomKind(rawValue: String(raw)),
-                  !insight.timing.isEmpty else { throw AIContextError.insufficientRecords }
+                  let typeValue = AISymptomType(kind: kind), !insight.timing.isEmpty else { throw AIContextError.insufficientRecords }
             type = "symptom_timing"
-            facts.symptom = AISymptomType(kind: kind)
+            facts.symptom = typeValue
             facts.startsAnalyzed = insight.timing.count
             facts.matchingStarts = insight.matchedStarts
             let offsets = insight.timing.flatMap { support in support.logDays.map { support.start.days(until: $0) } }
@@ -94,7 +94,7 @@ nonisolated enum AIContextBuilder {
     }
     private static func metric(_ category: InsightCategory) -> String {
         switch category {
-        case .symptomTiming: "recorded symptom timing; Poor sleep and Low energy only"
+        case .symptomTiming: "recorded symptom timing; rating observations mean Poor sleep, Low energy, or Low sex drive only"
         case .cycleLength: "mean recorded cycle interval"
         case .cycleVariability: "population standard deviation of recorded cycle intervals"
         case .bleedingDuration: "mean confirmed inclusive bleeding duration"
@@ -108,13 +108,14 @@ nonisolated enum AIContextBuilder {
         try p.validate()
         try SymptomValidation.validate(snapshot.symptoms, asOf: today)
         let symptoms = snapshot.symptoms.filter { $0.day == today }.compactMap { entry -> AISymptom? in
-            if entry.kind == .sleepQuality || entry.kind == .energyLevel {
+            guard let type = AISymptomType(kind: entry.kind) else { return nil }
+            if !entry.kind.usesSeverity {
                 // Only explicit adverse ratings can be described as symptoms. Severity is unknown.
                 guard entry.value == 1 else { return nil }
-                return AISymptom(type: AISymptomType(kind: entry.kind), severity: nil)
+                return AISymptom(type: type, severity: nil)
             }
             let severity: AISeverity? = entry.value.map { $0 == 1 ? .mild : $0 == 2 ? .moderate : .severe }
-            return AISymptom(type: AISymptomType(kind: entry.kind), severity: severity)
+            return AISymptom(type: type, severity: severity)
         }.sorted { $0.type.rawValue < $1.type.rawValue }
         try PeriodValidation.validate(snapshot.periods, asOf: today)
         let cycleDay = snapshot.periods.map(\.start).max().map { $0.days(until: today) + 1 }
@@ -122,7 +123,8 @@ nonisolated enum AIContextBuilder {
         let exerciseWire = exercises.map { exercise in
             exercise == .strengthTraining ? "strength_training" : exercise == .homeWorkouts ? "home_workouts" : exercise.rawValue
         }.sorted()
-        return .wellness(WellnessRecommendationContext(cycleDay: cycleDay, symptoms: symptoms,
+        // Omit an out-of-contract cycle day; never clamp it or roll the cycle forward.
+        return .wellness(WellnessRecommendationContext(cycleDay: cycleDay.flatMap { (1...100).contains($0) ? $0 : nil }, symptoms: symptoms,
             activityLevel: activityWire, preferredExercises: exerciseWire,
             dietaryPreference: diet == .noPreference ? "none" : diet.rawValue,
             foodAllergies: p.foodAllergies.sorted(), userGoals: goals.map { $0 == .manageSymptoms ? "manage_symptoms" : "stay_active" }.sorted()))
@@ -134,29 +136,36 @@ nonisolated enum AIContextBuilder {
         try SymptomValidation.validate(snapshot.symptoms, asOf: today)
         let periods = Array(snapshot.periods.sorted { $0.start < $1.start }.suffix(7))
         let windowStart = try today.adding(days: -89)
-        let logs = snapshot.symptoms.filter { $0.day >= windowStart && $0.day <= today }
-        guard !periods.isEmpty || !logs.isEmpty else { throw AIContextError.insufficientRecords }
+        let windowLogs = snapshot.symptoms.filter { $0.day >= windowStart && $0.day <= today }
+        let logs = windowLogs.filter { isRepresentable($0) }
+        guard !periods.isEmpty || !windowLogs.isEmpty else { throw AIContextError.insufficientRecords }
         let lengths = zip(periods, periods.dropFirst()).map { $0.start.days(until: $1.start) }
         let stats = RecordedStatistics(lengths: lengths)
         let durations = periods.compactMap(\.duration)
         let counts = Dictionary(grouping: logs, by: \.kind)
-        let observations = SymptomKind.allCases.compactMap { kind -> String? in
-            guard let entries = counts[kind] else { return nil }
-            return "\(kind.title): \(Set(entries.map(\.day)).count) recorded days in the last 90 days."
+        var facts = AIQuestionFacts(scope: CycleQuestionScope.cycleLengths.rawValue,
+            caveat: caveat + " Small samples are not trends. Open intervals are not measured cycles. Sleep and sex-drive counts are ratings, not necessarily adverse. Energy ratings are separately counted; low_energy means low only.")
+        facts.recordedStarts = periods.count
+        facts.confirmedBleedingDurations = durations
+        facts.unknownBleedingEnds = periods.count - durations.count
+        let energy = windowLogs.filter { $0.kind == .energyLevel }
+        if !energy.isEmpty {
+            facts.energyRatingDays = Dictionary(grouping: energy) { entry in
+                switch entry.value { case 1: "low"; case 2: "typical"; case 3: "high"; default: "unrated" }
+            }.mapValues { Set($0.map(\.day)).count }
         }
-        let details = [
-            "\(periods.count) recorded period starts; \(lengths.count) completed intervals in the selected records.",
-            "Confirmed bleeding durations (days): \(durations.isEmpty ? "unknown" : durations.map(String.init).joined(separator: ", ")).",
-            "\(periods.count - durations.count) bleeding ends are unknown. An open interval is not a measured cycle length.",
-            "Small samples describe only the available records, not a trend, typical cycle or prediction. Sleep and energy counts are ratings, not proof of adverse symptoms."
-        ] + observations + [caveat]
-        var facts = AIQuestionFacts(scope: CycleQuestionScope.cycleLengths.rawValue, caveat: details.joined(separator: " "))
+        facts.symptoms = SymptomKind.allCases.compactMap { kind in
+            guard let entries = counts[kind], let type = AISymptomType(kind: kind) else { return nil }
+            return AIQuestionSymptomFacts(symptom: type, cyclesAnalyzed: nil, daysAnalyzed: 90,
+                recordedDays: Set(entries.map(\.day)).count, matchingStarts: nil, timingWindow: nil,
+                minimumRecordedOffsetDays: nil, maximumRecordedOffsetDays: nil)
+        }
         facts.cyclesAnalyzed = lengths.count
         facts.averageCycleLength = stats?.mean
         facts.minimumCycleLength = stats?.minimum
         facts.maximumCycleLength = stats?.maximum
         facts.populationStandardDeviationDays = stats?.standardDeviation
-        return .question(CycleQuestionContext(question: "Summarize my available recorded facts and explain what is still unknown, without inferring a pattern.", facts: facts))
+        return .question(CycleQuestionContext(question: "Summarize my recorded facts and unknowns without inferring a pattern.", facts: facts))
     }
 
     static func summary(snapshot: TrackerSnapshot, start: LocalDay, today: LocalDay) throws -> AIRequest {
@@ -168,7 +177,7 @@ nonisolated enum AIContextBuilder {
             let next = index + 1 < periods.count ? periods[index + 1].start : nil
             let through = try next.map { try $0.adding(days: -1) } ?? today
             let selected = TrackerSnapshot(periods: [periods[index]],
-                symptoms: snapshot.symptoms.filter { $0.day >= start && $0.day <= through })
+                symptoms: snapshot.symptoms.filter { $0.day >= start && $0.day <= through && AISymptomType(kind: $0.kind) != nil })
             guard case .question(let context) = try recordInsights(snapshot: selected, today: through) else {
                 throw AIContextError.insufficientRecords
             }
@@ -178,21 +187,34 @@ nonisolated enum AIContextBuilder {
             if let next {
                 let length = start.days(until: next)
                 facts = AIQuestionFacts(scope: CycleQuestionScope.cycleLengths.rawValue,
-                    caveat: "Selected completed interval: \(length) days between recorded starts; bleeding duration unknown. "
-                        + "Symptom records in this interval: "
-                        + SymptomKind.allCases.compactMap { kind in
-                            let count = selected.symptoms.filter { $0.kind == kind }.count
-                            return count > 0 ? "\(kind.title): \(count) recorded days" : nil
-                        }.joined(separator: "; ")
-                        + ". One interval is not a trend. Sleep and energy are ratings, not necessarily adverse symptoms. " + caveat,
+                    caveat: "Selected completed interval; bleeding duration unknown. One interval is not a trend. Sleep and sex-drive counts are ratings; energy counts only low ratings. " + caveat,
                     cyclesAnalyzed: 1, averageCycleLength: Double(length), minimumCycleLength: length, maximumCycleLength: length)
+                facts.recordedStarts = 1
+                facts.unknownBleedingEnds = 1
+                facts.symptoms = context.facts.symptoms
+                facts.energyRatingDays = context.facts.energyRatingDays
             }
             return .question(CycleQuestionContext(question: "Describe the available records for this cycle, explaining missing measurements without guessing.", facts: facts))
         }
         let next = periods[index + 1].start
         let lengths = zip(periods.prefix(index + 2), periods.prefix(index + 2).dropFirst()).map { $0.start.days(until: $1.start) }
         guard let stats = RecordedStatistics(lengths: Array(lengths.suffix(6))) else { throw AIContextError.insufficientRecords }
-        let logs = snapshot.symptoms.filter { $0.day >= start && $0.day < next && $0.kind.qualifiesForTiming(value: $0.value) }
+        // A valid local record may exceed the specialized summary endpoint's ranges.
+        // Describe its exact measurements using scalar facts instead of fabricating replacements.
+        if !(1...100).contains(start.days(until: next)) || !(1...100).contains(stats.mean) || !(1...30).contains(duration) {
+            let selected = TrackerSnapshot(periods: [periods[index]],
+                symptoms: snapshot.symptoms.filter { $0.day >= start && $0.day < next })
+            guard case .question(let context) = try recordInsights(snapshot: selected, today: try next.adding(days: -1)) else {
+                throw AIContextError.insufficientRecords
+            }
+            var facts = context.facts
+            facts.cyclesAnalyzed = 1
+            facts.averageCycleLength = Double(start.days(until: next))
+            facts.minimumCycleLength = start.days(until: next)
+            facts.maximumCycleLength = start.days(until: next)
+            return .question(CycleQuestionContext(question: "Describe this completed interval and its unknowns without inferring a trend.", facts: facts))
+        }
+        let logs = snapshot.symptoms.filter { $0.day >= start && $0.day < next && $0.kind.qualifiesForTiming(value: $0.value) && AISymptomType(kind: $0.kind) != nil }
         let counts = Dictionary(grouping: logs, by: \.kind)
         let kinds = counts.keys.sorted { lhs, rhs in
             let a = counts[lhs]!.count, b = counts[rhs]!.count
@@ -204,7 +226,7 @@ nonisolated enum AIContextBuilder {
                "Average uses \(stats.count) completed intervals ending no later than this cycle.", caveat]
         return .summary(CycleSummaryContext(periodLabel: "Selected completed cycle", cycleLength: start.days(until: next),
             averageCycleLength: stats.mean, periodLength: duration,
-            commonSymptoms: kinds.prefix(3).map { AISymptomType(kind: $0) }, observations: observations))
+            commonSymptoms: Array(kinds.compactMap { AISymptomType(kind: $0) }.prefix(3)), observations: packedObservations(observations)))
     }
 
     static func question(_ question: String, scope: CycleQuestionScope, kind: SymptomKind,
@@ -215,7 +237,8 @@ nonisolated enum AIContextBuilder {
         guard supports(question, scope: scope, kind: kind) else { throw AIContextError.unsupportedQuestion }
         try PeriodValidation.validate(snapshot.periods, asOf: today)
         try SymptomValidation.validate(snapshot.symptoms, asOf: today)
-        var facts = AIQuestionFacts(scope: scope.rawValue, caveat: caveat)
+        var facts = AIQuestionFacts(scope: scope.rawValue,
+            caveat: caveat + " Timing uses only low sleep, energy and sex-drive ratings; frequency includes all sleep/sex-drive ratings but only low energy.")
         if scope == .cycleLengths {
             let periods = snapshot.periods.sorted { $0.start < $1.start }
             let lengths = Array(zip(periods, periods.dropFirst()).map { $0.start.days(until: $1.start) }.suffix(6))
@@ -232,11 +255,12 @@ nonisolated enum AIContextBuilder {
             facts.maximumCycleLength = stats.maximum
             facts.populationStandardDeviationDays = stats.standardDeviation
         } else {
-            facts.symptom = AISymptomType(kind: kind)
+            guard let type = AISymptomType(kind: kind) else { throw AIContextError.unsupportedQuestion }
+            facts.symptom = type
             if scope == .symptomFrequency {
                 let start = try today.adding(days: -89)
                 facts.daysAnalyzed = 90
-                facts.recordedDays = snapshot.symptoms.filter { $0.kind == kind && $0.day >= start && $0.day <= today }.count
+                facts.recordedDays = snapshot.symptoms.filter { $0.kind == kind && $0.day >= start && $0.day <= today && isRepresentable($0) }.count
             } else {
                 let offsets = scope == .beforePeriod ? -3 ... -1 : 0...2
                 let support = CycleInsightEngine.timingSupport(periods: snapshot.periods, symptoms: snapshot.symptoms,
@@ -265,15 +289,17 @@ nonisolated enum AIContextBuilder {
             return try question(text, scope: scope, kind: kind, snapshot: snapshot, today: today)
         }
         let values = try kinds.sorted { $0.rawValue < $1.rawValue }.map { kind -> AIQuestionSymptomFacts in
+            guard let type = AISymptomType(kind: kind) else { throw AIContextError.unsupportedQuestion }
             guard case .question(let context) = try question(scope.suggestedQuestion(kind: kind), scope: scope,
                 kind: kind, snapshot: snapshot, today: today) else { throw AIContextError.insufficientRecords }
             let facts = context.facts
-            return AIQuestionSymptomFacts(symptom: AISymptomType(kind: kind), cyclesAnalyzed: facts.cyclesAnalyzed,
+            return AIQuestionSymptomFacts(symptom: type, cyclesAnalyzed: facts.cyclesAnalyzed,
                 daysAnalyzed: facts.daysAnalyzed, recordedDays: facts.recordedDays, matchingStarts: facts.matchingStarts,
                 timingWindow: facts.timingWindow, minimumRecordedOffsetDays: facts.minimumRecordedOffsetDays,
                 maximumRecordedOffsetDays: facts.maximumRecordedOffsetDays)
         }
-        var facts = AIQuestionFacts(scope: scope.rawValue, caveat: caveat)
+        var facts = AIQuestionFacts(scope: scope.rawValue,
+            caveat: caveat + " Timing uses only low sleep, energy and sex-drive ratings; frequency includes all sleep/sex-drive ratings but only low energy.")
         facts.symptoms = values
         return .question(CycleQuestionContext(question: text, facts: facts))
     }
@@ -285,7 +311,10 @@ nonisolated enum AIContextBuilder {
     static func supports(_ question: String, scope: CycleQuestionScope, kinds: Set<SymptomKind>) -> Bool {
         let text = question.lowercased()
         let blocked = ["pregnan", "fertil", "ovulat", "diagnos", "pcos", "endometri", "medicat", "treatment", "cure", "cause", "why", "normal", "all histor", "all record", "sex", "tomorrow", "next period"]
-        guard !blocked.contains(where: { text.contains($0) }) else { return false }
+        // Only the exact observation phrase is exempted, and only when selected.
+        let screened = kinds.contains(.libido) && scope != .cycleLengths
+            ? text.replacingOccurrences(of: "\\bsex drive\\b", with: "libido", options: .regularExpression) : text
+        guard !blocked.contains(where: { screened.contains($0) }) else { return false }
         if scope != .cycleLengths && kinds.isEmpty { return false }
         if text == scope.selectedSymptomsQuestion.lowercased() { return true }
         if kinds.count == 1, let kind = kinds.first, text == scope.suggestedQuestion(kind: kind).lowercased() { return true }
@@ -315,5 +344,20 @@ nonisolated enum AIContextBuilder {
         case .symptomFrequency: return !text.contains("before") && !text.contains("after") && !text.contains("start") && (text.contains("log") || text.contains("record"))
         case .cycleLengths: return false
         }
+    }
+
+    private static func isRepresentable(_ entry: SymptomEntry) -> Bool {
+        AISymptomType(kind: entry.kind) != nil && (entry.kind != .energyLevel || entry.value == 1)
+    }
+
+    /// Keep every observation without exceeding the backend's 30-string/500-code-point bounds.
+    private static func packedObservations(_ observations: [String]) -> [String] {
+        var result: [String] = []
+        for observation in observations {
+            if let last = result.last, (last + " " + observation).unicodeScalars.count <= 500 {
+                result[result.count - 1] = last + " " + observation
+            } else { result.append(observation) }
+        }
+        return result
     }
 }

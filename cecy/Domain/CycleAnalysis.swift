@@ -195,6 +195,7 @@ protocol PeriodRepository {
     func saveSymptom(_ entry: SymptomEntry, editing: Bool, today: LocalDay, now: Date) throws -> TrackerSnapshot
     func addSymptoms(_ entries: [SymptomEntry], today: LocalDay, now: Date) throws -> TrackerSnapshot
     func deleteSymptom(id: UUID) throws -> TrackerSnapshot
+    func deleteSymptoms(on day: LocalDay) throws -> TrackerSnapshot
     func saveSexualActivity(_ entry: SexualActivityEntry, editing: Bool, today: LocalDay, now: Date) throws -> TrackerSnapshot
     func deleteSexualActivity(id: UUID) throws -> TrackerSnapshot
     func saveProfile(_ profile: LocalProfile, today: LocalDay) throws -> TrackerSnapshot

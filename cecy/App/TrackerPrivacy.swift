@@ -117,13 +117,16 @@ struct PreparedExport: Identifiable {
         guard canAccess else { return "Unlock Cecy before changing insight consent." }
         if !enabled { aiBlocked = true }
         var candidate = preferences
+        let renewingConsent = enabled && preferences.aiConsent?.isCurrent != true
         candidate.aiConsent = enabled ? AIConsentRecord(noticeVersion: AIConsentRecord.currentVersion, grantedAt: now) : nil
-        if !enabled { candidate.dailyInsightsEnabled = false; dailyInsightsBlocked = true }
+        if !enabled || renewingConsent { candidate.dailyInsightsEnabled = false }
+        if !enabled { dailyInsightsBlocked = true }
         guard !enabled || candidate.aiConsent?.isCurrent == true else { return "Insight consent could not be saved." }
         do {
             try storage.save(candidate)
             preferences = candidate
             aiBlocked = !enabled
+            if renewingConsent { dailyInsightsBlocked = true }
             return nil
         } catch {
             return enabled ? "Insights weren’t enabled because consent couldn’t be saved. Try again."

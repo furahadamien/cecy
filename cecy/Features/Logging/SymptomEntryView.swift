@@ -11,6 +11,7 @@ struct SymptomEntryView: View {
     @State private var notes: String
     @State private var saveError: String?
     @State private var discard = false
+    @State private var search = ""
     @AccessibilityFocusState private var errorFocused: Bool
 
     init(session: TrackerSession, day: LocalDay, entry: SymptomEntry? = nil) {
@@ -59,17 +60,27 @@ struct SymptomEntryView: View {
                     } footer: { Text("Review your symptoms before saving.") }
                 }
                 Section {
-                    SelectionFlowLayout {
-                        ForEach(SymptomKind.allCases, id: \.self) { kind in
-                            symptomButton(kind)
-                        }
+                    TextField("Search symptoms and details", text: $search)
+                        .accessibilityIdentifier("symptomSearch")
+                    if !selectedKinds.isEmpty {
+                        Text("Selected: \(orderedKinds.map(\.title).joined(separator: ", "))")
+                            .font(.footnote).accessibilityIdentifier("selectedSymptoms")
                     }
-                    .accessibilityElement(children: .contain)
-                    .accessibilityIdentifier("symptomKinds")
-                } header: {
-                    Text("Symptoms")
                 } footer: {
                     Text(original == nil ? "Choose all that apply. Tap again to deselect." : "Choose a type for this observation.")
+                }
+                ForEach(SymptomCategory.allCases, id: \.self) { category in
+                    let kinds = category.kinds.filter { search.isEmpty || $0.title.localizedCaseInsensitiveContains(search) }
+                    if !kinds.isEmpty {
+                        Section {
+                            SelectionFlowLayout {
+                                ForEach(kinds, id: \.self) { symptomButton($0) }
+                            }
+                        } header: { Label(category.rawValue, systemImage: category.symbol) }
+                    }
+                }
+                if !search.isEmpty && !SymptomKind.allCases.contains(where: { $0.title.localizedCaseInsensitiveContains(search) }) {
+                    Text("No matching type. You can describe other details in the private note with a selected observation.")
                 }
                 Section {
                     DatePicker("Date", selection: Binding(get: { day.formattingDate }, set: {

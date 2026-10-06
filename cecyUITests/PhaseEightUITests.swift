@@ -46,13 +46,13 @@ final class PhaseEightUITests: XCTestCase {
         tap("enableAI", app: app)
         XCTAssertTrue(app.navigationBars["Optional insights"].waitForNonExistence(timeout: 5), app.debugDescription)
     }
-    @MainActor private func describe(_ app: XCUIApplication) {
+    @MainActor private func describe(_ app: XCUIApplication, text: String = "Synthetic fatigue and digestive changes") {
         tap("logSymptoms", app: app)
         XCTAssertTrue(app.navigationBars["Log symptoms"].waitForExistence(timeout: 5))
         tap("describeSymptoms", app: app)
         XCTAssertTrue(app.navigationBars["Describe symptoms"].waitForExistence(timeout: 5))
         let field = app.textViews["aiSymptomText"].exists ? app.textViews["aiSymptomText"] : app.textFields["aiSymptomText"]
-        reveal(field, app: app); field.tap(); field.typeText("Synthetic fatigue and digestive changes")
+        reveal(field, app: app); field.tap(); field.typeText(text)
         app.buttons["Hide keyboard"].tap()
     }
     @MainActor private func back(_ app: XCUIApplication) { app.navigationBars.buttons.firstMatch.tap() }
@@ -88,8 +88,47 @@ final class PhaseEightUITests: XCTestCase {
         XCTAssertTrue(app.buttons["reviewAIConsent"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["disableAI"].exists)
     }
+    @MainActor func testExpandedCatalogReviewRequiresExplicitRatingAndSave() {
+        let app = launch(mode: "catalogV2")
+        describe(app, text: "Synthetic dizziness, vaginal itching, and high sex drive")
+        tap("reviewAIConsent", app: app)
+        let notice = app.staticTexts["aiExpandedCatalogDisclosure"]
+        UIViewport.reveal(notice, in: app)
+        XCTAssertTrue(notice.label.contains("sensitive health details"))
+        UIViewport.reveal(app.buttons["enableAI"], in: app)
+        app.buttons["enableAI"].tap()
+        XCTAssertTrue(app.navigationBars["Optional insights"].waitForNonExistence(timeout: 5))
+        tap("normalizeSymptoms", app: app)
+        XCTAssertTrue(app.staticTexts["Review symptoms before saving"].waitForExistence(timeout: 10))
+        for id in ["aiSymptom_dizziness", "aiSymptom_vaginalItching", "aiSymptom_libido"] {
+            let choice = app.buttons[id]
+            UIViewport.reveal(choice, in: app)
+            XCTAssertTrue(choice.isSelected)
+        }
+        let rating = app.buttons["aiSymptomRating_libido"]
+        UIViewport.reveal(rating, in: app)
+        XCTAssertTrue(rating.label.contains("Not rated"))
+        rating.tap()
+        app.buttons["High"].firstMatch.tap()
+        XCTAssertTrue(rating.label.contains("High"))
+        UIViewport.reveal(app.buttons["saveAISymptoms"], in: app)
+        app.buttons["saveAISymptoms"].tap()
+        XCTAssertTrue(app.buttons["saveAISymptoms"].waitForNonExistence(timeout: 15))
+        app.launchEnvironment.removeValue(forKey: "CECY_UI_FIXTURE")
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.buttons["logPeriod"].waitForExistence(timeout: 15))
+        let day = app.buttons["dailyLog_20260929"]
+        UIViewport.reveal(day, in: app); day.tap()
+        let edit = app.buttons["editSymptom_libido"]
+        UIViewport.reveal(edit, in: app); edit.tap()
+        let stored = app.buttons["symptomRating_libido"]
+        UIViewport.reveal(stored, in: app)
+        XCTAssertTrue(stored.label.contains("High"))
+    }
+
     @MainActor func testAllFourReadOnlyFeaturesShowLocalFactsAndAIOutput() {
         let app = launch()
+        app.tabBars.buttons["Insights"].tap()
         tap("dailyWellnessAI", app: app)
         XCTAssertTrue(app.staticTexts["localSevereSymptomNotice"].exists || app.otherElements["localSevereSymptomNotice"].exists)
         consent(app)

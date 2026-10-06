@@ -287,6 +287,22 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         }
     }
 
+    func deleteSymptoms(on day: LocalDay) throws -> TrackerSnapshot {
+        var candidate = try load()
+        let records = try context.fetch(FetchDescriptor<TrackerSchemaV3.SymptomRecord>())
+            .filter { $0.dayKey == day.key }
+        guard !records.isEmpty else { throw TrackingError.missingRecord }
+        do {
+            records.forEach { context.delete($0) }
+            try saveContext(context)
+            candidate.symptoms.removeAll { $0.day == day }
+            return candidate
+        } catch {
+            context.rollback()
+            throw error
+        }
+    }
+
     func deleteSymptom(id: UUID) throws -> TrackerSnapshot {
         var candidate = try load()
         guard let record = try context.fetch(FetchDescriptor<TrackerSchemaV3.SymptomRecord>()).first(where: { $0.id == id }) else {

@@ -1,4 +1,11 @@
 import SwiftUI
+private struct RecordsShareSurfaceKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    var recordsShareSurface: Bool {
+        get { self[RecordsShareSurfaceKey.self] }
+        set { self[RecordsShareSurfaceKey.self] = newValue }
+    }
+}
 
 /// One solid reading surface per record; no nested borders or translucent health text.
 struct RecordedEntryCard<Content: View>: View {
@@ -6,19 +13,25 @@ struct RecordedEntryCard<Content: View>: View {
     @Environment(\.colorSchemeContrast) private var contrast
     let accent: Color
     @ViewBuilder var content: Content
+    @Environment(\.recordsShareSurface) private var sharesSurface
 
     var body: some View {
-        let shape = UnevenRoundedRectangle(topLeadingRadius: 32, bottomLeadingRadius: 24,
-                                           bottomTrailingRadius: 32, topTrailingRadius: 24, style: .continuous)
-        VStack(alignment: .leading, spacing: 16) { content }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(20)
-            .background(TrackerPalette(scheme: colorScheme).surface, in: shape)
-            .overlay {
-                shape.strokeBorder(accent.opacity(contrast == .increased ? 1 : 0), lineWidth: 1)
-                    .allowsHitTesting(false)
-            }
-            .shadow(color: .black.opacity(contrast == .increased ? 0 : 0.04), radius: 12, y: 4)
+        if sharesSurface {
+            VStack(alignment: .leading, spacing: 12) { content }
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            let shape = UnevenRoundedRectangle(topLeadingRadius: 32, bottomLeadingRadius: 24,
+                                               bottomTrailingRadius: 32, topTrailingRadius: 24, style: .continuous)
+            VStack(alignment: .leading, spacing: 16) { content }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(20)
+                .background(TrackerPalette(scheme: colorScheme).surface, in: shape)
+                .overlay {
+                    shape.strokeBorder(accent.opacity(contrast == .increased ? 1 : 0), lineWidth: 1)
+                        .allowsHitTesting(false)
+                }
+                .shadow(color: .black.opacity(contrast == .increased ? 0 : 0.04), radius: 12, y: 4)
+        }
     }
 }
 

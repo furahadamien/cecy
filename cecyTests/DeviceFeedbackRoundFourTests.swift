@@ -70,9 +70,9 @@ nonisolated struct DeviceFeedbackRoundFourTests {
         guard case .question(let context) = try AIContextBuilder.recordInsights(snapshot: snapshot, today: today) else { Issue.record(); return }
         #expect(context.facts.cyclesAnalyzed == 0)
         #expect(context.facts.averageCycleLength == nil && context.facts.populationStandardDeviationDays == nil)
-        #expect(context.facts.caveat.contains("1 recorded period starts"))
-        #expect(context.facts.caveat.contains("Cramps: 1 recorded days"))
-        #expect(context.facts.caveat.contains("bleeding durations (days): unknown"))
+        #expect(context.facts.recordedStarts == 1)
+        #expect(context.facts.symptoms?.first?.symptom == .cramps && context.facts.symptoms?.first?.recordedDays == 1)
+        #expect(context.facts.confirmedBleedingDurations == [] && context.facts.unknownBleedingEnds == 1)
         let json = String(decoding: try JSONEncoder().encode(context), as: UTF8.self)
         for secret in ["PRIVATE", "20260902", "2026-09-02", snapshot.periods[0].id.uuidString, "typicalCycleDays"] {
             #expect(!json.contains(secret))
@@ -91,6 +91,9 @@ nonisolated struct DeviceFeedbackRoundFourTests {
         let snapshot = TrackerSnapshot(symptoms: [SymptomEntry(day: today, kind: .energyLevel, value: 3)])
         guard case .question(let context) = try AIContextBuilder.recordInsights(snapshot: snapshot, today: today) else { Issue.record(); return }
         #expect(context.facts.caveat.contains("ratings"))
+        #expect(context.facts.energyRatingDays == ["high": 1])
+        #expect(context.facts.symptoms?.isEmpty == true)
+        try context.validateForAI()
         #expect(throws: AIContextError.self) { try AIContextBuilder.recordInsights(snapshot: TrackerSnapshot(), today: today) }
         #expect(throws: TrackingError.futureDate) {
             try AIContextBuilder.recordInsights(snapshot: TrackerSnapshot(periods: [Period(start: today.adding(days: 1))]), today: today)

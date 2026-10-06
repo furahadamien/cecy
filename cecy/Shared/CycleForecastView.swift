@@ -1,5 +1,33 @@
 import SwiftUI
 
+struct TodayEstimatesCard: View {
+    let forecast: CycleForecast
+    let today: LocalDay
+    var body: some View {
+        TrackerCard {
+            Text("Today’s estimates").font(.headline).accessibilityAddTraits(.isHeader)
+            let bleeding = forecast.bleeding(on: today)
+            let fertile = forecast.fertile(on: today)
+            let ovulation = forecast.ovulation(on: today)
+            let period = forecast.period(on: today)
+            if bleeding != nil { Label("Expected bleeding day · Not recorded", systemImage: "drop") }
+            if period != nil { Label("Within a possible period-start window", systemImage: "circle.dashed") }
+            if fertile != nil { Label("Within an estimated fertile window", systemImage: "leaf") }
+            if ovulation != nil { Label("Possible ovulation today · Not confirmed", systemImage: "circle.dotted") }
+            if bleeding == nil && fertile == nil && ovulation == nil && period == nil {
+                Text("No calendar event is estimated for today. This does not identify a safe day.").font(.subheadline)
+            }
+            if let cycle = fertile ?? ovulation ?? period ?? bleeding {
+                if cycle.isLaterProjection { Text("Assumes earlier projected periods occurred; none have been recorded automatically.").font(.caption) }
+                ForEach(cycle.ovulationWarnings, id: \.self) { Text($0).font(.caption) }
+            }
+            Text("Estimates are separate from your logs and are not contraception guidance.").font(.caption).foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("todayEstimates")
+    }
+}
+
 struct ProjectedCycleDetails: View {
     @Environment(\.colorScheme) private var colorScheme
     let cycle: ProjectedCycle

@@ -22,7 +22,8 @@ import Testing
         let combined = DayActivityMarker.calendar(recorded: recorded, forecast: forecast, day: day)
         #expect(combined.count == 4)
         #expect(combined.first?.id == "forecast.bleeding" && combined.first?.symbol == "drop")
-        #expect(Array(combined.dropFirst()) == recorded)
+        #expect(combined.map(\.id) == ["forecast.bleeding", "period", "symptoms", "sexualActivity"])
+        #expect(combined.first(where: { $0.id == "symptoms" })?.title == "Cramps")
         #expect(Set(combined.map(\.id)).count == combined.count)
     }
 
@@ -34,6 +35,16 @@ import Testing
         #expect(combined.map(\.id) == ["forecast.fertile", "sexualActivity"])
         #expect(combined.first?.symbol == "leaf")
         #expect(DayActivityMarker.calendar(recorded: recorded, forecast: forecast, day: start) == recorded)
+    }
+
+    @Test func multipleSymptomsUseOneCalendarIconButKeepAccessibleNames() throws {
+        let (day, forecast) = try fixture()
+        let snapshot = TrackerSnapshot(symptoms: SymptomKind.allCases.map { SymptomEntry(day: day, kind: $0) })
+        let recorded = DayActivityMarker.recorded(on: day, in: snapshot)
+        #expect(recorded.count == SymptomKind.allCases.count)
+        let visual = DayActivityMarker.calendar(recorded: recorded, forecast: forecast, day: day)
+        #expect(visual.count == 1 && visual[0].id == "symptoms")
+        #expect(visual[0].title.contains("Cramps") && visual[0].title.contains("Night sweats"))
     }
 
     @Test func eagerGridReservesAllRowsAndKeepsSingleRowForecastCompact() {

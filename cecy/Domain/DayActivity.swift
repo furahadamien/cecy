@@ -14,7 +14,14 @@ nonisolated struct DayActivityMarker: Identifiable, Equatable, Sendable {
         if forecast.fertile(on: day) != nil {
             estimates.append(Self(id: "forecast.fertile", symbol: "leaf", title: "Estimated fertile window"))
         }
-        return estimates + recorded
+        let symptoms = recorded.filter { $0.id.hasPrefix("symptom.") }
+        var compact = recorded.filter { !$0.id.hasPrefix("symptom.") }
+        if !symptoms.isEmpty {
+            let position = compact.firstIndex { $0.id == "sexualActivity" } ?? compact.endIndex
+            compact.insert(Self(id: "symptoms", symbol: "waveform.path.ecg",
+                                title: symptoms.map(\.title).joined(separator: ", ")), at: position)
+        }
+        return estimates + compact
     }
 
     static func recorded(on day: LocalDay, in snapshot: TrackerSnapshot) -> [Self] {

@@ -42,12 +42,13 @@ final class DeviceFeedbackRoundTwoUITests: XCTestCase {
     }
 
     @MainActor private func tap(_ id: String, app: XCUIApplication) {
+        if id == "dailyWellnessAI" { app.tabBars.buttons["Insights"].tap() }
         let button = app.buttons[id]
         reveal(button, app: app)
         button.tap()
     }
 
-    @MainActor func testWellnessAppearsOnTodayAndClearsOnBackground() {
+    @MainActor func testWellnessAppearsInInsightsAndClearsOnBackground() {
         let app = launch()
         XCTAssertFalse(app.staticTexts["Synthetic gentle movement"].exists)
         tap("dailyWellnessAI", app: app)

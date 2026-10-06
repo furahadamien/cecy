@@ -10,7 +10,7 @@ struct TrackerCalendarView: View {
     let onLog: (LocalDay) -> Void
     @State private var selection: LocalDay
     @State private var showDatePicker = false
-    @State private var showExplanation = false
+    @State private var showHistory = false
 
     init(session: TrackerSession, today: LocalDay, overview: CycleOverview, onLog: @escaping (LocalDay) -> Void) {
         self.session = session
@@ -59,7 +59,6 @@ struct TrackerCalendarView: View {
                                         if day == selection {
                                             // Keep selected-date actions ahead of the remaining month at large text sizes.
                                             loggingActions
-                                            selectedDetails.padding(8)
                                         }
                                     }
                                     .id(day.key)
@@ -93,14 +92,25 @@ struct TrackerCalendarView: View {
                                 Label { Text("Sexual activity") } icon: {
                                     Image(systemName: "heart.fill").foregroundStyle(palette.sexualActivity)
                                 }
-                                Label("Symptoms use their individual icons", systemImage: "waveform.path.ecg")
+                                Label("Symptoms · One marker per day", systemImage: "waveform.path.ecg")
                             }
                             .font(.footnote).foregroundStyle(.secondary).padding(8)
                             .accessibilityElement(children: .contain)
                             .accessibilityIdentifier("calendarLegend")
                         }
-                        if !listLayout { selectedDetails }
                         TrackerCard { UpcomingCycleForecastView(forecast: session.cycleForecast, today: today) }
+                        TrackerCard { selectedDetails }
+                            .environment(\.recordsShareSurface, true)
+                            .accessibilityIdentifier("calendarRecordedDayCard")
+                        TrackerCard {
+                            NavigationLink { SexualActivityHistoryView(session: session) } label: {
+                                TrackerNavigationLabel(title: "Sexual activity history", symbol: "heart")
+                            }.accessibilityIdentifier("sexualActivityHistory")
+                            Divider()
+                            Button { showHistory = true } label: {
+                                TrackerNavigationLabel(title: "Add previous periods", symbol: "calendar.badge.plus")
+                            }.accessibilityIdentifier("addPreviousPeriods")
+                        }.buttonStyle(.plain)
                     }
                     .frame(width: max(0, contentWidth), alignment: .leading)
                     .padding(.vertical, TrackerLayout.pageInset)
@@ -116,10 +126,8 @@ struct TrackerCalendarView: View {
         .sheet(isPresented: $showDatePicker) {
             CalendarDateSheet(day: selection) { selection = $0 }
         }
-        .sheet(isPresented: $showExplanation) {
-            if let estimate = overview.estimate {
-                PredictionExplanation(estimate: estimate, sources: Array(overview.intervals.suffix(6)), replay: session.predictionReplay)
-            }
+        .sheet(isPresented: $showHistory) {
+            NavigationStack { HistoryEntryView(session: session, today: session.today ?? today, isOnboarding: false) }
         }
     }
 
@@ -262,23 +270,19 @@ struct TrackerCalendarView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(DayText.full(selection)).font(.headline).accessibilityAddTraits(.isHeader)
             if selection == today { Text("Today").font(.subheadline) }
-            ForEach(session.cycleForecast.cycles.filter { $0.contains(selection) }) { cycle in
-                ProjectedCycleDetails(cycle: cycle)
-            }
             if let period = record(on: selection) {
                 PeriodRecordSummary(session: session, period: period,
                                     title: period.start == selection ? "Recorded period start" : "Confirmed bleeding day")
             } else {
                 Text("No period recorded for this day.")
             }
-            if let estimate = overview.estimate, estimate.contains(selection) {
-                if today > estimate.latest { Text("Estimated window passed. No new start has been recorded.") }
-                Button("How this estimate works") { showExplanation = true }.frame(minHeight: 44)
-            }
-            ForEach(session.snapshot.symptoms.filter { $0.day == selection }) { entry in
-                SymptomRecordView(session: session, entry: entry)
+            if session.snapshot.symptoms.contains(where: { $0.day == selection }) {
+                Divider()
+                CalendarSymptomGroup(session: session, day: selection)
+                    .id(selection)
             }
             ForEach(session.snapshot.sexualActivities.filter { $0.day == selection }) { entry in
+                Divider()
                 SexualActivityRecordView(session: session, entry: entry)
             }
         }

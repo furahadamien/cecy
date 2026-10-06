@@ -349,6 +349,13 @@ final class TrackerSession {
         }
     }
 
+    func deleteSymptoms(on day: LocalDay) -> String? {
+        mutate(confirmation: "Symptoms deleted for \(DayText.full(day)).",
+               failure: "These symptoms weren’t deleted. Try again.") { repository, _, _ in
+            try repository.deleteSymptoms(on: day)
+        }
+    }
+
     func deleteSymptom(id: UUID) -> String? {
         mutate(confirmation: "Observation deleted.", failure: "This observation wasn’t deleted. Try again.") { repository, _, _ in
             try repository.deleteSymptom(id: id)
