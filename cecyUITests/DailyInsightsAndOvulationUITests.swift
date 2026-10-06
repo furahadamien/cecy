@@ -30,22 +30,28 @@ final class DailyInsightsAndOvulationUITests: XCTestCase {
         XCTAssertTrue(expanded.waitForExistence(timeout: 5))
         XCTAssertTrue(expanded.label.contains("Possible ovulation"))
         XCTAssertTrue(app.buttons["todayMonthDate_20260929"].label.contains("Estimated start window"))
+        expanded.tap()
+        app.buttons["expandTodayCalendar"].tap()
+        let selectedEstimate = app.otherElements["projectedCycle_0"].firstMatch
+        let estimateLabel = selectedEstimate.staticTexts["Possible ovulation · Estimate"]
+        UIViewport.reveal(estimateLabel, in: app)
+        XCTAssertTrue(estimateLabel.isHittable)
+        XCTAssertTrue(selectedEstimate.staticTexts["forecastFertileWindow_0"].exists)
+        XCTAssertFalse(selectedEstimate.buttons["ovulationUncertainty_0"].exists)
+        XCTAssertFalse(selectedEstimate.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "not six days of ovulation")).firstMatch.exists)
         app.tabBars.buttons["Calendar"].tap()
         let date = app.buttons["calendarDay_20260916"]
         XCTAssertTrue(date.waitForExistence(timeout: 5))
         XCTAssertTrue(date.label.contains("Possible ovulation"))
         XCTAssertTrue(app.buttons["calendarDay_20260929"].label.contains("estimate"))
         date.tap()
-        let details = app.otherElements["selectedCalendarDetails"]
+        let details = app.otherElements["upcomingCycleForecast"]
         let detail = details.staticTexts["Possible ovulation · Estimate"].firstMatch
         UIViewport.reveal(detail, in: app)
         XCTAssertTrue(detail.isHittable)
-        let uncertainty = details.buttons["ovulationUncertainty_0"]
-        UIViewport.reveal(uncertainty, in: app)
-        uncertainty.tap()
-        let caution = details.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "No dates are identified as safe days.")).firstMatch
-        UIViewport.reveal(caution, in: app)
-        XCTAssertTrue(caution.isHittable)
+        XCTAssertFalse(details.buttons["ovulationUncertainty_0"].exists)
+        XCTAssertFalse(details.buttons["How this forecast works"].exists)
+        XCTAssertFalse(details.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Calendar estimates only")).firstMatch.exists)
     }
 
     @MainActor func testBleedingAndFertileWindowsRemainDistinctAcrossCalendars() {
@@ -112,14 +118,14 @@ final class DailyInsightsAndOvulationUITests: XCTestCase {
         XCTAssertFalse(app.buttons["logSexualActivity"].isEnabled)
     }
 
-    @MainActor func testCycleContextShowsSpecificCautionWithoutHidingDate() {
+    @MainActor func testCycleContextShowsConciseStatusWithoutHidingDate() {
         let app = launch()
         app.tabBars.buttons["Settings"].tap()
         app.buttons["profileSettings"].tap()
         let context = app.buttons["Cycle context (0)"]
-        reveal(context, app: app); context.tap()
-        let breastfeeding = app.buttons["cycleContext_breastfeeding"]
-        reveal(breastfeeding, app: app); breastfeeding.tap()
+        UIViewport.reveal(context, in: app); context.tap()
+        let hormonal = app.buttons["cycleContext_hormonalBirthControl"]
+        UIViewport.reveal(hormonal, in: app); hormonal.tap()
         app.navigationBars.buttons["saveProfile"].tap()
         XCTAssertTrue(app.navigationBars["Profile"].waitForNonExistence(timeout: 5))
         app.tabBars.buttons["Calendar"].tap()
@@ -129,10 +135,16 @@ final class DailyInsightsAndOvulationUITests: XCTestCase {
         XCTAssertTrue(day.label.contains("Possible ovulation"))
         XCTAssertTrue(day.label.contains("Timing may not apply"))
         day.tap()
-        let caution = app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH %@", "Breastfeeding:")).firstMatch
-        reveal(caution, app: app)
-        XCTAssertTrue(caution.label.contains("can still occur"))
-        XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "estimates are hidden")).firstMatch.exists)
+        let status = app.staticTexts["forecastTimingUncertain"].firstMatch
+        UIViewport.reveal(status, in: app)
+        XCTAssertEqual(status.label, "Timing uncertain")
+        XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "methods prevent ovulation")).firstMatch.exists)
+        app.tabBars.buttons["Today"].tap()
+        let phase = app.buttons["cyclePhase_menstrual"]
+        UIViewport.reveal(phase, in: app); phase.tap()
+        XCTAssertTrue(app.staticTexts["phaseExplanation"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["phaseExperiences"].exists)
+        XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH %@", "Hormonal birth control:")).firstMatch.exists)
     }
 
     @MainActor func testLocalAnswersAndConsentedDailyPreparation() {
