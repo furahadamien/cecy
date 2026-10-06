@@ -33,40 +33,64 @@ struct ProjectedCycleDetails: View {
 
     var body: some View {
         let palette = TrackerPalette(scheme: colorScheme)
-        VStack(alignment: .leading, spacing: 10) {
-            if cycle.referenceNotice != nil {
-                Text("Reference estimate").font(.footnote).accessibilityIdentifier("forecastReferenceNotice")
+        VStack(alignment: .leading, spacing: 20) {
+            if cycle.referenceNotice != nil || !cycle.ovulationWarnings.isEmpty {
+                SelectionFlowLayout {
+                    if cycle.referenceNotice != nil {
+                        Text("Reference estimate").accessibilityIdentifier("forecastReferenceNotice")
+                    }
+                    if !cycle.ovulationWarnings.isEmpty {
+                        Label {
+                            Text("Timing uncertain").accessibilityIdentifier("forecastTimingUncertain")
+                        } icon: {
+                            Image(systemName: "questionmark.circle").accessibilityHidden(true)
+                        }
+                    }
+                }
+                .font(.caption).foregroundStyle(.secondary)
             }
-            if !cycle.ovulationWarnings.isEmpty {
-                Text("Timing uncertain").font(.caption).foregroundStyle(.secondary)
-                    .accessibilityIdentifier("forecastTimingUncertain")
+            VStack(alignment: .leading, spacing: 12) {
+                Label(cycle.isLaterProjection ? "Following period start · Projection" : "Possible period start · Estimate",
+                      systemImage: "circle.dashed")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(palette.recorded)
+                    .accessibilityAddTraits(.isHeader)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(notBefore == nil ? "Start window" : "Remaining start window")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Text(DayText.range(max(notBefore ?? cycle.period.earliest, cycle.period.earliest), cycle.period.latest))
+                        .font(TrackerTypography.sectionTitle)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("forecastPeriodWindow_\(cycle.index)")
+                    Text("Around \(DayText.short(cycle.period.center))")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(palette.recordedSurface, in: RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous))
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("forecastPeriodSection_\(cycle.index)")
+
+            if let bleeding = cycle.bleeding {
+                ForecastDateRow(title: "Expected bleeding dates", value: DayText.range(bleeding.start, bleeding.end),
+                                symbol: "drop", accent: palette.recorded, identifier: "forecastBleedingDates_\(cycle.index)")
+            } else {
+                Text("Bleeding duration unavailable")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+
+            Divider()
+
             if let ovulation = cycle.ovulation {
-                Label(cycle.isLaterProjection ? "Possible ovulation · Projection" : "Possible ovulation · Estimate",
-                      systemImage: "circle.dotted")
-                    .font(.headline).foregroundStyle(palette.accent)
-                Text("Around \(DayText.short(ovulation.center))").font(.subheadline.weight(.semibold))
+                ForecastDateRow(title: cycle.isLaterProjection ? "Possible ovulation · Projection" : "Possible ovulation · Estimate",
+                                value: "Around \(DayText.short(ovulation.center))", symbol: "circle.dotted",
+                                accent: palette.accent, identifier: "forecastOvulation_\(cycle.index)")
                 if let fertile = cycle.fertileWindow {
-                    Label("Estimated fertile window", systemImage: "leaf")
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(palette.accent)
-                        .accessibilityIdentifier("forecastFertileWindow_\(cycle.index)")
-                    Text(DayText.range(fertile.start, fertile.end)).font(.subheadline)
+                    ForecastDateRow(title: "Estimated fertile window", value: DayText.range(fertile.start, fertile.end),
+                                    symbol: "leaf", accent: palette.accent, identifier: "forecastFertileWindow_\(cycle.index)")
                 }
             } else {
                 Text("Ovulation and fertile dates unavailable")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
-            Label(cycle.isLaterProjection ? "Following period start · Projection" : "Possible period start · Estimate",
-                  systemImage: "circle.dashed")
-                .font(.subheadline.weight(.semibold)).foregroundStyle(palette.recorded)
-            Text("Around \(DayText.short(cycle.period.center))").font(.subheadline.weight(.semibold))
-            Text("\(notBefore == nil ? "Start window" : "Remaining start window"): \(DayText.range(max(notBefore ?? cycle.period.earliest, cycle.period.earliest), cycle.period.latest))").font(.subheadline)
-            if let bleeding = cycle.bleeding {
-                Label("Expected bleeding dates", systemImage: "drop")
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(palette.recorded)
-                Text(DayText.range(bleeding.start, bleeding.end)).font(.subheadline)
-            } else {
-                Text("Bleeding duration unavailable")
                     .font(.footnote).foregroundStyle(.secondary)
             }
         }
@@ -75,17 +99,55 @@ struct ProjectedCycleDetails: View {
     }
 }
 
+/// A quiet label and prominent date, aligned consistently without another nested card.
+private struct ForecastDateRow: View {
+    let title: String
+    let value: String
+    let symbol: String
+    let accent: Color
+    let identifier: String
+    @ScaledMetric(relativeTo: .body) private var iconSize = 18.0
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: symbol)
+                .font(.system(size: iconSize, weight: .medium))
+                .foregroundStyle(accent)
+                .frame(width: iconSize + 18, height: iconSize + 18)
+                .background(accent.opacity(0.08), in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).font(.subheadline).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier(identifier)
+                Text(value).font(.body.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("\(identifier)_value")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityElement(children: .contain)
+    }
+}
+
 struct UpcomingCycleForecastView: View {
     let forecast: CycleForecast
     let today: LocalDay
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 20) {
             Text("Upcoming cycle forecast").font(.headline).accessibilityAddTraits(.isHeader)
             if let cycle = forecast.nextPeriod(onOrAfter: today) {
                 ProjectedCycleDetails(cycle: cycle, notBefore: today)
                 if let next = forecast.nextOvulation(onOrAfter: today), next.index != cycle.index {
-                    DisclosureGroup("Next projected ovulation") { ProjectedCycleDetails(cycle: next, notBefore: today) }
+                    Divider()
+                    DisclosureGroup {
+                        ProjectedCycleDetails(cycle: next, notBefore: today).padding(.top, 16)
+                    } label: {
+                        Text("Next projected ovulation")
+                            .font(.subheadline.weight(.semibold)).frame(minHeight: 44)
+                    }
+                    .accessibilityIdentifier("nextProjectedOvulation")
                 }
             } else {
                 Text("Forecast unavailable")

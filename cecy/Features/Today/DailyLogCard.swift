@@ -1,7 +1,31 @@
 import SwiftUI
 
-/// One overview surface; private notes and editing live on the selected day's page.
+/// Selected-day records use the same presentation and editor as Calendar.
 struct DailyLogCard: View {
+    let session: TrackerSession
+    let selectedDay: LocalDay
+    let today: LocalDay
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            RecordedDayCard(session: session, day: selectedDay, today: today)
+                .accessibilityIdentifier("todayRecordedDayCard")
+            NavigationLink {
+                TrackerPage(title: "Daily log history") {
+                    DailyLogHistoryCard(session: session, selectedDay: selectedDay, today: today)
+                }
+                .navigationBarTitleDisplayMode(.inline)
+            } label: {
+                Label("View all daily logs", systemImage: "clock.arrow.circlepath")
+            }
+            .buttonStyle(RecordActionButtonStyle())
+            .accessibilityIdentifier("dailyLogHistory")
+        }
+    }
+}
+
+/// Retain paginated access to older records without crowding the selected day.
+private struct DailyLogHistoryCard: View {
     @Environment(\.colorScheme) private var colorScheme
     @ScaledMetric(relativeTo: .body) private var listHeight = 280.0
     let session: TrackerSession

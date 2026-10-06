@@ -117,9 +117,8 @@ final class PhaseEightUITests: XCTestCase {
         app.launchEnvironment.removeValue(forKey: "CECY_UI_FIXTURE")
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["logPeriod"].waitForExistence(timeout: 15))
-        let day = app.buttons["dailyLog_20260929"]
-        UIViewport.reveal(day, in: app); day.tap()
-        let edit = app.buttons["editSymptom_libido"]
+        tap("editDaySymptoms", app: app)
+        let edit = app.buttons["chooseDaySymptom_libido"]
         UIViewport.reveal(edit, in: app); edit.tap()
         let stored = app.buttons["symptomRating_libido"]
         UIViewport.reveal(stored, in: app)

@@ -99,8 +99,7 @@ struct TrackerCalendarView: View {
                             .accessibilityIdentifier("calendarLegend")
                         }
                         TrackerCard { UpcomingCycleForecastView(forecast: session.cycleForecast, today: today) }
-                        TrackerCard { selectedDetails }
-                            .environment(\.recordsShareSurface, true)
+                        RecordedDayCard(session: session, day: selection, today: today)
                             .accessibilityIdentifier("calendarRecordedDayCard")
                         TrackerCard {
                             NavigationLink { SexualActivityHistoryView(session: session) } label: {
@@ -264,30 +263,6 @@ struct TrackerCalendarView: View {
         .accessibilityHint(record(on: selection) == nil ? "Record actual bleeding days." : "Edit this period or its confirmed bleeding dates.")
         SymptomLogButton(session: session, day: selection, title: "Symptoms", compact: true)
         SexualActivityLogButton(session: session, day: selection, compact: true)
-    }
-
-    private var selectedDetails: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(DayText.full(selection)).font(.headline).accessibilityAddTraits(.isHeader)
-            if selection == today { Text("Today").font(.subheadline) }
-            if let period = record(on: selection) {
-                PeriodRecordSummary(session: session, period: period,
-                                    title: period.start == selection ? "Recorded period start" : "Confirmed bleeding day")
-            } else {
-                Text("No period recorded for this day.")
-            }
-            if session.snapshot.symptoms.contains(where: { $0.day == selection }) {
-                Divider()
-                CalendarSymptomGroup(session: session, day: selection)
-                    .id(selection)
-            }
-            ForEach(session.snapshot.sexualActivities.filter { $0.day == selection }) { entry in
-                Divider()
-                SexualActivityRecordView(session: session, entry: entry)
-            }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("selectedCalendarDetails")
     }
 }
 

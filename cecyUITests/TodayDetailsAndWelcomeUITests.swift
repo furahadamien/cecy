@@ -71,13 +71,12 @@ final class TodayDetailsAndWelcomeUITests: XCTestCase {
         app.buttons["expandTodayCalendar"].tap()
         app.buttons["todayMonthDate_20260902"].tap()
         app.buttons["expandTodayCalendar"].tap()
-        let row = app.buttons["dailyLog_20260902"]
-        UIViewport.reveal(row, in: app)
-        XCTAssertTrue(row.label.contains("September 2, 2026"))
-        XCTAssertTrue(row.label.contains("Period start"))
-        XCTAssertGreaterThan(row.frame.minY, app.otherElements["upcomingCycleForecast"].frame.maxY)
+        let card = app.otherElements["todayRecordedDayCard"]
+        UIViewport.reveal(card, in: app)
+        XCTAssertTrue(card.staticTexts["September 2, 2026"].firstMatch.exists)
+        XCTAssertTrue(card.staticTexts["Recorded period start"].exists)
+        XCTAssertGreaterThan(card.frame.minY, app.otherElements["upcomingCycleForecast"].frame.maxY)
         XCTAssertFalse(app.buttons["sexualActivityHistory"].exists)
-        row.tap()
         let edit = app.buttons["editPeriod"].firstMatch
         UIViewport.reveal(edit, in: app)
         edit.tap()
