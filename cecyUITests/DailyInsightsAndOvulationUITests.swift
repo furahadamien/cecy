@@ -138,7 +138,7 @@ final class DailyInsightsAndOvulationUITests: XCTestCase {
     @MainActor func testLocalAnswersAndConsentedDailyPreparation() {
         let app = launch()
         app.tabBars.buttons["Insights"].tap()
-        XCTAssertTrue(app.otherElements["dailyInsightsCard"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.otherElements["forTodayCard"].waitForExistence(timeout: 5))
         let ask = app.buttons["askCecy"]
         reveal(ask, app: app); ask.tap()
         let answer = app.buttons["preparedAnswer_lengths"]

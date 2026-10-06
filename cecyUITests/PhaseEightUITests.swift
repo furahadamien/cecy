@@ -90,6 +90,7 @@ final class PhaseEightUITests: XCTestCase {
     }
     @MainActor func testAllFourReadOnlyFeaturesShowLocalFactsAndAIOutput() {
         let app = launch()
+        app.tabBars.buttons["Insights"].tap()
         tap("dailyWellnessAI", app: app)
         XCTAssertTrue(app.staticTexts["localSevereSymptomNotice"].exists || app.otherElements["localSevereSymptomNotice"].exists)
         consent(app)

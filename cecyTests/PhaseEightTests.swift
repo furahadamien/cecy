@@ -23,7 +23,9 @@ nonisolated private func aiSnapshot() throws -> TrackerSnapshot {
 
 nonisolated struct AIModelTests {
     @Test func allTaxonomyMappingsAndSpecialRatings() throws {
-        #expect(AISymptomType.allCases.count == SymptomKind.allCases.count)
+        #expect(AISymptomType.allCases.count == 13)
+        #expect(AISymptomType.allCases.count < SymptomKind.allCases.count)
+        #expect(AISymptomType(kind: .vaginalDryness) == nil)
         for type in AISymptomType.allCases {
             #expect(AISymptomType(kind: type.kind) == type)
             for severity in [AISeverity.mild, .moderate, .severe] {

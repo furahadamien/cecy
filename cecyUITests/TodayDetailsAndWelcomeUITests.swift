@@ -76,7 +76,7 @@ final class TodayDetailsAndWelcomeUITests: XCTestCase {
         XCTAssertTrue(row.label.contains("September 2, 2026"))
         XCTAssertTrue(row.label.contains("Period start"))
         XCTAssertGreaterThan(row.frame.minY, app.otherElements["upcomingCycleForecast"].frame.maxY)
-        XCTAssertLessThan(row.frame.maxY, app.buttons["sexualActivityHistory"].frame.minY)
+        XCTAssertFalse(app.buttons["sexualActivityHistory"].exists)
         row.tap()
         let edit = app.buttons["editPeriod"].firstMatch
         UIViewport.reveal(edit, in: app)
@@ -98,7 +98,7 @@ final class TodayDetailsAndWelcomeUITests: XCTestCase {
         XCTAssertGreaterThan(confirmation.frame.minY, app.otherElements["upcomingCycleForecast"].frame.maxY)
         let dismiss = app.buttons["Dismiss confirmation"]
         UIViewport.reveal(dismiss, in: app)
-        XCTAssertLessThan(dismiss.frame.maxY, app.buttons["sexualActivityHistory"].frame.minY)
+        XCTAssertFalse(app.buttons["sexualActivityHistory"].exists)
         dismiss.tap()
         XCTAssertFalse(confirmation.exists)
         app.terminate(); app.launch()

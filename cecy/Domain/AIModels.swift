@@ -57,8 +57,9 @@ nonisolated enum AISymptomType: String, Codable, CaseIterable, Sendable {
         case .digestiveChange: .digestiveChanges
         }
     }
-    init(kind: SymptomKind) {
-        self = Self.allCases.first { $0.kind == kind }!
+    init?(kind: SymptomKind) {
+        guard let value = Self.allCases.first(where: { $0.kind == kind }) else { return nil }
+        self = value
     }
 }
 

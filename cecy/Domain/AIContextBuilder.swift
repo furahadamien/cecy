@@ -73,9 +73,9 @@ nonisolated enum AIContextBuilder {
         switch insight.category {
         case .symptomTiming:
             guard let raw = insight.id.split(separator: ".").last, let kind = SymptomKind(rawValue: String(raw)),
-                  !insight.timing.isEmpty else { throw AIContextError.insufficientRecords }
+                  let typeValue = AISymptomType(kind: kind), !insight.timing.isEmpty else { throw AIContextError.insufficientRecords }
             type = "symptom_timing"
-            facts.symptom = AISymptomType(kind: kind)
+            facts.symptom = typeValue
             facts.startsAnalyzed = insight.timing.count
             facts.matchingStarts = insight.matchedStarts
             let offsets = insight.timing.flatMap { support in support.logDays.map { support.start.days(until: $0) } }
@@ -108,13 +108,14 @@ nonisolated enum AIContextBuilder {
         try p.validate()
         try SymptomValidation.validate(snapshot.symptoms, asOf: today)
         let symptoms = snapshot.symptoms.filter { $0.day == today }.compactMap { entry -> AISymptom? in
+            guard let type = AISymptomType(kind: entry.kind) else { return nil }
             if entry.kind == .sleepQuality || entry.kind == .energyLevel {
                 // Only explicit adverse ratings can be described as symptoms. Severity is unknown.
                 guard entry.value == 1 else { return nil }
-                return AISymptom(type: AISymptomType(kind: entry.kind), severity: nil)
+                return AISymptom(type: type, severity: nil)
             }
             let severity: AISeverity? = entry.value.map { $0 == 1 ? .mild : $0 == 2 ? .moderate : .severe }
-            return AISymptom(type: AISymptomType(kind: entry.kind), severity: severity)
+            return AISymptom(type: type, severity: severity)
         }.sorted { $0.type.rawValue < $1.type.rawValue }
         try PeriodValidation.validate(snapshot.periods, asOf: today)
         let cycleDay = snapshot.periods.map(\.start).max().map { $0.days(until: today) + 1 }
@@ -134,7 +135,7 @@ nonisolated enum AIContextBuilder {
         try SymptomValidation.validate(snapshot.symptoms, asOf: today)
         let periods = Array(snapshot.periods.sorted { $0.start < $1.start }.suffix(7))
         let windowStart = try today.adding(days: -89)
-        let logs = snapshot.symptoms.filter { $0.day >= windowStart && $0.day <= today }
+        let logs = snapshot.symptoms.filter { $0.day >= windowStart && $0.day <= today && AISymptomType(kind: $0.kind) != nil }
         guard !periods.isEmpty || !logs.isEmpty else { throw AIContextError.insufficientRecords }
         let lengths = zip(periods, periods.dropFirst()).map { $0.start.days(until: $1.start) }
         let stats = RecordedStatistics(lengths: lengths)
@@ -168,7 +169,7 @@ nonisolated enum AIContextBuilder {
             let next = index + 1 < periods.count ? periods[index + 1].start : nil
             let through = try next.map { try $0.adding(days: -1) } ?? today
             let selected = TrackerSnapshot(periods: [periods[index]],
-                symptoms: snapshot.symptoms.filter { $0.day >= start && $0.day <= through })
+                symptoms: snapshot.symptoms.filter { $0.day >= start && $0.day <= through && AISymptomType(kind: $0.kind) != nil })
             guard case .question(let context) = try recordInsights(snapshot: selected, today: through) else {
                 throw AIContextError.insufficientRecords
             }
@@ -192,7 +193,7 @@ nonisolated enum AIContextBuilder {
         let next = periods[index + 1].start
         let lengths = zip(periods.prefix(index + 2), periods.prefix(index + 2).dropFirst()).map { $0.start.days(until: $1.start) }
         guard let stats = RecordedStatistics(lengths: Array(lengths.suffix(6))) else { throw AIContextError.insufficientRecords }
-        let logs = snapshot.symptoms.filter { $0.day >= start && $0.day < next && $0.kind.qualifiesForTiming(value: $0.value) }
+        let logs = snapshot.symptoms.filter { $0.day >= start && $0.day < next && $0.kind.qualifiesForTiming(value: $0.value) && AISymptomType(kind: $0.kind) != nil }
         let counts = Dictionary(grouping: logs, by: \.kind)
         let kinds = counts.keys.sorted { lhs, rhs in
             let a = counts[lhs]!.count, b = counts[rhs]!.count
@@ -204,7 +205,7 @@ nonisolated enum AIContextBuilder {
                "Average uses \(stats.count) completed intervals ending no later than this cycle.", caveat]
         return .summary(CycleSummaryContext(periodLabel: "Selected completed cycle", cycleLength: start.days(until: next),
             averageCycleLength: stats.mean, periodLength: duration,
-            commonSymptoms: kinds.prefix(3).map { AISymptomType(kind: $0) }, observations: observations))
+            commonSymptoms: Array(kinds.compactMap { AISymptomType(kind: $0) }.prefix(3)), observations: observations))
     }
 
     static func question(_ question: String, scope: CycleQuestionScope, kind: SymptomKind,
@@ -232,7 +233,8 @@ nonisolated enum AIContextBuilder {
             facts.maximumCycleLength = stats.maximum
             facts.populationStandardDeviationDays = stats.standardDeviation
         } else {
-            facts.symptom = AISymptomType(kind: kind)
+            guard let type = AISymptomType(kind: kind) else { throw AIContextError.unsupportedQuestion }
+            facts.symptom = type
             if scope == .symptomFrequency {
                 let start = try today.adding(days: -89)
                 facts.daysAnalyzed = 90
@@ -265,10 +267,11 @@ nonisolated enum AIContextBuilder {
             return try question(text, scope: scope, kind: kind, snapshot: snapshot, today: today)
         }
         let values = try kinds.sorted { $0.rawValue < $1.rawValue }.map { kind -> AIQuestionSymptomFacts in
+            guard let type = AISymptomType(kind: kind) else { throw AIContextError.unsupportedQuestion }
             guard case .question(let context) = try question(scope.suggestedQuestion(kind: kind), scope: scope,
                 kind: kind, snapshot: snapshot, today: today) else { throw AIContextError.insufficientRecords }
             let facts = context.facts
-            return AIQuestionSymptomFacts(symptom: AISymptomType(kind: kind), cyclesAnalyzed: facts.cyclesAnalyzed,
+            return AIQuestionSymptomFacts(symptom: type, cyclesAnalyzed: facts.cyclesAnalyzed,
                 daysAnalyzed: facts.daysAnalyzed, recordedDays: facts.recordedDays, matchingStarts: facts.matchingStarts,
                 timingWindow: facts.timingWindow, minimumRecordedOffsetDays: facts.minimumRecordedOffsetDays,
                 maximumRecordedOffsetDays: facts.maximumRecordedOffsetDays)

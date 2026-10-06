@@ -22,6 +22,7 @@ final class SexualActivityUITests: XCTestCase {
     }
 
     @MainActor private func tap(_ identifier: String, in app: XCUIApplication) {
+        if identifier == "sexualActivityHistory" { app.tabBars.buttons["Calendar"].tap() }
         let button = app.buttons[identifier]
         reveal(button, in: app); button.tap()
     }

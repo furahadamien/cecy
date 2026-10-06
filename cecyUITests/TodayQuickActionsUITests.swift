@@ -78,6 +78,7 @@ final class TodayQuickActionsUITests: XCTestCase {
     }
 
     @MainActor private func enableDailyPreparation(in app: XCUIApplication) {
+        app.tabBars.buttons["Insights"].tap()
         let options = app.buttons["Daily preparation"]
         UIViewport.reveal(options, in: app); options.tap()
         let review = app.buttons["reviewAIConsent"]
@@ -89,27 +90,28 @@ final class TodayQuickActionsUITests: XCTestCase {
         UIViewport.reveal(toggle, in: app)
         XCTAssertEqual(toggle.value as? String, "0")
         // Manual consent alone must not start automatic processing.
-        XCTAssertFalse(app.staticTexts["Calculated on this device"].exists)
+        XCTAssertTrue(app.staticTexts["Calculated on this device"].exists)
         XCTAssertFalse(app.otherElements["aiOutput"].exists)
         toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
         XCTAssertTrue(app.alerts.firstMatch.waitForExistence(timeout: 5))
         app.alerts.buttons["enableDailyInsights"].firstMatch.tap()
     }
 
-    @MainActor func testDailyInsightAppearsOnTodayAutomaticallyAndIsSharedAcrossTabs() {
+    @MainActor func testDailyInsightAppearsInInsightsAutomaticallyAndSurvivesTabChanges() {
         let app = launch()
         enableDailyPreparation(in: app)
         let card = app.otherElements["forTodayCard"]
         let answer = card.staticTexts["Synthetic answer from selected facts"]
         UIViewport.reveal(answer, in: app, searchEarlierFirst: true)
         XCTAssertTrue(answer.isHittable)
-        app.tabBars.buttons["Insights"].tap()
-        XCTAssertTrue(app.staticTexts["Synthetic answer from selected facts"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Today"].tap()
+        XCTAssertFalse(app.otherElements["forTodayCard"].exists)
+        app.tabBars.buttons["Insights"].tap()
         XCTAssertTrue(answer.exists)
         // Generated text remains ephemeral, and relaunch does not spend another daily request.
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["logPeriod"].waitForExistence(timeout: 10))
+        app.tabBars.buttons["Insights"].tap()
         let local = app.staticTexts["Calculated on this device"]
         UIViewport.reveal(local, in: app)
         XCTAssertTrue(local.isHittable)
@@ -123,6 +125,7 @@ final class TodayQuickActionsUITests: XCTestCase {
         UIViewport.reveal(local, in: app, searchEarlierFirst: true)
         XCTAssertTrue(local.isHittable)
         XCTAssertTrue(app.otherElements["forTodayCard"].descendants(matching: .any)["aiError"].firstMatch.exists)
+        app.tabBars.buttons["Today"].tap()
         let period = app.buttons["logPeriod"]
         UIViewport.reveal(period, in: app, searchEarlierFirst: true)
         XCTAssertTrue(period.isEnabled)

@@ -39,9 +39,9 @@ nonisolated struct MultiSymptomQuestionTests {
         let today = try LocalDay(key: 20260929), snapshot = try snapshot(today: today)
         for scope in CycleQuestionScope.allCases where scope != .cycleLengths {
             let request = try AIContextBuilder.question(scope.selectedSymptomsQuestion, scope: scope,
-                kinds: Set(SymptomKind.allCases), snapshot: snapshot, today: today)
+                kinds: Set(AISymptomType.allCases.map(\.kind)), snapshot: snapshot, today: today)
             guard case .question(let context) = request else { Issue.record(); return }
-            #expect(context.facts.symptoms?.count == SymptomKind.allCases.count)
+            #expect(context.facts.symptoms?.count == AISymptomType.allCases.count)
             #expect(try JSONEncoder().encode(context).count < 8_000)
             #expect(context.question.count <= 100)
             if scope != .symptomFrequency {

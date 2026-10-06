@@ -1,8 +1,41 @@
 import Foundation
 
+nonisolated enum SymptomCategory: String, CaseIterable, Sendable {
+    case pain = "Pain and discomfort", mood = "Mood and focus", energy = "Energy and sleep"
+    case digestion = "Digestion and appetite", skin = "Skin and hair", body = "Other body changes"
+    var symbol: String {
+        switch self {
+        case .pain: "waveform.path.ecg"
+        case .mood: "brain.head.profile"
+        case .energy: "moon.zzz"
+        case .digestion: "fork.knife"
+        case .skin: "sparkles"
+        case .body: "figure.stand"
+        }
+    }
+    var kinds: [SymptomKind] { SymptomKind.allCases.filter { $0.category == self } }
+}
+
 nonisolated enum SymptomKind: String, CaseIterable, Sendable {
     case cramps, headache, bloating, fatigue, moodChanges, acne, backPain, nausea
     case breastTenderness, sleepQuality, energyLevel, cravings, digestiveChanges
+    case pelvicPain, jointPain, muscleAches, breastSwelling
+    case anxiety, irritability, lowMood, moodSwings, difficultyConcentrating
+    case insomnia, dizziness, brainFog
+    case constipation, diarrhea, appetiteChanges, vomiting
+    case oilySkin, drySkin, hairChanges
+    case hotFlashes, nightSweats, dischargeChanges, vaginalDryness, vaginalItching, urinaryDiscomfort, libido
+
+    var category: SymptomCategory {
+        switch self {
+        case .cramps, .headache, .backPain, .breastTenderness, .pelvicPain, .jointPain, .muscleAches, .breastSwelling: .pain
+        case .moodChanges, .anxiety, .irritability, .lowMood, .moodSwings, .difficultyConcentrating, .brainFog: .mood
+        case .fatigue, .sleepQuality, .energyLevel, .insomnia, .dizziness: .energy
+        case .bloating, .nausea, .cravings, .digestiveChanges, .constipation, .diarrhea, .appetiteChanges, .vomiting: .digestion
+        case .acne, .oilySkin, .drySkin, .hairChanges: .skin
+        case .hotFlashes, .nightSweats, .dischargeChanges, .vaginalDryness, .vaginalItching, .urinaryDiscomfort, .libido: .body
+        }
+    }
 
     var title: String {
         switch self {
@@ -19,6 +52,32 @@ nonisolated enum SymptomKind: String, CaseIterable, Sendable {
         case .energyLevel: "Energy level"
         case .cravings: "Cravings"
         case .digestiveChanges: "Digestive changes"
+        case .pelvicPain: "Pelvic pain"
+        case .jointPain: "Joint pain"
+        case .muscleAches: "Muscle aches"
+        case .breastSwelling: "Breast swelling"
+        case .anxiety: "Anxiety"
+        case .irritability: "Irritability"
+        case .lowMood: "Low mood"
+        case .moodSwings: "Mood swings"
+        case .difficultyConcentrating: "Difficulty concentrating"
+        case .insomnia: "Difficulty sleeping"
+        case .dizziness: "Dizziness"
+        case .brainFog: "Brain fog"
+        case .constipation: "Constipation"
+        case .diarrhea: "Diarrhea"
+        case .appetiteChanges: "Appetite changes"
+        case .vomiting: "Vomiting"
+        case .oilySkin: "Oily skin"
+        case .drySkin: "Dry skin"
+        case .hairChanges: "Hair changes"
+        case .hotFlashes: "Hot flashes"
+        case .nightSweats: "Night sweats"
+        case .dischargeChanges: "Discharge changes"
+        case .vaginalDryness: "Vaginal dryness"
+        case .vaginalItching: "Vaginal itching"
+        case .urinaryDiscomfort: "Urinary discomfort"
+        case .libido: "Sex drive"
         }
     }
 
@@ -37,14 +96,15 @@ nonisolated enum SymptomKind: String, CaseIterable, Sendable {
         case .energyLevel: "bolt"
         case .cravings: "fork.knife"
         case .digestiveChanges: "waveform.path"
+        default: category.symbol
         }
     }
 
-    var ratingTitle: String { self == .sleepQuality || self == .energyLevel ? "Rating (optional)" : "Severity (optional)" }
+    var ratingTitle: String { self == .sleepQuality || self == .energyLevel || self == .libido ? "Rating (optional)" : "Severity (optional)" }
     var ratingLabels: [String] {
         switch self {
         case .sleepQuality: ["Poor", "Fair", "Good"]
-        case .energyLevel: ["Low", "Typical", "High"]
+        case .energyLevel, .libido: ["Low", "Typical", "High"]
         default: ["Mild", "Moderate", "Severe"]
         }
     }
@@ -52,11 +112,12 @@ nonisolated enum SymptomKind: String, CaseIterable, Sendable {
         switch self {
         case .sleepQuality: "Poor sleep"
         case .energyLevel: "Low energy"
+        case .libido: "Low sex drive"
         default: title
         }
     }
     func qualifiesForTiming(value: Int?) -> Bool {
-        self == .sleepQuality || self == .energyLevel ? value == 1 : true
+        self == .sleepQuality || self == .energyLevel || self == .libido ? value == 1 : true
     }
 }
 

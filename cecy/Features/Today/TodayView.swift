@@ -9,12 +9,6 @@ struct TodayView: View {
     @State private var showExplanation = false
     @State private var selection: LocalDay
 
-    private var wellness: WellnessRecommendation? {
-        guard session.canUseAI,
-              let request = try? AIContextBuilder.wellness(snapshot: session.snapshot, today: today) else { return nil }
-        return session.ai.wellness(for: request)
-    }
-
     init(session: TrackerSession, today: LocalDay, overview: CycleOverview, onLog: @escaping (LocalDay) -> Void, onHistory: @escaping () -> Void) {
         self.session = session
         self.today = today
@@ -58,47 +52,18 @@ struct TodayView: View {
                         .accessibilityIdentifier("cycleDay")
                         .accessibilityHint("Current cycle, counted from your recorded start on \(DayText.full(start))")
                 }
-                Text(countdown.detail).font(.footnote).foregroundStyle(.secondary)
-            }
-            TrackerCard {
-                PredictionSummary(outcome: overview.prediction, today: today, forecast: session.cycleForecast)
-                if session.cycleForecast.nextPeriod(onOrAfter: today) != nil {
+                if overview.estimate != nil {
+                    PredictionSummary(outcome: overview.prediction, today: today)
                     Button("How this estimate works") { showExplanation = true }
                         .frame(minHeight: 44)
-                }
-            }
-            TrackerCard {
-                Text("For today").font(.headline).accessibilityAddTraits(.isHeader)
-                if session.privacy.dailyInsightsEnabled {
-                    DailyInsightsContent(session: session)
-                }
-                if let wellness {
-                    WellnessSafetyNotice(symptoms: session.snapshot.symptoms, today: today)
-                    VStack(alignment: .leading, spacing: 12) {
-                        if let movement = wellness.movementSuggestions.first { wellnessRow("Movement", text: movement, symbol: "figure.walk") }
-                        if let food = wellness.foodSuggestions.first { wellnessRow("Food", text: food, symbol: "fork.knife") }
-                        wellnessRow("Hydration", text: wellness.hydrationSuggestion, symbol: "drop")
-                        if let recovery = wellness.recoverySuggestions.first { wellnessRow("Recovery", text: recovery, symbol: "leaf") }
-                        AISafetyNotice(message: wellness.safetyMessage)
-                    }.accessibilityIdentifier("todayWellnessSuggestions")
                 } else {
-                    Text("Food, movement and recovery ideas based on today’s logs. Generate when you’re ready.")
-                        .font(.subheadline).foregroundStyle(.secondary)
+                    Text(countdown.detail).font(.footnote).foregroundStyle(.secondary)
                 }
-                NavigationLink {
-                    AIFeatureView(session: session, feature: .wellness)
-                } label: {
-                    Label(wellness == nil ? "Get today’s suggestions" : "View all suggestions", systemImage: "sparkles")
-                        .frame(minHeight: 44)
-                }
-                .accessibilityIdentifier("dailyWellnessAI")
-                NavigationLink("Edit wellness preferences") { ProfileSettingsView(session: session) }
-                    .frame(minHeight: 44).font(.subheadline)
-                    .accessibilityIdentifier("todayWellnessPreferences")
-                DisclosureGroup("Daily preparation") { DailyInsightsPreference(session: session) }
             }
             .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("forTodayCard")
+            .accessibilityIdentifier("nextPeriodCard")
+            CyclePhaseRingView(session: session, today: today, overview: overview)
+            TodayEstimatesCard(forecast: session.cycleForecast, today: today)
             TrackerCard { UpcomingCycleForecastView(forecast: session.cycleForecast, today: today) }
             DailyLogCard(session: session, selectedDay: selection, today: today)
             if let confirmation = session.confirmation {
@@ -109,33 +74,17 @@ struct TodayView: View {
                 }
                 .onAppear { AccessibilityNotification.Announcement(confirmation).post() }
             }
-            NavigationLink("Sexual activity history") { SexualActivityHistoryView(session: session) }
-                .frame(minHeight: 44).accessibilityIdentifier("sexualActivityHistory")
-            Button("Add previous periods", action: onHistory)
-                .frame(maxWidth: .infinity, minHeight: 44).buttonStyle(.bordered)
             if let insight = session.insights.first { InsightCard(insight: insight) }
             if let message = session.insightMessage { InlineError(message: message) }
         }
         .onChange(of: today) { old, new in if selection == old { selection = new } }
         .sheet(isPresented: $showExplanation) {
-            if let cycle = session.cycleForecast.nextPeriod(onOrAfter: today),
-               cycle.isLaterProjection || cycle.referenceNotice != nil {
-                NavigationStack {
-                    TrackerPage(title: "About this projection") { TrackerCard { ProjectedCycleDetails(cycle: cycle, notBefore: today) } }
-                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showExplanation = false } } }
-                }
-            } else if let estimate = overview.estimate {
+            if let estimate = overview.estimate {
                 PredictionExplanation(estimate: estimate, sources: Array(overview.intervals.suffix(6)), replay: session.predictionReplay)
             }
         }
     }
 
-    private func wellnessRow(_ title: String, text: String, symbol: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label(title, systemImage: symbol).font(.subheadline.weight(.semibold))
-            Text(verbatim: text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
-        }
-    }
 }
 
 /// Presentation only: never rolls a missed estimate into an unrecorded new cycle.
@@ -171,31 +120,29 @@ struct TodayView: View {
 }
 
 struct PredictionSummary: View {
+    @Environment(\.colorScheme) private var colorScheme
     let outcome: PredictionOutcome
     let today: LocalDay
-    let forecast: CycleForecast
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Estimated next period start").font(.headline).accessibilityAddTraits(.isHeader)
-            if let cycle = forecast.nextPeriod(onOrAfter: today) {
-                Text(DayText.range(max(today, cycle.period.earliest), cycle.period.latest))
+            if case .available(let estimate) = outcome {
+                VStack(alignment: .leading, spacing: 8) {
+                Label("Estimated period start window", systemImage: "circle.dashed").font(.headline)
+                Text(DayText.range(estimate.earliest, estimate.latest))
                     .font(TrackerTypography.sectionTitle).accessibilityIdentifier("predictionWindow")
-                Text("Around \(DayText.short(cycle.period.center))").font(.subheadline)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading).padding(12)
+                .background(TrackerPalette(scheme: colorScheme).recordedSurface, in: RoundedRectangle(cornerRadius: 16))
+                Text("Around \(DayText.short(estimate.center))").font(.subheadline)
                     .accessibilityIdentifier("nextPeriodCenter")
-                let confidence = primaryConfidence(cycle)
-                Label("\(confidence.rawValue) confidence · Rough estimate", systemImage: "circle.dashed")
+                Label("\(estimate.confidence.rawValue) confidence · Rough estimate", systemImage: "circle.dashed")
                     .font(.subheadline)
-                if cycle.referenceNotice != nil {
-                    Text("Typical-cycle reference · Review recorded starts")
-                        .font(.subheadline).accessibilityIdentifier("referencePrediction")
-                } else if cycle.isLaterProjection {
-                    Text("Provisional projection · Earlier periods are not confirmed")
-                        .font(.subheadline).accessibilityIdentifier("projectedPrediction")
-                } else if case .available(let estimate) = outcome, estimate.basis == .usualCycle {
-                    Text("Starter estimate · based on your usual \(estimate.reportedCycleDays ?? 28)-day cycle, not measured cycle history.")
+                if estimate.basis == .usualCycle, let length = estimate.reportedCycleDays {
+                    Text("Starter estimate · based on your usual \(length)-day cycle, not measured cycle history.")
                         .font(.subheadline).accessibilityIdentifier("starterPrediction")
                 }
+                Text("Possible start dates, not confirmed bleeding days. Missing records can affect timing.").font(.footnote).foregroundStyle(.secondary)
             } else {
             switch outcome {
             case .available:
@@ -211,12 +158,6 @@ struct PredictionSummary: View {
         }
     }
 
-    private func primaryConfidence(_ cycle: ProjectedCycle) -> PredictionConfidence {
-        if !cycle.isLaterProjection, cycle.referenceNotice == nil, case .available(let estimate) = outcome {
-            return estimate.confidence
-        }
-        return .low
-    }
 }
 
 struct PredictionExplanation: View {

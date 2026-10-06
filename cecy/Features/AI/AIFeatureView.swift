@@ -105,12 +105,14 @@ struct AIFeatureView: View {
                                 Text("\(kinds.count) selected").font(.caption).foregroundStyle(.secondary)
                             }
                             SelectionFlowLayout {
-                                ForEach(SymptomKind.allCases, id: \.self) { kind in
+                                ForEach(AISymptomType.allCases.map(\.kind), id: \.self) { kind in
                                     SelectionChip(title: kind.title, symbol: kind.symbol, selected: kinds.contains(kind)) {
                                         if kinds.remove(kind) == nil { kinds.insert(kind) }
                                     }.accessibilityIdentifier("questionSymptom_\(kind.rawValue)")
                                 }
                             }
+                            Text("Expanded symptom types remain in your local logs; AI currently supports the types shown here.")
+                                .font(.caption).foregroundStyle(.secondary)
                         }
                         .padding(12)
                         .background(TrackerPalette(scheme: colorScheme).sage, in: RoundedRectangle(cornerRadius: 20))
