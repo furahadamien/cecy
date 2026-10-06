@@ -19,27 +19,12 @@ struct CyclePhaseRingView: View {
                 PhaseRingGraphic(timeline: timeline) { selectedPhase = $0 }
                     .frame(maxWidth: 280).frame(height: 260)
                     .frame(maxWidth: .infinity)
-                if let phase = timeline.currentPhase {
-                    Label("\(phase.title) · \(timeline.currentIsRecorded ? "Recorded bleeding" : "Estimated phase")", systemImage: phase.symbol)
-                        .font(.subheadline.weight(.semibold))
-                        .accessibilityIdentifier("currentCyclePhase")
-                    Text(phase.explanation).font(.subheadline)
-                } else {
-                    Text(timeline.markerDay == nil
-                         ? "Day \(timeline.cycleDay) is beyond this estimated cycle. No new period has been assumed."
-                         : "Your cycle context makes the current phase uncertain.")
-                        .font(.subheadline).accessibilityIdentifier("uncertainCyclePhase")
-                }
-                Text("\(timeline.length)-day estimated cycle · Today: day \(timeline.cycleDay)")
-                    .font(.footnote).monospacedDigit().accessibilityIdentifier("phaseCycleLength")
-                Text("Solid inner arc: recorded bleeding. Dashed arcs: estimated phases. Dot: today. Pale outer band: estimated fertile window.")
-                    .font(.caption).foregroundStyle(.secondary)
                 if let days = timeline.fertileDays {
-                    Text("Estimated fertile window: days \(days.lowerBound)–\(days.upperBound), not a multi-day ovulation phase.")
+                    Text("Estimated fertile window: days \(days.lowerBound)–\(days.upperBound)")
                         .font(.caption).accessibilityIdentifier("phaseFertileWindow")
                 }
             } else {
-                Text("Phase timing is unavailable. Record period dates and a typical bleeding length; irregular or conflicting estimates may not support a phase ring.")
+                Text("Phase timing unavailable")
                     .font(.subheadline).foregroundStyle(.secondary)
                     .accessibilityIdentifier("phaseTimelineUnavailable")
             }
@@ -55,12 +40,11 @@ struct CyclePhaseRingView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(TrackerPalette(scheme: colorScheme).accent)
-                .accessibilityValue(timeline?.currentPhase == phase ? "Current phase" : "")
+                .accessibilityValue(timeline?.currentPhase == phase
+                    ? "Current phase · \(timeline?.currentIsRecorded == true ? "Recorded bleeding" : "Estimated")" : "")
                 .accessibilityHint("Opens the phase range and explanation")
                 .accessibilityIdentifier("cyclePhase_\(phase.rawValue)")
             }
-            Text("Calendar estimates—not confirmed ovulation or safe days. Do not use for contraception.")
-                .font(.caption).foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("cyclePhaseRing")
@@ -110,6 +94,10 @@ private struct PhaseRingGraphic: View {
                 VStack(spacing: 4) {
                     Text("Day \(timeline.cycleDay)").font(.title2.weight(.semibold)).monospacedDigit()
                     Text("of ~\(timeline.length)").font(.caption)
+                    if timeline.currentPhase == nil {
+                        Text("Phase uncertain").font(.caption2)
+                            .accessibilityIdentifier("uncertainCyclePhase")
+                    }
                 }.dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
@@ -123,8 +111,11 @@ private struct PhaseRingGraphic: View {
                 if let segment = timeline.segments.first(where: { $0.days.contains(day) }) { select(segment.phase) }
             }
         }
-        // Equivalent full-size labelled buttons below expose all phases to assistive input.
-        .accessibilityHidden(true)
+        // Expose the day/length without requiring a visual legend; labelled buttons select phases.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Cycle phase ring")
+        .accessibilityValue("Today: day \(timeline.cycleDay). Estimated cycle: \(timeline.length) days. \(timeline.currentPhase?.title ?? "Phase uncertain"). \(timeline.currentIsRecorded ? "Recorded bleeding" : "Estimated, not confirmed")")
+        .accessibilityIdentifier("phaseRingSummary")
     }
 
     private func arc(_ days: ClosedRange<Int>, inset: CGFloat) -> some Shape {
@@ -159,12 +150,12 @@ private struct CyclePhaseDetailsView: View {
                     Text("\(phase == .menstrual && !timeline.bleedingIsEstimated ? "Recorded" : "Estimated") days \(segment.days.lowerBound)–\(segment.days.upperBound)")
                         .font(.headline).accessibilityIdentifier("phaseDayRange")
                     Text(DayText.range(range.start, range.end)).font(.subheadline)
-                    ForEach(timeline.warnings, id: \.self) { Text($0).font(.footnote) }
-                } else { Text("No separate day range can be estimated from these records.").font(.subheadline) }
+                } else { Text("Estimated range unavailable").font(.subheadline) }
                 Text(phase.explanation)
+                    .accessibilityIdentifier("phaseExplanation")
                 Text("Common experiences").font(.headline)
                 Text(phase.experiences).font(.subheadline)
-                Text("Experiences vary; these are possibilities, not a prediction about you.").font(.caption).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("phaseExperiences")
                 let patterns = CyclePhaseTimeline.patterns(for: phase, insights: insights)
                 if !patterns.isEmpty {
                     Text("Your recorded patterns near period starts").font(.headline)
@@ -172,14 +163,7 @@ private struct CyclePhaseDetailsView: View {
                         Text(insight.title).font(.subheadline.weight(.semibold))
                         Text(insight.explanation).font(.footnote)
                     }
-                    Text("Start-relative patterns do not confirm a hormonal phase.").font(.caption)
-                } else {
-                    Text("No repeated personal pattern is established here yet.").font(.footnote).foregroundStyle(.secondary)
                 }
-                if phase == .follicular {
-                    Text("Biologically, the follicular phase includes menstruation. The ring shows bleeding separately for clarity.").font(.footnote)
-                }
-                Text("Timing comes from the existing calendar estimate, not hormone measurements. Not for contraception.").font(.footnote)
             }
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
