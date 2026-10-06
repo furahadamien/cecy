@@ -9,7 +9,7 @@ nonisolated enum AITask: String, Codable, Sendable, CaseIterable {
 }
 
 nonisolated struct AIConsentRecord: Codable, Equatable, Sendable {
-    static let currentVersion = 1
+    static let currentVersion = 2
     let noticeVersion: Int
     let grantedAt: Date
     var isCurrent: Bool { noticeVersion == Self.currentVersion && grantedAt.timeIntervalSinceReferenceDate.isFinite }
@@ -40,6 +40,13 @@ nonisolated enum AISymptomType: String, Codable, CaseIterable, Sendable {
     case cramps, headache, bloating, fatigue, acne, nausea, cravings
     case moodChange = "mood_change", backPain = "back_pain", breastTenderness = "breast_tenderness"
     case sleepChange = "sleep_change", lowEnergy = "low_energy", digestiveChange = "digestive_change"
+    case pelvicPain = "pelvic_pain", jointPain = "joint_pain", muscleAches = "muscle_aches", breastSwelling = "breast_swelling"
+    case anxiety, irritability, lowMood = "low_mood", moodSwings = "mood_swings"
+    case difficultyConcentrating = "difficulty_concentrating", brainFog = "brain_fog", insomnia, dizziness
+    case constipation, diarrhea, appetiteChanges = "appetite_changes", vomiting
+    case oilySkin = "oily_skin", drySkin = "dry_skin", hairChanges = "hair_changes"
+    case hotFlashes = "hot_flashes", nightSweats = "night_sweats", dischargeChanges = "discharge_changes"
+    case vaginalDryness = "vaginal_dryness", vaginalItching = "vaginal_itching", urinaryDiscomfort = "urinary_discomfort", libido
     var kind: SymptomKind {
         switch self {
         case .cramps: .cramps
@@ -55,6 +62,32 @@ nonisolated enum AISymptomType: String, Codable, CaseIterable, Sendable {
         case .sleepChange: .sleepQuality
         case .lowEnergy: .energyLevel
         case .digestiveChange: .digestiveChanges
+        case .pelvicPain: .pelvicPain
+        case .jointPain: .jointPain
+        case .muscleAches: .muscleAches
+        case .breastSwelling: .breastSwelling
+        case .anxiety: .anxiety
+        case .irritability: .irritability
+        case .lowMood: .lowMood
+        case .moodSwings: .moodSwings
+        case .difficultyConcentrating: .difficultyConcentrating
+        case .brainFog: .brainFog
+        case .insomnia: .insomnia
+        case .dizziness: .dizziness
+        case .constipation: .constipation
+        case .diarrhea: .diarrhea
+        case .appetiteChanges: .appetiteChanges
+        case .vomiting: .vomiting
+        case .oilySkin: .oilySkin
+        case .drySkin: .drySkin
+        case .hairChanges: .hairChanges
+        case .hotFlashes: .hotFlashes
+        case .nightSweats: .nightSweats
+        case .dischargeChanges: .dischargeChanges
+        case .vaginalDryness: .vaginalDryness
+        case .vaginalItching: .vaginalItching
+        case .urinaryDiscomfort: .urinaryDiscomfort
+        case .libido: .libido
         }
     }
     init?(kind: SymptomKind) {
@@ -84,7 +117,7 @@ nonisolated struct AISymptom: Codable, Equatable, Sendable {
         try values.encode(severity, forKey: .severity) // Explicit null, not omitted.
     }
     var suggestedRating: Int? {
-        type == .sleepChange || type == .lowEnergy ? nil : severity?.rating
+        type.kind.usesSeverity ? severity?.rating : nil
     }
 }
 
@@ -145,6 +178,10 @@ nonisolated struct AIQuestionFacts: Codable, Equatable, Sendable {
     var minimumRecordedOffsetDays: Int?
     var maximumRecordedOffsetDays: Int?
     var symptoms: [AIQuestionSymptomFacts]?
+    var recordedStarts: Int?
+    var confirmedBleedingDurations: [Int]?
+    var unknownBleedingEnds: Int?
+    var energyRatingDays: [String: Int]?
 }
 
 nonisolated struct AIQuestionSymptomFacts: Codable, Equatable, Sendable {
@@ -161,20 +198,21 @@ nonisolated struct AIQuestionSymptomFacts: Codable, Equatable, Sendable {
 nonisolated protocol AIValidatedResponse: Codable, Sendable { func validate() throws }
 nonisolated enum AIResponseValidation {
     static func text(_ value: String, maximum: Int = 4_000) throws {
-        guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, value.count <= maximum else {
+        guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, value.unicodeScalars.count <= maximum else {
             throw AIServiceError.invalidResponse
         }
     }
-    static func list(_ values: [String], maximum: Int) throws {
+    static func list(_ values: [String], maximum: Int, textMaximum: Int = 4_000) throws {
         guard values.count <= maximum else { throw AIServiceError.invalidResponse }
-        for value in values { try text(value) }
+        for value in values { try text(value, maximum: textMaximum) }
     }
-    static func safety(_ value: String?) throws { if let value { try text(value) } }
+    static func safety(_ value: String?) throws { if let value { try text(value, maximum: 600) } }
 }
 nonisolated struct SymptomNormalizationResult: AIValidatedResponse, Equatable {
     let symptoms: [AISymptom]
     func validate() throws {
-        guard symptoms.count <= 20, Set(symptoms.map(\.type)).count == symptoms.count else {
+        guard symptoms.count <= 39, Set(symptoms.map(\.type)).count == symptoms.count,
+              symptoms.allSatisfy({ $0.type.kind.usesSeverity || $0.severity == nil }) else {
             throw AIServiceError.invalidResponse
         }
     }
@@ -185,9 +223,9 @@ nonisolated struct InsightExplanationResult: AIValidatedResponse, Equatable {
     let supportingObservation: String
     let safetyMessage: String?
     func validate() throws {
-        try AIResponseValidation.text(title, maximum: 300)
-        try AIResponseValidation.text(explanation)
-        try AIResponseValidation.text(supportingObservation)
+        try AIResponseValidation.text(title, maximum: 160)
+        try AIResponseValidation.text(explanation, maximum: 1_000)
+        try AIResponseValidation.text(supportingObservation, maximum: 500)
         try AIResponseValidation.safety(safetyMessage)
     }
 }
@@ -199,11 +237,11 @@ nonisolated struct WellnessRecommendation: AIValidatedResponse, Equatable {
     let explanation: String
     let safetyMessage: String?
     func validate() throws {
-        try AIResponseValidation.list(movementSuggestions, maximum: 6)
-        try AIResponseValidation.list(foodSuggestions, maximum: 6)
-        try AIResponseValidation.text(hydrationSuggestion)
-        try AIResponseValidation.list(recoverySuggestions, maximum: 6)
-        try AIResponseValidation.text(explanation)
+        try AIResponseValidation.list(movementSuggestions, maximum: 6, textMaximum: 200)
+        try AIResponseValidation.list(foodSuggestions, maximum: 6, textMaximum: 200)
+        try AIResponseValidation.text(hydrationSuggestion, maximum: 300)
+        try AIResponseValidation.list(recoverySuggestions, maximum: 6, textMaximum: 200)
+        try AIResponseValidation.text(explanation, maximum: 1_000)
         try AIResponseValidation.safety(safetyMessage)
     }
 }
@@ -212,8 +250,8 @@ nonisolated struct CycleSummaryResult: AIValidatedResponse, Equatable {
     let highlights: [String]
     let safetyMessage: String?
     func validate() throws {
-        try AIResponseValidation.text(summary)
-        try AIResponseValidation.list(highlights, maximum: 20)
+        try AIResponseValidation.text(summary, maximum: 1_200)
+        try AIResponseValidation.list(highlights, maximum: 8, textMaximum: 300)
         try AIResponseValidation.safety(safetyMessage)
     }
 }
@@ -222,8 +260,8 @@ nonisolated struct CycleQuestionResult: AIValidatedResponse, Equatable {
     let supportingFacts: [String]
     let safetyMessage: String?
     func validate() throws {
-        try AIResponseValidation.text(answer)
-        try AIResponseValidation.list(supportingFacts, maximum: 20)
+        try AIResponseValidation.text(answer, maximum: 1_200)
+        try AIResponseValidation.list(supportingFacts, maximum: 8, textMaximum: 300)
         try AIResponseValidation.safety(safetyMessage)
     }
 }

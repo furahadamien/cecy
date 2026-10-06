@@ -83,13 +83,14 @@ struct AISymptomEntryView: View {
                             Text("Not rated").tag(Int?.none)
                             ForEach(1...3, id: \.self) { Text(kind.ratingLabels[$0 - 1]).tag(Int?.some($0)) }
                         }
+                        .accessibilityIdentifier("aiSymptomRating_\(kind.rawValue)")
                         if session.snapshot.symptoms.contains(where: { $0.day == day && $0.kind == kind }) {
                             Label("\(kind.title) is already recorded on this date. Deselect it here or edit the existing observation.", systemImage: "exclamationmark.circle")
                                 .font(.footnote)
                         }
                     }
-                    if selected.contains(.sleepQuality) || selected.contains(.energyLevel) {
-                        Text("Choose your sleep or energy rating, or leave Not rated.")
+                    if selected.contains(where: { !$0.usesSeverity }) {
+                        Text("Choose your sleep, energy, or sex-drive rating, or leave Not rated.")
                     }
                     Toggle("Keep description as a private note", isOn: $keepNote)
                     Text("Saves your description with each selected symptom. It won’t be sent again automatically.")

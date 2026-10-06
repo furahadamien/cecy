@@ -119,18 +119,16 @@ nonisolated struct CyclePhaseTests {
         #expect(loaded.symptoms.allSatisfy { $0.value == 2 && $0.notes == "Private synthetic note" })
     }
 
-    @Test func newLocalTypesDoNotEnterAutomaticAIContext() throws {
+    @Test func expandedTypesHaveBoundedV2AggregateContexts() throws {
         let today = try LocalDay(key: 20261006)
         let snapshot = TrackerSnapshot(periods: [Period(start: today)], symptoms: [
             SymptomEntry(day: today, kind: .vaginalDryness), SymptomEntry(day: today, kind: .libido),
             SymptomEntry(day: today, kind: .cramps)])
         guard case .question(let context) = try AIContextBuilder.recordInsights(snapshot: snapshot, today: today) else { Issue.record(); return }
-        let text = String(decoding: try JSONEncoder().encode(context), as: UTF8.self)
-        #expect(text.contains("Cramps"))
-        #expect(!text.contains("Vaginal") && !text.contains("Sex drive") && !text.contains("libido"))
-        #expect(throws: AIContextError.self) {
-            try AIContextBuilder.question(CycleQuestionScope.symptomFrequency.suggestedQuestion(kind: .vaginalDryness),
-                scope: .symptomFrequency, kind: .vaginalDryness, snapshot: snapshot, today: today)
-        }
+        #expect(Set(context.facts.symptoms?.map(\.symptom) ?? []) == [.cramps, .vaginalDryness, .libido])
+        try context.validateForAI()
+        guard case .question(let question) = try AIContextBuilder.question(CycleQuestionScope.symptomFrequency.suggestedQuestion(kind: .vaginalDryness),
+            scope: .symptomFrequency, kind: .vaginalDryness, snapshot: snapshot, today: today) else { Issue.record(); return }
+        #expect(question.facts.symptom == .vaginalDryness && question.facts.recordedDays == 1)
     }
 }

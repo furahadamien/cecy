@@ -1,0 +1,16 @@
+{
+  "sourceRevision": "44af85ec5675389142bc77aa97b7bc47196f1871",
+  "source": "Response envelopes extracted from fixtures/symptom-catalog/v1.json and v2.json; synthetic contract fixtures, not live model results.",
+  "cases": [
+    {"version":1,"task":"normalize_symptoms","response":{"success":true,"data":{"symptoms":[{"type":"fatigue","severity":null},{"type":"cramps","severity":"mild"}]}}},
+    {"version":1,"task":"explain_insight","response":{"success":true,"data":{"title":"Headaches appeared in the supplied records","explanation":"The supplied records include headaches in four of six cycles.","supportingObservation":"Four headache occurrences were supplied across six cycles.","safetyMessage":null}}},
+    {"version":1,"task":"daily_wellness_recommendation","response":{"success":true,"data":{"movementSuggestions":["Take a comfortable walk if it feels manageable."],"foodSuggestions":["Choose a balanced meal you tolerate well."],"hydrationSuggestion":"Drink water regularly throughout the day.","recoverySuggestions":["Allow time for rest."],"explanation":"These suggestions account for the supplied moderate cramps.","safetyMessage":null}}},
+    {"version":1,"task":"cycle_summary","response":{"success":true,"data":{"summary":"The supplied cycle lasted 30 days with a five-day period.","highlights":["Fatigue and cramps were supplied as common symptoms."],"safetyMessage":null}}},
+    {"version":1,"task":"answer_cycle_question","response":{"success":true,"data":{"answer":"Headache was recorded more often in the supplied facts.","supportingFacts":["Headache had four supplied occurrences and cramps had two."],"safetyMessage":null}}},
+    {"version":2,"task":"normalize_symptoms","response":{"success":true,"data":{"symptoms":[{"type":"dizziness","severity":null},{"type":"vaginal_itching","severity":null}]}}},
+    {"version":2,"task":"explain_insight","response":{"success":true,"data":{"title":"Low sex-drive ratings appeared in the supplied records","explanation":"A low sex-drive rating was supplied in three of four cycles.","supportingObservation":"Three low ratings were supplied across four cycles.","safetyMessage":null}}},
+    {"version":2,"task":"daily_wellness_recommendation","response":{"success":true,"data":{"movementSuggestions":["Rest rather than exercising while severe vomiting continues."],"foodSuggestions":["Choose tolerated foods that meet the supplied vegetarian and peanut-free needs."],"hydrationSuggestion":"Take small, regular sips of fluid if tolerated.","recoverySuggestions":["Prioritize rest."],"explanation":"The suggestions prioritize the supplied severe vomiting.","safetyMessage":"Consider prompt medical advice for severe or persistent vomiting or signs of dehydration."}}},
+    {"version":2,"task":"cycle_summary","response":{"success":true,"data":{"summary":"The supplied cycle lasted 31 days with a five-day period.","highlights":["Brain fog, pelvic pain, and bloating were supplied as common observations."],"safetyMessage":null}}},
+    {"version":2,"task":"answer_cycle_question","response":{"success":true,"data":{"answer":"Brain fog was the most frequent observation in the supplied facts.","supportingFacts":["Brain fog had four supplied occurrences, compared with three for pelvic pain and one for oily skin."],"safetyMessage":null}}}
+  ]
+}

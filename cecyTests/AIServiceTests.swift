@@ -65,6 +65,7 @@ nonisolated private final class AIHTTPStub: URLProtocol, @unchecked Sendable {
         #expect(request.url == RemoteAIService.endpoint)
         #expect(request.httpMethod == "POST")
         #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        #expect(request.value(forHTTPHeaderField: "X-Cecy-Symptom-Catalog-Version") == "2")
         #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
         #expect(request.value(forHTTPHeaderField: "x-functions-key") == nil)
         #expect(request.timeoutInterval == 75)
@@ -158,6 +159,31 @@ nonisolated private final class AIHTTPStub: URLProtocol, @unchecked Sendable {
     @Test func invalidDescriptionMakesNoNetworkCall() async {
         let remote = service(AIFixtures.symptoms)
         await #expect(throws: AIServiceError.invalidRequest) { try await remote.normalizeSymptoms(text: " ") }
+        #expect(AIHTTPStub.state.captured.0.isEmpty)
+    }
+
+    @Test func expandedResultsAndInvalidVersionDoNotDowngradeOrRetry() async throws {
+        let fixture = #"{"success":true,"data":{"symptoms":[{"type":"vaginal_itching","severity":null},{"type":"libido","severity":null}]}}"#
+        let value = try await service(fixture).normalizeSymptoms(text: "Synthetic observations")
+        #expect(value.symptoms.map(\.type) == [.vaginalItching, .libido])
+        try assertRequest(.normalizeSymptoms)
+        let rejected = service(#"{"success":false,"error":{"code":"INVALID_REQUEST","message":"Invalid catalog version"}}"#, status: 400)
+        await #expect(throws: AIServiceError.invalidRequest) { try await rejected.normalizeSymptoms(text: "Synthetic") }
+        try assertRequest(.normalizeSymptoms)
+    }
+
+    @Test func invalidRatingsAndOversizedFactsNeverLeaveDevice() async throws {
+        let remote = service(AIFixtures.wellness)
+        let context = WellnessRecommendationContext(cycleDay: nil, symptoms: [AISymptom(type: .libido, severity: .severe)],
+            activityLevel: "beginner", preferredExercises: [], dietaryPreference: "none", foodAllergies: [], userGoals: [])
+        await #expect(throws: AIServiceError.invalidRequest) { try await remote.getWellnessRecommendation(context: context) }
+        let facts = AIQuestionFacts(scope: "cycleLengths", caveat: String(repeating: "a", count: 501))
+        await #expect(throws: AIServiceError.invalidRequest) {
+            try await remote.answerCycleQuestion(context: CycleQuestionContext(question: "Synthetic?", facts: facts))
+        }
+        await #expect(throws: AIServiceError.invalidRequest) {
+            try await remote.normalizeSymptoms(text: String(repeating: "e\u{301}", count: 1_001))
+        }
         #expect(AIHTTPStub.state.captured.0.isEmpty)
     }
 

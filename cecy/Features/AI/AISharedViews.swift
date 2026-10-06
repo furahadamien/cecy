@@ -9,6 +9,8 @@ struct AIConsentView: View {
             SettingsForm(title: "Optional insights") {
                 Section("Your choice") {
                     Text("Cecy uses AI through its Azure service and OpenAI. When you make a request, selected text, cycle facts or wellness preferences—including allergies—are sent for processing, not your full history.")
+                    Text("Selected health observations can include mood, sleep, digestion, skin, vaginal or urinary changes, and sex-drive ratings. These are sensitive health details. Stored private notes and sexual-activity records are not included automatically.")
+                        .accessibilityIdentifier("aiExpandedCatalogDisclosure")
                     Text("Records stay stored on this device. External processing follows provider data policies. Avoid identifying details in your text; a sent request cannot be recalled.")
                     Text("Suggestions can be wrong and are not medical advice. Manual tracking always works without this optional online service.")
                 }
@@ -62,7 +64,7 @@ struct WellnessSafetyNotice: View {
     let symptoms: [SymptomEntry]
     let today: LocalDay?
     var body: some View {
-        if symptoms.contains(where: { $0.day == today && $0.value == 3 && $0.kind != .sleepQuality && $0.kind != .energyLevel }) {
+        if symptoms.contains(where: { $0.day == today && $0.value == 3 && $0.kind.usesSeverity }) {
             Label("You logged a severe symptom today. General wellness suggestions are not treatment. Consider medical advice; seek urgent care for severe or sudden concerning symptoms.", systemImage: "exclamationmark.triangle")
                 .font(.footnote)
                 .fixedSize(horizontal: false, vertical: true)

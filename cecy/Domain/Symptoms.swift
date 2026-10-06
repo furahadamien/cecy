@@ -100,7 +100,8 @@ nonisolated enum SymptomKind: String, CaseIterable, Sendable {
         }
     }
 
-    var ratingTitle: String { self == .sleepQuality || self == .energyLevel || self == .libido ? "Rating (optional)" : "Severity (optional)" }
+    var usesSeverity: Bool { self != .sleepQuality && self != .energyLevel && self != .libido }
+    var ratingTitle: String { usesSeverity ? "Severity (optional)" : "Rating (optional)" }
     var ratingLabels: [String] {
         switch self {
         case .sleepQuality: ["Poor", "Fair", "Good"]

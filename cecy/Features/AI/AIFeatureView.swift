@@ -111,7 +111,7 @@ struct AIFeatureView: View {
                                     }.accessibilityIdentifier("questionSymptom_\(kind.rawValue)")
                                 }
                             }
-                            Text("Expanded symptom types remain in your local logs; AI currently supports the types shown here.")
+                            Text("Only selected symptoms and the recorded facts needed for this question are sent after consent. Energy questions count low ratings; timing questions use poor sleep and low sex-drive ratings.")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         .padding(12)

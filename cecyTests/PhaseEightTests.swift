@@ -23,14 +23,14 @@ nonisolated private func aiSnapshot() throws -> TrackerSnapshot {
 
 nonisolated struct AIModelTests {
     @Test func allTaxonomyMappingsAndSpecialRatings() throws {
-        #expect(AISymptomType.allCases.count == 13)
-        #expect(AISymptomType.allCases.count < SymptomKind.allCases.count)
-        #expect(AISymptomType(kind: .vaginalDryness) == nil)
+        #expect(AISymptomType.allCases.count == 39)
+        #expect(AISymptomType.allCases.count == SymptomKind.allCases.count)
+        #expect(AISymptomType(kind: .vaginalDryness) == .vaginalDryness)
         for type in AISymptomType.allCases {
             #expect(AISymptomType(kind: type.kind) == type)
             for severity in [AISeverity.mild, .moderate, .severe] {
                 let item = AISymptom(type: type, severity: severity)
-                let special = type == .sleepChange || type == .lowEnergy
+                let special = !type.kind.usesSeverity
                 #expect(item.suggestedRating == (special ? nil : severity.rating))
                 #expect(try JSONDecoder().decode(AISymptom.self, from: JSONEncoder().encode(item)) == item)
             }
@@ -108,7 +108,7 @@ nonisolated struct AIContextTests {
         let today = try aiDay(20260929)
         guard case .question(let open) = try AIContextBuilder.summary(snapshot: snapshot, start: aiDay(20260902), today: today) else { Issue.record(); return }
         #expect(open.facts.cyclesAnalyzed == 0 && open.facts.averageCycleLength == nil)
-        #expect(open.facts.caveat.contains("Confirmed bleeding durations (days): 5"))
+        #expect(open.facts.confirmedBleedingDurations == [5])
         guard case .summary(let value) = try AIContextBuilder.summary(snapshot: snapshot, start: aiDay(20260804), today: today) else { Issue.record(); return }
         #expect(value.cycleLength == 29 && value.periodLength == 5)
         #expect(value.commonSymptoms == [.headache])
@@ -213,6 +213,23 @@ nonisolated struct AIContextTests {
         #expect(reopened.aiEnabled)
         try reopened.prepareForReset()
         #expect(!privacy(storage).aiEnabled)
+    }
+
+    @Test func catalogV1ConsentRequiresRenewalAndSeparateDailyOptIn() throws {
+        let storage = AIThrowingPreferences()
+        storage.value.aiConsent = AIConsentRecord(noticeVersion: 1, grantedAt: Date())
+        storage.value.dailyInsightsEnabled = true
+        let value = privacy(storage)
+        #expect(!value.aiEnabled && !value.dailyInsightsEnabled)
+        storage.fail = true
+        #expect(value.setAIEnabled(true) != nil)
+        #expect(!value.aiEnabled && !value.dailyInsightsEnabled)
+        storage.fail = false
+        #expect(value.setAIEnabled(true) == nil)
+        #expect(value.aiEnabled && !value.dailyInsightsEnabled)
+        #expect(storage.value.dailyInsightsEnabled == false)
+        #expect(!privacy(storage).dailyInsightsEnabled)
+        #expect(value.setDailyInsightsEnabled(true) == nil && value.dailyInsightsEnabled)
     }
     @Test func noConsentMakesZeroServiceCalls() async {
         let service = AIControlledService()

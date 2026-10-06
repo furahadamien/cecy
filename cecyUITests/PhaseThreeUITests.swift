@@ -28,8 +28,9 @@ final class PhaseThreeUITests: XCTestCase {
 
     @MainActor private func toggleSymptom(_ kind: String, in app: XCUIApplication) {
         let button = app.buttons["symptomKind_\(kind)"]
-        XCTAssertTrue(button.waitForExistence(timeout: 5))
-        reveal(button, in: app); button.tap()
+        reveal(button, in: app)
+        XCTAssertTrue(button.exists)
+        button.tap()
     }
 
     @MainActor private func note(in app: XCUIApplication) -> XCUIElement {
@@ -116,16 +117,21 @@ final class PhaseThreeUITests: XCTestCase {
         app.terminate(); app.launch()
         XCTAssertTrue(app.tabBars.buttons["Calendar"].waitForExistence(timeout: 10))
         app.tabBars.buttons["Calendar"].tap()
-        let edit = app.buttons["editSymptom_sleepQuality"]
+        let groupEdit = app.buttons["editDaySymptoms"]
+        reveal(groupEdit, in: app); groupEdit.tap()
+        let edit = app.buttons["chooseDaySymptom_sleepQuality"]
         reveal(edit, in: app); edit.tap()
         reveal(app.buttons["symptomRating_sleepQuality"], in: app)
         XCTAssertTrue(app.buttons["symptomRating_sleepQuality"].label.contains("Good"))
         app.buttons["Cancel"].tap()
-        let editEnergy = app.buttons["editSymptom_energyLevel"]
+        XCTAssertTrue(app.navigationBars["Edit observation"].waitForNonExistence(timeout: 10))
+        let editEnergy = app.buttons["chooseDaySymptom_energyLevel"]
         reveal(editEnergy, in: app); editEnergy.tap()
         reveal(app.buttons["symptomRating_energyLevel"], in: app)
         XCTAssertTrue(app.buttons["symptomRating_energyLevel"].label.contains("Low"))
         app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.navigationBars["Edit observation"].waitForNonExistence(timeout: 10))
+        app.buttons["Done"].tap()
         for _ in 0..<6 { app.swipeDown() }
         XCTAssertTrue(app.buttons["calendarDay_20260929"].label.contains("2 recorded observations"))
         app.tabBars.buttons["Settings"].tap()

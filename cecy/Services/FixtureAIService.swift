@@ -7,10 +7,14 @@ nonisolated struct FixtureAIService: AIService {
     private func prepare() async throws {
         if mode == "slow" { try await Task.sleep(for: .seconds(20)) }
         else { try await Task.sleep(for: .milliseconds(100)) }
-        guard mode == "success" || mode == "slow" else { throw AIServiceError.unavailable }
+        guard mode == "success" || mode == "slow" || mode == "catalogV2" else { throw AIServiceError.unavailable }
     }
     func normalizeSymptoms(text: String) async throws -> SymptomNormalizationResult {
         try await prepare()
+        if mode == "catalogV2" {
+            return SymptomNormalizationResult(symptoms: [AISymptom(type: .dizziness, severity: nil),
+                AISymptom(type: .vaginalItching, severity: nil), AISymptom(type: .libido, severity: nil)])
+        }
         return SymptomNormalizationResult(symptoms: [AISymptom(type: .fatigue, severity: .moderate), AISymptom(type: .digestiveChange, severity: nil)])
     }
     func explainInsight(context: InsightExplanationContext) async throws -> InsightExplanationResult {

@@ -51,12 +51,69 @@ final class CycleExperienceUITests: XCTestCase {
         XCTAssertFalse(app.otherElements["todayEstimates"].exists)
         let records = app.otherElements["calendarRecordedDayCard"]
         UIViewport.reveal(records, in: app)
-        XCTAssertTrue(records.descendants(matching: .any)["editSymptom_cramps"].exists)
+        XCTAssertTrue(records.descendants(matching: .any)["editDaySymptoms"].exists)
         tap("sexualActivityHistory", in: app)
-        XCTAssertTrue(app.navigationBars["Sexual activity"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Sexual activity"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["No sexual activity recorded yet."].exists)
         app.navigationBars.buttons.firstMatch.tap()
         tap("addPreviousPeriods", in: app)
         XCTAssertTrue(app.buttons["Cancel"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor func testCalendarSymptomsShareActionsAndDeleteAfterConfirmation() {
+        let app = launch()
+        tap("logSymptoms", in: app)
+        let search = app.textFields["symptomSearch"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap(); search.typeText("Headache")
+        tap("symptomKind_headache", in: app)
+        app.buttons["saveSymptom"].tap()
+        XCTAssertTrue(app.buttons["saveSymptom"].waitForNonExistence(timeout: 10))
+        app.tabBars.buttons["Calendar"].tap()
+        tap("editDaySymptoms", in: app)
+        XCTAssertTrue(app.buttons["chooseDaySymptom_cramps"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["chooseDaySymptom_headache"].exists)
+        app.buttons["chooseDaySymptom_cramps"].tap()
+        XCTAssertTrue(app.navigationBars["Edit observation"].waitForExistence(timeout: 5))
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.navigationBars["Edit observation"].waitForNonExistence(timeout: 5))
+        app.buttons["Done"].tap()
+        tap("deleteDaySymptoms", in: app)
+        app.alerts.buttons["Keep symptoms"].tap()
+        XCTAssertEqual(app.buttons.matching(identifier: "editDaySymptoms").count, 1)
+        XCTAssertFalse(app.buttons["editSymptom_cramps"].exists)
+        XCTAssertFalse(app.buttons["deleteSymptom_headache"].exists)
+        tap("deleteDaySymptoms", in: app)
+        app.alerts.buttons["Delete all symptoms"].tap()
+        XCTAssertTrue(app.buttons["editDaySymptoms"].waitForNonExistence(timeout: 10))
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.buttons["logPeriod"].waitForExistence(timeout: 15))
+        app.tabBars.buttons["Calendar"].tap()
+        UIViewport.reveal(app.buttons["sexualActivityHistory"], in: app)
+        XCTAssertFalse(app.buttons["editDaySymptoms"].exists)
+    }
+
+    @MainActor func testCalendarSymptomActionsFitLargestText() {
+        let app = launch(largeText: true)
+        app.tabBars.buttons["Calendar"].tap()
+        // The full month and forecast explanations precede the records card.
+        // Fast-scroll near the footer before the precise viewport checks.
+        for _ in 0..<12 {
+            if app.buttons["editDaySymptoms"].isHittable { break }
+            app.swipeUp(velocity: .fast)
+        }
+        for id in ["editDaySymptoms", "deleteDaySymptoms"] {
+            let button = app.buttons[id]
+            UIViewport.reveal(button, in: app)
+            XCTAssertTrue(button.isHittable)
+            XCTAssertGreaterThanOrEqual(button.frame.height, 44)
+            XCTAssertGreaterThanOrEqual(button.frame.minX, 0)
+            XCTAssertLessThanOrEqual(button.frame.maxX, app.frame.maxX)
+        }
+        app.buttons["deleteDaySymptoms"].tap()
+        app.alerts.buttons["Keep symptoms"].tap()
+        tap("editDaySymptoms", in: app)
+        XCTAssertTrue(app.buttons["chooseDaySymptom_cramps"].waitForExistence(timeout: 5))
     }
 
     @MainActor func testExpandedSymptomCanBeSearchedSavedAndReopened() {

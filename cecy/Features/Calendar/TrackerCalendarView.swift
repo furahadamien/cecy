@@ -276,9 +276,10 @@ struct TrackerCalendarView: View {
             } else {
                 Text("No period recorded for this day.")
             }
-            ForEach(session.snapshot.symptoms.filter { $0.day == selection }) { entry in
+            if session.snapshot.symptoms.contains(where: { $0.day == selection }) {
                 Divider()
-                SymptomRecordView(session: session, entry: entry)
+                CalendarSymptomGroup(session: session, day: selection)
+                    .id(selection)
             }
             ForEach(session.snapshot.sexualActivities.filter { $0.day == selection }) { entry in
                 Divider()

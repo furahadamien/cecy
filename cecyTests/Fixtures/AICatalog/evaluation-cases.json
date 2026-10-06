@@ -1,0 +1,18 @@
+{
+  "sourceRevision":"44af85ec5675389142bc77aa97b7bc47196f1871",
+  "source":"Expected type sets extracted from backend evaluation-cases.json. These test client handling of expected outputs, not model reasoning.",
+  "recordedLiveModelResults":false,
+  "cases":[
+    {"id":"all-legacy-codes","expectedTypes":["cramps","headache","bloating","fatigue","mood_change","acne","back_pain","breast_tenderness","nausea","cravings","sleep_change","low_energy","digestive_change"],"expectedNullSeverityTypes":["sleep_change","low_energy"]},
+    {"id":"expanded-pain","expectedTypes":["pelvic_pain","joint_pain","muscle_aches","breast_swelling"],"expectedNullSeverityTypes":[]},
+    {"id":"expanded-mood-focus","expectedTypes":["anxiety","irritability","low_mood","mood_swings","difficulty_concentrating","brain_fog"],"expectedNullSeverityTypes":[]},
+    {"id":"expanded-energy-digestion","expectedTypes":["insomnia","dizziness","constipation","diarrhea","appetite_changes","vomiting"],"expectedNullSeverityTypes":[]},
+    {"id":"expanded-skin-body","expectedTypes":["oily_skin","dry_skin","hair_changes","hot_flashes","night_sweats","discharge_changes","vaginal_dryness","vaginal_itching","urinary_discomfort","libido"],"expectedNullSeverityTypes":["libido"]},
+    {"id":"negation","expectedTypes":["dizziness"],"excludedTypes":["headache"],"expectedNullSeverityTypes":[]},
+    {"id":"specific-not-umbrella","expectedTypes":["constipation"],"excludedTypes":["digestive_change"],"expectedNullSeverityTypes":[]},
+    {"id":"rating-observations","expectedTypes":["sleep_change","libido"],"excludedTypes":["low_energy"],"expectedNullSeverityTypes":["sleep_change","libido"]},
+    {"id":"low-energy-rating","expectedTypes":["low_energy"],"expectedNullSeverityTypes":["low_energy"]},
+    {"id":"empty-result","expectedTypes":[],"expectedNullSeverityTypes":[]},
+    {"id":"adversarial-text","expectedTypes":["dizziness"],"excludedTypes":["made_up_symptom"],"expectedNullSeverityTypes":[]}
+  ]
+}

@@ -57,15 +57,17 @@ actor RemoteAIService: AIService {
         return try await send(.answerCycleQuestion, context: context)
     }
 
-    private func send<C: Encodable & Sendable, R: AIValidatedResponse>(_ task: AITask, context: C) async throws -> R {
+    private func send<C: AIRequestContext, R: AIValidatedResponse>(_ task: AITask, context: C) async throws -> R {
         do {
             try Task.checkCancellation()
+            try context.validateForAI()
             let body = try JSONEncoder().encode(AIRequestEnvelope(task: task, context: context))
             guard body.count <= Self.maximumRequestBytes else { throw AIServiceError.invalidRequest }
             var request = URLRequest(url: Self.endpoint, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 75)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.setValue("application/json", forHTTPHeaderField: "Accept")
+            request.setValue("2", forHTTPHeaderField: "X-Cecy-Symptom-Catalog-Version")
             request.httpBody = body
             let (bytes, response) = try await session.bytes(for: request, delegate: redirects)
             defer { bytes.task.cancel() }
