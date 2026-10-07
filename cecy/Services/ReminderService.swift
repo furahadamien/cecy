@@ -34,8 +34,8 @@ nonisolated enum ReminderAuthorization: Sendable { case notDetermined, allowed, 
     }
     func add(_ request: ReminderRequest) async throws {
         let content = UNMutableNotificationContent()
-        content.title = "Cecy"
-        content.body = "A reminder you asked for. Open Cecy when it suits you."
+        content.title = request.kind.notificationTitle(showDetails: request.showDetails)
+        content.body = request.kind.notificationBody(showDetails: request.showDetails)
         content.sound = .default
         var components = DateComponents()
         components.calendar = Calendar(identifier: .gregorian)
@@ -110,7 +110,7 @@ nonisolated enum ReminderAuthorization: Sendable { case notDetermined, allowed, 
                             guard current == revision else { break }
                             try await delivery.add(request)
                         }
-                        status = requests.isEmpty ? "No future window reminder can be scheduled from the current estimate." : "Discreet reminders scheduled. iOS controls delivery."
+                        status = requests.isEmpty ? "No future window reminder can be scheduled from the current estimate." : "Reminders scheduled. iOS controls delivery."
                     } catch {
                         await delivery.clear()
                         status = "Reminders could not be scheduled. Reopen Cecy or change a setting to retry."

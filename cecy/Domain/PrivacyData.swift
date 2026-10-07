@@ -11,6 +11,8 @@ nonisolated struct PrivacyPreferences: Codable, Equatable, Sendable {
     var windowReminder = false
     var reminderHour = 20
     var reminderMinute = 0
+    // Existing installations retain discreet notification content until explicitly enabled.
+    var reminderDetailsEnabled: Bool?
     // Missing in earlier preference files means follow the device, not a reset of privacy choices.
     var appearance: AppAppearance?
     // Missing in legacy files means no AI consent, never an implicit opt-in.
@@ -27,11 +29,30 @@ nonisolated struct PrivacyPreferences: Codable, Equatable, Sendable {
 }
 
 nonisolated struct ReminderRequest: Equatable, Sendable {
-    enum Kind: String, Sendable { case daily, window }
+    enum Kind: String, Sendable {
+        case daily, window
+
+        var title: String { self == .daily ? "Daily check-in" : "Period window" }
+        var scheduleDescription: String {
+            self == .daily ? "Every day: log your period, symptoms or how you feel."
+                : "Once, 1 day before your earliest estimated period start."
+        }
+        func notificationTitle(showDetails: Bool) -> String {
+            showDetails ? title : "Cecy check-in"
+        }
+        func notificationBody(showDetails: Bool) -> String {
+            guard showDetails else {
+                return self == .daily ? "Take a moment to update your daily log." : "Open Cecy for your scheduled check-in."
+            }
+            return self == .daily ? "Log your period, symptoms or how you feel today."
+                : "Check your estimated period start window in Cecy."
+        }
+    }
     let kind: Kind
     let hour: Int
     let minute: Int
     let day: LocalDay?
+    var showDetails = false
     var id: String { "cecy.reminder.\(kind.rawValue)" }
     static let identifiers = ["cecy.reminder.daily", "cecy.reminder.window"]
 }
@@ -41,7 +62,8 @@ nonisolated enum ReminderPlanner {
         try preferences.validate()
         var requests: [ReminderRequest] = []
         if preferences.dailyReminder {
-            requests.append(ReminderRequest(kind: .daily, hour: preferences.reminderHour, minute: preferences.reminderMinute, day: nil))
+            requests.append(ReminderRequest(kind: .daily, hour: preferences.reminderHour, minute: preferences.reminderMinute, day: nil,
+                                            showDetails: preferences.reminderDetailsEnabled == true))
         }
         if preferences.windowReminder, let prediction {
             let day = try prediction.earliest.adding(days: -1)
@@ -55,7 +77,8 @@ nonisolated enum ReminderPlanner {
                                             matchingPolicy: .nextTime, repeatedTimePolicy: .first),
                try LocalDay(date: fire, timeZone: timeZone) == day, fire > now {
                 let components = calendar.dateComponents([.hour, .minute], from: fire)
-                requests.append(ReminderRequest(kind: .window, hour: components.hour!, minute: components.minute!, day: day))
+                requests.append(ReminderRequest(kind: .window, hour: components.hour!, minute: components.minute!, day: day,
+                                                showDetails: preferences.reminderDetailsEnabled == true))
             }
         }
         return requests

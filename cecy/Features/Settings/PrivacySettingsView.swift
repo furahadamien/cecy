@@ -122,6 +122,7 @@ struct ReminderSettingsView: View {
     let privacy: TrackerPrivacy
     @State private var daily: Bool
     @State private var window: Bool
+    @State private var showDetails: Bool
     @State private var time: Date
 
     init(privacy: TrackerPrivacy) {
@@ -129,6 +130,7 @@ struct ReminderSettingsView: View {
         let preferences = privacy.preferences
         _daily = State(initialValue: preferences.dailyReminder)
         _window = State(initialValue: preferences.windowReminder)
+        _showDetails = State(initialValue: preferences.reminderDetailsEnabled == true)
         _time = State(initialValue: Calendar.current.date(from: DateComponents(year: 2001, month: 1, day: 1,
                       hour: preferences.reminderHour, minute: preferences.reminderMinute)) ?? Date())
     }
@@ -137,6 +139,7 @@ struct ReminderSettingsView: View {
         let parts = Calendar.current.dateComponents([.hour, .minute], from: time)
         let saved = privacy.preferences
         return daily != saved.dailyReminder || window != saved.windowReminder
+            || showDetails != (saved.reminderDetailsEnabled == true)
             || parts.hour != saved.reminderHour || parts.minute != saved.reminderMinute
     }
 
@@ -144,18 +147,24 @@ struct ReminderSettingsView: View {
         SettingsForm(title: "Reminders") {
             if let message = privacy.message { Section { InlineError(message: message) } }
             Section {
-                Toggle("Daily check-in", isOn: $daily).accessibilityIdentifier("dailyReminder")
-                Toggle("Before period window", isOn: $window).accessibilityIdentifier("windowReminder")
-                DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)
+                Toggle(isOn: $daily) { ReminderChoiceLabel(kind: .daily) }.accessibilityIdentifier("dailyReminder")
+                Toggle(isOn: $window) { ReminderChoiceLabel(kind: .window) }.accessibilityIdentifier("windowReminder")
+                DatePicker("Reminder time", selection: $time, displayedComponents: .hourAndMinute)
             } header: {
                 Text("Choose reminders")
             } footer: {
-                Text("Uses local time. Period reminders need an available estimate and a future reminder time.")
+                Text("Both use this local time. Period alerts need an available estimate and a future reminder time.")
+            }
+            if daily || window {
+                Section {
+                    ReminderMessageFields(daily: daily, window: window, showDetails: $showDetails)
+                }
             }
             Section {
                 Button("Save changes") {
                     let parts = Calendar.current.dateComponents([.hour, .minute], from: time)
-                    Task { await privacy.setReminders(daily: daily, window: window, hour: parts.hour ?? 20, minute: parts.minute ?? 0) }
+                    Task { await privacy.setReminders(daily: daily, window: window, hour: parts.hour ?? 20, minute: parts.minute ?? 0,
+                                                     showDetails: showDetails) }
                 }
                 .frame(minHeight: 44).accessibilityIdentifier("saveReminders")
                 if privacy.isChangingReminders { ProgressView("Updating reminders…") }
@@ -178,7 +187,7 @@ struct ReminderSettingsView: View {
             }
             Section {
                 DisclosureGroup("Delivery and privacy") {
-                    Text("Notifications never include symptoms, notes or predicted dates. iOS still knows the schedule. Permission is requested only when you save enabled reminders.")
+                    Text("Reminder details name the purpose of an alert, never your recorded symptoms or private notes. Turn details off for discreet wording. iOS still knows the schedule.")
                     Text("A period reminder is scheduled the day before the earliest estimated start, only if that time is still in the future. No estimate means no period reminder.")
                     Text("Reminders update when you open Cecy or change records or settings. Focus and system settings may delay or prevent delivery. These are not medical alerts.")
                 }
@@ -186,7 +195,7 @@ struct ReminderSettingsView: View {
                     if let url = URL(string: UIApplication.openNotificationSettingsURLString) { UIApplication.shared.open(url) }
                 }.frame(minHeight: 44)
             } footer: {
-                Text("Discreet notifications. No health details on your lock screen.")
+                Text("iOS controls lock-screen previews. App lock does not hide notification text.")
             }
         }
         .disabled(privacy.isChangingReminders)

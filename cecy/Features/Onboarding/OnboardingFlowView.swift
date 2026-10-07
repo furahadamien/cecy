@@ -36,7 +36,7 @@ struct OnboardingFlowView: View {
             case .symptoms: "What do you usually experience? Choose any that apply."
             case .context: "Does any of this apply right now?"
             case .goals: "What would you like Cecy to help with?"
-            case .notifications: "A gentle nudge, only when you want it."
+            case .notifications: "Choose what to be reminded about and when."
             case .review: "Take a quick look. You can change anything later."
             case .apple: nil
             }
@@ -80,6 +80,7 @@ struct OnboardingFlowView: View {
         value.periods = session.snapshot.periods
         value.dailyReminder = session.privacy.preferences.dailyReminder
         value.windowReminder = session.privacy.preferences.windowReminder
+        value.reminderDetailsEnabled = session.privacy.preferences.reminderDetailsEnabled == true
         value.reminderHour = session.privacy.preferences.reminderHour
         value.reminderMinute = session.privacy.preferences.reminderMinute
         _draft = State(initialValue: value)
@@ -234,20 +235,20 @@ struct OnboardingFlowView: View {
         case .notifications:
             Section {
                 Toggle(isOn: $draft.dailyReminder) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Daily check-in")
-                        Text("A moment to log periods or symptoms.").font(.caption).foregroundStyle(.secondary)
-                    }
+                    ReminderChoiceLabel(kind: .daily)
                 }.accessibilityIdentifier("onboardingDailyReminder")
                 Toggle(isOn: $draft.windowReminder) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Before period window")
-                        Text("One day before an eligible estimate.").font(.caption).foregroundStyle(.secondary)
-                    }
+                    ReminderChoiceLabel(kind: .window)
                 }.accessibilityIdentifier("onboardingWindowReminder")
-                DatePicker("Local time", selection: reminderTime, displayedComponents: .hourAndMinute)
+                DatePicker("Reminder time", selection: reminderTime, displayedComponents: .hourAndMinute)
             } footer: {
-                Text("Discreet notifications, without health details. If you enable one, iOS will ask permission during setup. You can decline.")
+                Text("Both use this local time. Period alerts need a future estimate. iOS permission is requested during setup only if you enable a reminder.")
+            }
+            if draft.dailyReminder || draft.windowReminder {
+                Section {
+                    ReminderMessageFields(daily: draft.dailyReminder, window: draft.windowReminder,
+                                          showDetails: $draft.reminderDetailsEnabled)
+                }
             }
         case .review:
             review
@@ -336,7 +337,10 @@ struct OnboardingFlowView: View {
         case .symptoms: draft.profile.commonSymptoms = []
         case .context: draft.profile.cycleContext = []
         case .goals: draft.profile.goals = []
-        case .notifications: draft.dailyReminder = false; draft.windowReminder = false
+        case .notifications:
+            draft.dailyReminder = false
+            draft.windowReminder = false
+            draft.reminderDetailsEnabled = false
         default: break
         }
     }

@@ -170,6 +170,7 @@ nonisolated struct OnboardingDraft: Equatable, Sendable {
     var periods: [Period] = []
     var dailyReminder = false
     var windowReminder = false
+    var reminderDetailsEnabled = false
     var reminderHour = 20
     var reminderMinute = 0
 

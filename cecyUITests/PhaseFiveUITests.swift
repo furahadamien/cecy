@@ -164,6 +164,14 @@ final class PhaseFiveUITests: XCTestCase {
         XCTAssertEqual(toggle.value as? String, "0")
         toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
         XCTAssertEqual(toggle.value as? String, "1")
+        let details = app.switches["reminderDetails"]
+        reveal(details, in: app)
+        XCTAssertEqual(details.value as? String, "0")
+        details.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        let preview = app.staticTexts["reminderPreview_daily"]
+        reveal(preview, in: app)
+        XCTAssertTrue(preview.label.contains("Log your period, symptoms or how you feel today."))
+        reveal(app.buttons["saveReminders"], in: app)
         XCTAssertTrue(app.staticTexts["reminderDraftStatus"].exists)
         app.buttons["saveReminders"].tap()
         let savedDaily = app.staticTexts["savedDailyReminder"]
@@ -177,6 +185,8 @@ final class PhaseFiveUITests: XCTestCase {
         app.tabBars.buttons["Settings"].tap()
         reveal(reminders, in: app); reminders.tap()
         XCTAssertEqual(app.switches["dailyReminder"].value as? String, "1")
+        reveal(details, in: app)
+        XCTAssertEqual(details.value as? String, "1")
         app.navigationBars["Reminders"].buttons.element(boundBy: 0).tap()
         let reset = app.buttons["deleteAllData"]
         reveal(reset, in: app); reset.tap()
