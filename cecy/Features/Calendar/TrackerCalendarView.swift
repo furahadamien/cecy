@@ -243,18 +243,18 @@ struct TrackerCalendarView: View {
 
     private var loggingActions: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TrackerCompactLogActions {
+            TrackerCompactLogActions(horizontalSpacing: 4) {
                 loggingButtons
+                DailyBleedingLogButton(session: session, day: selection)
             }
+            .environment(\.compactLogLabels, true)
             .disabled(selection > today)
-            DailyBleedingLogButton(session: session, day: selection)
             Text("Log for \(DayText.full(selection))")
                 .font(.caption).foregroundStyle(.secondary)
             if selection > today {
                 Text("Future dates can be viewed, but not recorded as observations.").font(.footnote)
             }
         }
-        .padding(.horizontal, 8)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("calendarLoggingActions")
     }

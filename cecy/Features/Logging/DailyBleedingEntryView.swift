@@ -86,11 +86,18 @@ struct DailyBleedingEntryView: View {
                     }
                 } footer: { Text("One day's answer. Does not start a period.") }
                 if state == .bleeding {
-                    Section("Optional") {
-                        Picker("Flow", selection: $flow) {
-                            Text("Not recorded").tag(nil as PeriodFlow?)
-                            ForEach(PeriodFlow.allCases, id: \.self) { Text($0.title).tag(Optional($0)) }
+                    Section {
+                        Text("Flow · Optional").font(.headline)
+                        SelectionFlowLayout {
+                            SelectionChip(title: "Not recorded", symbol: "minus.circle", selected: flow == nil) { flow = nil }
+                                .accessibilityIdentifier("dailyFlow_none")
+                            ForEach(PeriodFlow.allCases, id: \.self) { choice in
+                                SelectionChip(title: choice.title, symbol: choice.symbol, selected: flow == choice) { flow = choice }
+                                    .accessibilityIdentifier("dailyFlow_\(choice.rawValue)")
+                            }
                         }
+                        .accessibilityElement(children: .contain)
+                        .accessibilityIdentifier("dailyFlow")
                         if let period = review.periods.first(where: { $0.contains(day) }) {
                             Toggle("Link to period starting \(DayText.short(period.start))", isOn: Binding(
                                 get: { periodID == period.id }, set: { periodID = $0 ? period.id : nil }))

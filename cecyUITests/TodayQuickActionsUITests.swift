@@ -49,18 +49,18 @@ final class TodayQuickActionsUITests: XCTestCase {
         app.buttons["todayDate_20260928"].tap()
         let actions = app.otherElements["todayLogActions"]
         XCTAssertTrue(actions.label.contains("September 28"))
-        for (identifier, title) in [("logPeriod", "Record a period"), ("logSymptoms", "Log symptoms"), ("logSexualActivity", "Log sex")] {
+        for (identifier, title) in [("logPeriod", "Record a period"), ("logSymptoms", "Log symptoms"), ("logSexualActivity", "Log sex"), ("logDailyBleeding", "Daily bleeding")] {
             app.buttons[identifier].tap()
             XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5))
             app.navigationBars.buttons["Cancel"].tap()
             XCTAssertTrue(actions.label.contains("September 28"))
         }
         app.buttons["todayDate_20260930"].tap()
-        for identifier in ["logPeriod", "logSymptoms", "logSexualActivity"] {
+        for identifier in ["logPeriod", "logSymptoms", "logSexualActivity", "logDailyBleeding"] {
             XCTAssertFalse(app.buttons[identifier].isEnabled)
         }
         app.buttons["stripReturnToToday"].tap()
-        for identifier in ["logPeriod", "logSymptoms", "logSexualActivity"] {
+        for identifier in ["logPeriod", "logSymptoms", "logSexualActivity", "logDailyBleeding"] {
             XCTAssertTrue(app.buttons[identifier].isEnabled)
         }
     }

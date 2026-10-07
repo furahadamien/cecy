@@ -183,7 +183,8 @@ struct SymptomLogButton: View {
             if compact {
                 entryButton.buttonStyle(TrackerCompactLogButtonStyle())
             } else {
-                entryButton.buttonStyle(.bordered).buttonBorderShape(.capsule)
+                entryButton.font(.subheadline.weight(.semibold))
+                    .buttonStyle(.bordered).buttonBorderShape(.capsule)
             }
         }
         .accessibilityLabel("Log symptoms").accessibilityIdentifier("logSymptoms")
@@ -193,7 +194,6 @@ struct SymptomLogButton: View {
     private var entryButton: some View {
         Button { showEntry = true } label: {
             Label(title, systemImage: "plus.circle")
-                .font((compact ? Font.footnote : Font.subheadline).weight(.semibold))
                 .frame(maxWidth: compact ? nil : .infinity,
                        minHeight: compact ? nil : TrackerLayout.minimumTarget)
         }

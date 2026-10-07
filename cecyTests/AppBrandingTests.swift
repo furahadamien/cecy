@@ -53,7 +53,7 @@ struct AppBrandingTests {
         let imageView = try #require(view.subviews.compactMap { $0 as? UIImageView }.first)
         let labels = view.subviews.compactMap { $0 as? UILabel }
         #expect(!labels.contains { $0.text?.lowercased() == "cecy" })
-        let tagline = try #require(labels.first { $0.text == "Your rhythm. Your records." })
+        let tagline = try #require(labels.first { $0.text == "Own your rhythm." })
         #expect(imageView.image != nil)
         #expect(imageView.contentMode == .scaleAspectFit)
         #expect(!imageView.isAccessibilityElement)

@@ -22,7 +22,7 @@
                                     <constraint firstAttribute="height" constant="120" id="icon-height"/>
                                 </constraints>
                             </imageView>
-                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="Your rhythm. Your records." textAlignment="center" numberOfLines="0" translatesAutoresizingMaskIntoConstraints="NO" id="tagline">
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="Own your rhythm." textAlignment="center" numberOfLines="0" translatesAutoresizingMaskIntoConstraints="NO" id="tagline">
                                 <rect key="frame" x="24" y="486" width="345" height="20"/>
                                 <fontDescription key="fontDescription" type="system" pointSize="16"/>
                                 <color key="textColor" name="AccentColor"/>

@@ -31,12 +31,13 @@ struct TodayView: View {
                 .accessibilityIdentifier("logPeriod")
                 SymptomLogButton(session: session, day: selection, title: "Symptoms", compact: true)
                 SexualActivityLogButton(session: session, day: selection, compact: true)
+                DailyBleedingLogButton(session: session, day: selection)
             }
+            .environment(\.compactLogLabels, true)
             .disabled(selection > today)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Log for \(DayText.full(selection))")
             .accessibilityIdentifier("todayLogActions")
-            DailyBleedingLogButton(session: session, day: selection)
             TodayCalendarLegend()
             ForEach(session.cycleForecast.cycles.filter { selection != today && $0.contains(selection) }) { cycle in
                 TrackerCard { ProjectedCycleDetails(cycle: cycle) }

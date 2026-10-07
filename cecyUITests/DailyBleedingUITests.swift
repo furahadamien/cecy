@@ -32,6 +32,129 @@ final class DailyBleedingUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 5), .completed)
     }
 
+    @MainActor func testCalendarLoggingActionsShareOneRowAndKeepDateGuards() {
+        let app = launch()
+        app.tabBars.buttons["Calendar"].tap()
+        tap("calendarDay_20260928", in: app)
+        let actions = app.otherElements["calendarLoggingActions"]
+        let identifiers = ["calendarLogPeriod", "logSymptoms", "logSexualActivity", "logDailyBleeding"]
+        let first = actions.buttons[identifiers[0]]
+        UIViewport.reveal(first, in: app)
+        var previous: CGRect?
+        for id in identifiers {
+            let button = actions.buttons[id]
+            XCTAssertTrue(button.isHittable)
+            XCTAssertGreaterThanOrEqual(button.frame.height, 44)
+            XCTAssertGreaterThanOrEqual(button.frame.width, 44)
+            XCTAssertEqual(button.frame.midY, first.frame.midY, accuracy: 1,
+                           identifiers.map { "\($0): \(actions.buttons[$0].frame)" }.joined(separator: ", "))
+            XCTAssertTrue(app.frame.contains(button.frame))
+            if let previous { XCTAssertGreaterThanOrEqual(button.frame.minX, previous.maxX) }
+            previous = button.frame
+        }
+        actions.buttons["logDailyBleeding"].tap()
+        XCTAssertTrue(app.navigationBars["Daily bleeding"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["September 28, 2026"].exists)
+        app.navigationBars.buttons["Cancel"].tap()
+        tap("calendarDay_20260930", in: app)
+        for id in identifiers { XCTAssertFalse(actions.buttons[id].isEnabled) }
+        tap("calendarDay_20260928", in: app)
+        for id in identifiers { XCTAssertTrue(actions.buttons[id].isEnabled) }
+    }
+
+    @MainActor func testCalendarLoggingActionsAtLargestText() {
+        let app = launch(large: true)
+        app.tabBars.buttons["Calendar"].tap()
+        tap("calendarDay_20260902", in: app)
+        let actions = app.otherElements["calendarLoggingActions"]
+        for id in ["calendarLogPeriod", "logSymptoms", "logSexualActivity", "logDailyBleeding"] {
+            let button = actions.buttons[id]
+            UIViewport.reveal(button, in: app)
+            XCTAssertTrue(button.isHittable)
+            XCTAssertGreaterThanOrEqual(button.frame.height, 44)
+            XCTAssertGreaterThanOrEqual(button.frame.minX, app.frame.minX)
+            XCTAssertLessThanOrEqual(button.frame.maxX, app.frame.maxX)
+        }
+        actions.buttons["logDailyBleeding"].tap()
+        XCTAssertTrue(app.navigationBars["Daily bleeding"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor func testTodayLoggingActionsShareOneRow() {
+        let app = launch()
+        let actions = app.otherElements["todayLogActions"]
+        let identifiers = ["logPeriod", "logSymptoms", "logSexualActivity", "logDailyBleeding"]
+        let first = actions.buttons[identifiers[0]]
+        XCTAssertTrue(first.waitForExistence(timeout: 5))
+        var previous: CGRect?
+        for id in identifiers {
+            let button = actions.buttons[id]
+            XCTAssertTrue(button.exists)
+            XCTAssertTrue(button.isHittable)
+            XCTAssertGreaterThanOrEqual(button.frame.height, 44)
+            XCTAssertGreaterThanOrEqual(button.frame.width, 44)
+            XCTAssertEqual(button.frame.midY, first.frame.midY, accuracy: 1,
+                           identifiers.map { "\($0): \(actions.buttons[$0].frame)" }.joined(separator: ", "))
+            XCTAssertTrue(app.frame.contains(button.frame))
+            if let previous { XCTAssertGreaterThanOrEqual(button.frame.minX, previous.maxX) }
+            previous = button.frame
+        }
+    }
+
+    @MainActor func testDailyFlowChipsPersistAndClear() {
+        let app = launch()
+        tap("logDailyBleeding", in: app)
+        tap("dailyState_bleeding", in: app)
+        let none = app.buttons["dailyFlow_none"]
+        XCTAssertTrue(none.waitForExistence(timeout: 5))
+        XCTAssertEqual(none.value as? String, "Selected")
+        let light = app.buttons["dailyFlow_light"]
+        XCTAssertEqual(light.frame.midY, none.frame.midY, accuracy: 1)
+        XCTAssertGreaterThanOrEqual(light.frame.minX, none.frame.maxX)
+        for value in ["light", "moderate", "heavy"] {
+            tap("dailyFlow_\(value)", in: app)
+            XCTAssertEqual(app.buttons["dailyFlow_\(value)"].value as? String, "Selected")
+        }
+        app.buttons["saveDailyBleeding"].tap()
+        XCTAssertTrue(app.navigationBars["Daily bleeding"].waitForNonExistence(timeout: 10))
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
+        tap("logDailyBleeding", in: app)
+        XCTAssertEqual(app.buttons["dailyFlow_heavy"].value as? String, "Selected")
+        tap("dailyFlow_none", in: app)
+        app.buttons["saveDailyBleeding"].tap()
+        XCTAssertTrue(app.navigationBars["Edit daily answer"].waitForNonExistence(timeout: 10))
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
+        tap("logDailyBleeding", in: app)
+        XCTAssertEqual(app.buttons["dailyFlow_none"].value as? String, "Selected")
+        tap("dailyState_spotting", in: app)
+        XCTAssertFalse(app.buttons["dailyFlow_none"].exists)
+    }
+
+    @MainActor func testDailyFlowChipsAndActionsAtLargestText() {
+        let app = launch(large: true)
+        for id in ["logPeriod", "logSymptoms", "logSexualActivity", "logDailyBleeding"] {
+            let button = app.buttons[id]
+            UIViewport.reveal(button, in: app)
+            XCTAssertTrue(button.isHittable)
+            XCTAssertGreaterThanOrEqual(button.frame.height, 44)
+            XCTAssertGreaterThanOrEqual(button.frame.minX, app.frame.minX)
+            XCTAssertLessThanOrEqual(button.frame.maxX, app.frame.maxX)
+        }
+        tap("logDailyBleeding", in: app)
+        tap("dailyState_bleeding", in: app)
+        for value in ["none", "light", "moderate", "heavy"] {
+            let chip = app.buttons["dailyFlow_\(value)"]
+            UIViewport.reveal(chip, in: app)
+            XCTAssertTrue(chip.isHittable)
+            XCTAssertGreaterThanOrEqual(chip.frame.height, 44)
+            XCTAssertGreaterThanOrEqual(chip.frame.minX, app.frame.minX)
+            XCTAssertLessThanOrEqual(chip.frame.maxX, app.frame.maxX)
+            chip.tap()
+            XCTAssertEqual(chip.value as? String, "Selected")
+        }
+    }
+
     @MainActor func testStandaloneAnswerPersistsAcrossTabsEditAndDelete() {
         let app = launch()
         tap("logDailyBleeding", in: app)
