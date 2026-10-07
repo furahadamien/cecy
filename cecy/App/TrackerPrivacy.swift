@@ -187,7 +187,7 @@ struct PreparedExport: Identifiable {
     enum ReminderSaveResult { case saved, permissionUnavailable, failed, interrupted }
 
     @discardableResult
-    func setReminders(daily: Bool, window: Bool, hour: Int, minute: Int) async -> ReminderSaveResult {
+    func setReminders(daily: Bool, window: Bool, hour: Int, minute: Int, showDetails: Bool? = nil) async -> ReminderSaveResult {
         guard canAccess, !isChangingReminders else { return .interrupted }
         isChangingReminders = true
         message = nil
@@ -203,6 +203,7 @@ struct PreparedExport: Identifiable {
         candidate.windowReminder = window
         candidate.reminderHour = hour
         candidate.reminderMinute = minute
+        if let showDetails { candidate.reminderDetailsEnabled = showDetails }
         do {
             try candidate.validate()
             try storage.save(candidate)

@@ -256,7 +256,8 @@ final class TrackerSession {
             setupStage = .reminders
             privacy.trackingChanged(prediction: overview?.estimate, now: now, timeZone: zone())
             let reminderResult = await privacy.setReminders(daily: draft.dailyReminder, window: draft.windowReminder,
-                                                           hour: draft.reminderHour, minute: draft.reminderMinute)
+                                                           hour: draft.reminderHour, minute: draft.reminderMinute,
+                                                           showDetails: draft.reminderDetailsEnabled)
             try checkAccess()
             if reminderResult == .failed || reminderResult == .interrupted {
                 return privacy.message ?? "Reminder choices couldn’t be saved. Retry setup."

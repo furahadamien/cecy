@@ -73,6 +73,32 @@ nonisolated struct PhaseFiveDomainTests {
         let west = try ReminderPlanner.requests(preferences: preferences, prediction: estimate, now: now, timeZone: TimeZone(secondsFromGMT: -12 * 3600)!)
         #expect(east.isEmpty && west.count == 1)
     }
+
+    @Test func reminderDetailsAreExplicitAndMessagesMatchTheirPurpose() throws {
+        let legacy = Data(#"{"version":1,"lockEnabled":false,"dailyReminder":true,"windowReminder":true,"reminderHour":20,"reminderMinute":0}"#.utf8)
+        var preferences = try JSONDecoder().decode(PrivacyPreferences.self, from: legacy)
+        #expect(preferences.reminderDetailsEnabled == nil)
+        for enabled in [false, true] {
+            preferences.reminderDetailsEnabled = enabled
+            let requests = try ReminderPlanner.requests(preferences: preferences, prediction: prediction(20261001), now: now, timeZone: .gmt)
+            #expect(requests.count == 2)
+            #expect(requests.allSatisfy { $0.showDetails == enabled })
+            for request in requests {
+                let body = request.kind.notificationBody(showDetails: request.showDetails)
+                #expect(body.count < 100)
+                #expect(!body.contains("A reminder you asked for"))
+                if !enabled {
+                    #expect(!body.contains("period") && !body.contains("symptoms"))
+                }
+            }
+        }
+        #expect(ReminderRequest.Kind.daily.notificationBody(showDetails: true) == "Log your period, symptoms or how you feel today.")
+        #expect(ReminderRequest.Kind.window.notificationBody(showDetails: true) == "Check your estimated period start window in Cecy.")
+        #expect(!ReminderRequest.Kind.window.notificationBody(showDetails: true).contains("tomorrow"))
+        #expect(ReminderRequest.Kind.daily.notificationTitle(showDetails: true) == "Daily check-in")
+        #expect(ReminderRequest.Kind.window.notificationTitle(showDetails: true) == "Period window")
+        #expect(try JSONDecoder().decode(PrivacyPreferences.self, from: JSONEncoder().encode(preferences)) == preferences)
+    }
 }
 
 @MainActor private final class TestPreferences: PrivacyPreferenceStoring {
@@ -333,6 +359,27 @@ nonisolated struct PhaseFiveDomainTests {
         delivery.failAdd = false
         coordinator.replace(with: [request], enabled: true); await coordinator.flush()
         #expect(delivery.requests == [request])
+    }
+
+    @Test func detailChoicePersistsAndFailedOrDeniedSavesDoNotEnableIt() async {
+        let store = TestPreferences(); let delivery = TestReminders()
+        let privacy = controller(store, delivery: delivery); privacy.start()
+        store.failSave = true
+        #expect(await privacy.setReminders(daily: true, window: false, hour: 20, minute: 0, showDetails: true) == .failed)
+        #expect(privacy.preferences.reminderDetailsEnabled != true)
+        store.failSave = false; delivery.permission = .denied
+        #expect(await privacy.setReminders(daily: true, window: false, hour: 20, minute: 0, showDetails: true) == .permissionUnavailable)
+        #expect(store.value.reminderDetailsEnabled != true)
+        delivery.permission = .allowed
+        #expect(await privacy.setReminders(daily: true, window: false, hour: 20, minute: 0, showDetails: true) == .saved)
+        #expect(delivery.requests.first?.showDetails == true)
+        let reopened = controller(store); reopened.start()
+        #expect(reopened.preferences.reminderDetailsEnabled == true)
+        await privacy.setReminders(daily: true, window: false, hour: 9, minute: 30)
+        #expect(delivery.requests.first?.showDetails == true)
+        await privacy.setReminders(daily: true, window: false, hour: 9, minute: 30, showDetails: false)
+        #expect(delivery.requests.count == 1 && delivery.requests.first?.showDetails == false)
+        #expect(store.value.reminderDetailsEnabled == false)
     }
 
     @Test func resetWaitsForInFlightAddAndClearsEverythingButLock() async throws {

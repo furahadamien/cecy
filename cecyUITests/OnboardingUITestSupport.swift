@@ -88,7 +88,7 @@ import XCTest
         app.buttons["saveOnboardingPeriod"].tap()
     }
 
-    static func reachApple(in app: XCUIApplication) {
+    static func reachApple(in app: XCUIApplication, configureReminders: (() -> Void)? = nil) {
         XCTAssertTrue(app.buttons["onboardingContinue"].waitForExistence(timeout: 10))
         next(in: app)
         let name = app.textFields["profileName"]
@@ -121,6 +121,7 @@ import XCTest
         reveal(skip, in: app); skip.tap()
         app.buttons["goal_predictPeriod"].tap()
         next(in: app)
+        configureReminders?()
         next(in: app)
         reveal(app.staticTexts["starterEstimateNotice"], in: app)
         XCTAssertTrue(app.staticTexts["starterEstimateNotice"].exists)
@@ -191,6 +192,32 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(app.buttons["profileSettings"].waitForExistence(timeout: 5))
         app.buttons["profileSettings"].tap()
         XCTAssertEqual(app.textFields["profileName"].value as? String, "Synthetic Alex Updated")
+    }
+
+    @MainActor func testReminderSetupExplainsScheduleAndSavesDetailedPreviews() {
+        let app = launch()
+        OnboardingUITestSupport.reachApple(in: app) {
+            XCTAssertEqual(app.staticTexts["onboardingHeading"].label, "Your reminders")
+            for id in ["onboardingDailyReminder", "onboardingWindowReminder", "reminderDetails"] {
+                let toggle = app.switches[id]
+                OnboardingUITestSupport.reveal(toggle, in: app)
+                XCTAssertEqual(toggle.value as? String, "0")
+                toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+            }
+            let preview = app.staticTexts["reminderPreview_window"]
+            OnboardingUITestSupport.reveal(preview, in: app)
+            XCTAssertTrue(preview.label.contains("Check your estimated period start window in Cecy."))
+        }
+        app.buttons["continueWithApple"].tap()
+        XCTAssertTrue(app.tabBars.buttons["Settings"].waitForExistence(timeout: 15))
+        app.tabBars.buttons["Settings"].tap()
+        let settings = app.buttons["reminderSettings"]
+        UIViewport.reveal(settings, in: app); settings.tap()
+        for id in ["dailyReminder", "windowReminder", "reminderDetails"] {
+            let toggle = app.switches[id]
+            UIViewport.reveal(toggle, in: app)
+            XCTAssertEqual(toggle.value as? String, "1")
+        }
     }
 
     @MainActor func testAppleCancellationLeavesSetupIncomplete() {
