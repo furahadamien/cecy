@@ -62,16 +62,27 @@ nonisolated enum ProtectedFiles {
 
 @MainActor protocol ExportFileManaging {
     func prepare(_ data: Data) throws -> URL
+    func prepareSummary(_ data: Data) throws -> URL
     func clean() throws
+}
+
+extension ExportFileManaging {
+    func prepareSummary(_ data: Data) throws -> URL { throw TrackingError.invalidData }
 }
 
 @MainActor final class ProtectedExportFiles: ExportFileManaging {
     let directory: URL
     init(directory: URL) { self.directory = directory }
     func prepare(_ data: Data) throws -> URL {
+        try prepare(data, filename: "Cecy-export.json")
+    }
+    func prepareSummary(_ data: Data) throws -> URL {
+        try prepare(data, filename: "Cecy-summary.txt")
+    }
+    private func prepare(_ data: Data, filename: String) throws -> URL {
         try clean()
         try ProtectedFiles.directory(directory, excludeFromBackup: true)
-        let url = directory.appendingPathComponent("Cecy-export.json")
+        let url = directory.appendingPathComponent(filename)
         do {
             try ProtectedFiles.write(data, to: url)
             return url

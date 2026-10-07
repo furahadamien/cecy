@@ -36,14 +36,13 @@ nonisolated struct UpcomingForecastTests {
         #expect(forecast.nextPeriod(onOrAfter: exact)?.period.center == exact)
     }
 
-    @Test func wideHistoricalGapsKeepExplicitTypicalCycleReference() throws {
+    @Test func wideHistoricalGapsDoNotRestoreADatedReference() throws {
         let records = try [20260101, 20260805, 20260902].map { Period(start: try LocalDay(key: $0)) }
         let overview = CycleCalculator.overview(periods: records, today: today, profile: profile())
         #expect(overview.prediction == .wideVariation)
         let forecast = CycleForecast.calculate(overview: overview, profile: profile(), periods: records, asOf: today)
-        let next = try #require(forecast.nextPeriod(onOrAfter: today))
-        #expect(next.referenceNotice != nil && next.ovulationBasis.contains("entered 28-day"))
-        #expect(next.period.center >= today && records.count == 3)
+        #expect(forecast.cycles.isEmpty && forecast.nextPeriod(onOrAfter: today) == nil)
+        #expect(forecast.nextOvulation(onOrAfter: today) == nil && records.count == 3)
         #expect(CycleForecast.calculate(overview: overview, profile: nil, asOf: today).cycles.isEmpty)
     }
 
@@ -52,9 +51,8 @@ nonisolated struct UpcomingForecastTests {
         let overview = CycleCalculator.overview(periods: records, today: today, profile: profile())
         #expect(overview.estimate?.sourceLengths == [1]) // facts are retained, not deleted or merged
         let forecast = CycleForecast.calculate(overview: overview, profile: profile(), asOf: today)
-        let next = try #require(forecast.nextPeriod(onOrAfter: today))
-        #expect(next.referenceNotice != nil)
-        #expect(try next.period.center == LocalDay(key: 20261029))
+        #expect(forecast.cycles.isEmpty)
+        #expect(ForecastAvailabilityPolicy.applying(to: overview).estimate == nil)
     }
 
     @Test func selectionOffersContinuationWithoutAutomaticallyMerging() throws {
@@ -80,7 +78,7 @@ nonisolated struct UpcomingForecastTests {
         return session
     }
 
-    @Test func addingPastPeriodAndSymptomsPreservesRecordsAndUpcomingForecast() throws {
+    @Test func addingPastPeriodPreservesRecordsAndWithholdsUnsuitableForecast() throws {
         let s = try session()
         let recent = try [20260805, 20260902].map { Period(start: try LocalDay(key: $0)) }
         #expect(s.save(recent) == nil)
@@ -88,13 +86,14 @@ nonisolated struct UpcomingForecastTests {
         #expect(s.save([older]) == nil)
         #expect(s.snapshot.periods.count == 3 && Set(s.snapshot.periods.map(\.id)).isSuperset(of: Set(recent.map(\.id))))
         #expect(s.overview?.latestStart == recent.last?.start)
-        #expect(try #require(s.cycleForecast.nextPeriod(onOrAfter: today)).period.center >= today)
+        #expect(s.overview?.prediction == .wideVariation && s.cycleForecast.cycles.isEmpty)
         let forecast = s.cycleForecast
         #expect(s.saveSymptom(SymptomEntry(day: try LocalDay(key: 20260103), kind: .cramps)) == nil)
         #expect(s.cycleForecast == forecast && s.snapshot.periods.count == 3)
         s.refresh()
         #expect(s.cycleForecast == forecast)
         #expect(s.delete(id: older.id) == nil)
+        #expect(s.cycleForecast.nextPeriod(onOrAfter: today) != nil)
         #expect(s.snapshot.periods.count == 2 && s.cycleForecast.nextPeriod(onOrAfter: today)?.referenceNotice == nil)
     }
 

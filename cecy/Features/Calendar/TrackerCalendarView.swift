@@ -57,8 +57,10 @@ struct TrackerCalendarView: View {
                                     VStack(alignment: .leading, spacing: 12) {
                                         dayButton(day, asList: true)
                                         if day == selection {
-                                            // Keep selected-date actions ahead of the remaining month at large text sizes.
+                                            // Keep actions and records together at large text sizes.
                                             loggingActions
+                                            RecordedDayCard(session: session, day: selection, today: today)
+                                                .accessibilityIdentifier("calendarRecordedDayCard")
                                         }
                                     }
                                     .id(day.key)
@@ -93,14 +95,17 @@ struct TrackerCalendarView: View {
                                     Image(systemName: "heart.fill").foregroundStyle(palette.sexualActivity)
                                 }
                                 Label("Symptoms · One marker per day", systemImage: "waveform.path.ecg")
+                                DailyBleedingLegend()
                             }
                             .font(.footnote).foregroundStyle(.secondary).padding(8)
                             .accessibilityElement(children: .contain)
                             .accessibilityIdentifier("calendarLegend")
                         }
                         TrackerCard { UpcomingCycleForecastView(forecast: session.cycleForecast, today: today) }
-                        RecordedDayCard(session: session, day: selection, today: today)
-                            .accessibilityIdentifier("calendarRecordedDayCard")
+                        if !listLayout {
+                            RecordedDayCard(session: session, day: selection, today: today)
+                                .accessibilityIdentifier("calendarRecordedDayCard")
+                        }
                         TrackerCard {
                             NavigationLink { SexualActivityHistoryView(session: session) } label: {
                                 TrackerNavigationLabel(title: "Sexual activity history", symbol: "heart")
@@ -160,6 +165,7 @@ struct TrackerCalendarView: View {
     private func observationCount(on day: LocalDay) -> Int {
         session.snapshot.symptoms.filter { $0.day == day }.count
             + session.snapshot.sexualActivities.filter { $0.day == day }.count
+            + (session.activityIndex.markers(on: day).contains { $0.id == "dailyBleeding" } ? 1 : 0)
     }
 
     private func status(_ day: LocalDay) -> String {
@@ -170,7 +176,7 @@ struct TrackerCalendarView: View {
         } else { parts.append("No recorded period") }
         let count = observationCount(on: day)
         if count > 0 { parts.append("\(count) recorded observations") }
-        parts += DayActivityMarker.recorded(on: day, in: session.snapshot).filter { $0.id != "period" }.map(\.title)
+        parts += session.activityIndex.markers(on: day).filter { $0.id != "period" }.map(\.title)
         let period = session.cycleForecast.period(on: day)
         let ovulation = session.cycleForecast.ovulation(on: day)
         if period != nil { parts.append("Possible period start; estimate") }
@@ -222,7 +228,7 @@ struct TrackerCalendarView: View {
                 // Activity markers sit outside the date badge, as on Today.
                 if !asList {
                     DayActivityIcons(markers: DayActivityMarker.calendar(
-                        recorded: DayActivityMarker.recorded(on: day, in: session.snapshot),
+                        recorded: session.activityIndex.markers(on: day),
                         forecast: session.cycleForecast, day: day))
                 }
             }
@@ -237,9 +243,11 @@ struct TrackerCalendarView: View {
 
     private var loggingActions: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TrackerCompactLogActions {
+            TrackerCompactLogActions(horizontalSpacing: 4) {
                 loggingButtons
+                DailyBleedingLogButton(session: session, day: selection)
             }
+            .environment(\.compactLogLabels, true)
             .disabled(selection > today)
             Text("Log for \(DayText.full(selection))")
                 .font(.caption).foregroundStyle(.secondary)
@@ -247,7 +255,6 @@ struct TrackerCalendarView: View {
                 Text("Future dates can be viewed, but not recorded as observations.").font(.footnote)
             }
         }
-        .padding(.horizontal, 8)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("calendarLoggingActions")
     }

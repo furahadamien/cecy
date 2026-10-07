@@ -94,6 +94,7 @@ nonisolated enum TrackerExport {
         let observations: [ObservationRecord]
         let profile: ProfileRecord?
         let sexualActivities: [SexualActivityRecord]?
+        let dailyBleeding: [DailyBleedingRecord]?
     }
     struct ProfileRecord: Codable {
         let preferredName: String
@@ -173,6 +174,15 @@ nonisolated enum TrackerExport {
         let createdAt: Date
         let updatedAt: Date
     }
+    struct DailyBleedingRecord: Codable {
+        let id: UUID
+        let date: String
+        let state: String
+        let flow: String?
+        let periodID: UUID?
+        let createdAt: Date
+        let updatedAt: Date
+    }
     static func civilDate(_ day: LocalDay) -> String {
         String(format: "%04d-%02d-%02d", locale: Locale(identifier: "en_US_POSIX"), day.year, day.month, day.day)
     }
@@ -181,9 +191,10 @@ nonisolated enum TrackerExport {
         try PeriodValidation.validate(snapshot.periods)
         try SymptomValidation.validate(snapshot.symptoms)
         try SexualActivityValidation.validate(snapshot.sexualActivities)
+        try DailyBleedingValidation.validate(snapshot.dailyBleeding, periods: snapshot.periods)
         guard generatedAt.timeIntervalSinceReferenceDate.isFinite else { throw TrackingError.invalidData }
         let includesIdentity = includeProfile && (snapshot.profile?.genderIdentity != nil || (includeSexualActivity && snapshot.profile?.sexualPartners != nil))
-        let version = includeProfile && snapshot.profile?.typicalCycleDays != nil ? 6
+        let version = !snapshot.dailyBleeding.isEmpty ? 7 : includeProfile && snapshot.profile?.typicalCycleDays != nil ? 6
             : includesIdentity ? 5 : (includeProfile && snapshot.profile?.wellnessPreferences != nil ? 4 : (includeSexualActivity ? 3 : (includeProfile ? 2 : 1)))
         let document = Document(formatVersion: version, generatedAt: generatedAt, includesPrivateNotes: includeNotes,
             periods: snapshot.periods.sorted { $0.start < $1.start }.map {
@@ -197,7 +208,11 @@ nonisolated enum TrackerExport {
             sexualActivities: includeSexualActivity ? SexualActivityValidation.sorted(snapshot.sexualActivities).map {
                 SexualActivityRecord(id: $0.id, date: civilDate($0.day), activities: $0.orderedActivities.map(\.rawValue),
                                      notes: includeNotes ? $0.notes : nil, createdAt: $0.createdAt, updatedAt: $0.updatedAt)
-            } : nil)
+            } : nil,
+            dailyBleeding: snapshot.dailyBleeding.isEmpty ? nil : DailyBleedingValidation.sorted(snapshot.dailyBleeding).map {
+                DailyBleedingRecord(id: $0.id, date: civilDate($0.day), state: $0.state.rawValue, flow: $0.flow?.rawValue,
+                                    periodID: $0.periodID, createdAt: $0.createdAt, updatedAt: $0.updatedAt)
+            })
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601

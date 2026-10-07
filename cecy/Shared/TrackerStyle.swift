@@ -82,20 +82,36 @@ struct TrackerPrimaryButtonStyle: PrimitiveButtonStyle {
     }
 }
 
+extension EnvironmentValues {
+    @Entry var compactLogLabels = false
+}
+
+private struct CompactLogLabelStyle: LabelStyle {
+    let compact: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: compact ? 3 : 8) {
+            configuration.icon
+            configuration.title
+        }
+    }
+}
+
 /// Logging controls have a 44-point total target, without native padding around a 44-point label.
 struct TrackerCompactLogButtonStyle: ButtonStyle {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.compactLogLabels) private var compactLabels
     var prominent = false
 
     func makeBody(configuration: Configuration) -> some View {
         let palette = TrackerPalette(scheme: colorScheme)
         configuration.label
-            .font(.footnote.weight(.semibold))
-            .labelStyle(.titleAndIcon)
+            .font(compactLabels ? .caption2.weight(.semibold) : .footnote.weight(.semibold))
+            .labelStyle(CompactLogLabelStyle(compact: compactLabels))
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, compactLabels ? 4 : 8)
             .padding(.vertical, 6)
             .frame(minWidth: 44, minHeight: 44)
             .foregroundStyle(prominent ? Color.white : palette.accent)
@@ -107,6 +123,7 @@ struct TrackerCompactLogButtonStyle: ButtonStyle {
 
 struct TrackerCompactLogActions<Content: View>: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    var horizontalSpacing: CGFloat = 6
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -115,7 +132,7 @@ struct TrackerCompactLogActions<Content: View>: View {
                 VStack(alignment: .leading, spacing: 6) { content }
             } else {
                 ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 6) { content }
+                    HStack(spacing: horizontalSpacing) { content }
                         .fixedSize(horizontal: true, vertical: false)
                     VStack(alignment: .leading, spacing: 6) { content }
                 }

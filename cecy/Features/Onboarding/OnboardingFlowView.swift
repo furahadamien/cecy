@@ -32,7 +32,7 @@ struct OnboardingFlowView: View {
             case .partners: "Choose all that apply, or skip. This doesn’t define your orientation."
             case .cycle: "The number of days you usually bleed."
             case .cycleLength: "From the first day of one period to the first day of the next."
-            case .history: "One start date is enough to begin."
+            case .history: "It’s OK if you don’t remember."
             case .symptoms: "What do you usually experience? Choose any that apply."
             case .context: "Does any of this apply right now?"
             case .goals: "What would you like Cecy to help with?"
@@ -75,8 +75,6 @@ struct OnboardingFlowView: View {
         self.today = today
         var value = OnboardingDraft()
         value.profile = session.snapshot.profile ?? value.profile
-        if value.profile.typicalPeriodDays == nil { value.profile.typicalPeriodDays = CycleSetupPolicy.defaultPeriodDays }
-        if value.profile.typicalCycleDays == nil { value.profile.typicalCycleDays = CycleSetupPolicy.defaultCycleDays }
         value.periods = session.snapshot.periods
         value.dailyReminder = session.privacy.preferences.dailyReminder
         value.windowReminder = session.privacy.preferences.windowReminder
@@ -154,6 +152,7 @@ struct OnboardingFlowView: View {
                     OnboardingPeriodSheet(period: period, today: session.today ?? today, existing: draft.periods) { value in
                         draft.periods.removeAll { $0.id == value.id }
                         draft.periods.append(value)
+                        draft.profile.setUnknown(.lastStart, false)
                         error = nil
                     }
                 }
@@ -186,35 +185,37 @@ struct OnboardingFlowView: View {
             }
         case .cycle:
             Section {
-                CycleLengthWheel(title: "Typical period length", range: CycleSetupPolicy.periodDays,
-                    days: Binding(get: { draft.profile.typicalPeriodDays ?? 5 }, set: { draft.profile.typicalPeriodDays = $0 }),
-                    identifier: "onboardingPeriodLength")
-            } footer: {
-                Text("Start at 5 days, or scroll to what’s usual for you. This is your usual duration, not a confirmed end date for your last period.")
+                OnboardingCycleLengthField(title: "Typical period length", range: CycleSetupPolicy.periodDays,
+                    suggestedDays: CycleSetupPolicy.defaultPeriodDays, identifier: "onboardingPeriodLength",
+                    value: $draft.profile.typicalPeriodDays, isUnknown: unknown(.periodLength))
             }
         case .cycleLength:
             Section {
-                CycleLengthWheel(title: "Typical cycle length", range: CycleSetupPolicy.cycleDays,
-                    days: Binding(get: { draft.profile.typicalCycleDays ?? 28 }, set: { draft.profile.typicalCycleDays = $0 }),
-                    identifier: "onboardingCycleLength")
-            } footer: {
-                Text("Start at 28 days, or scroll to your usual cycle length. This supplies a rough first estimate until enough recorded cycles are available. You can change it later.")
+                OnboardingCycleLengthField(title: "Typical cycle length", range: CycleSetupPolicy.cycleDays,
+                    suggestedDays: CycleSetupPolicy.defaultCycleDays, identifier: "onboardingCycleLength",
+                    value: $draft.profile.typicalCycleDays, isUnknown: unknown(.cycleLength))
             }
+            Section { ProfilePredictabilityFields(profile: $draft.profile) }
         case .history:
             Section {
                 if let latest = draft.periods.max(by: { $0.start < $1.start }) {
                     Label("Last period started", systemImage: "calendar.badge.checkmark").font(.subheadline)
                     Text(DayText.full(latest.start)).font(TrackerTypography.sectionTitle)
                         .accessibilityIdentifier("onboardingLastStart")
-                } else {
+                } else if draft.profile.unknownCycleFields?.contains(.lastStart) != true {
                     Text("Choose the first day of your most recent period.").font(.title3.weight(.medium))
                 }
                 Button { editingPeriod = draft.periods.max(by: { $0.start < $1.start }) ?? Period(start: today) } label: {
                     Label(draft.periods.isEmpty ? "Choose start date" : "Change start date", systemImage: "calendar")
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }.accessibilityIdentifier("addOnboardingPeriod")
-            } footer: {
-                Text("No need to remember four periods. Older dates can be added later from Today. End dates are optional and never filled in automatically.")
+                if draft.periods.isEmpty {
+                    SelectionChip(title: "I don’t remember", selected: draft.profile.unknownCycleFields?.contains(.lastStart) == true) {
+                        draft.profile.setUnknown(.lastStart, true)
+                        error = nil
+                    }
+                    .accessibilityIdentifier("onboardingLastStartUnknown")
+                }
             }
         case .symptoms:
             Section {
@@ -265,8 +266,8 @@ struct OnboardingFlowView: View {
     @ViewBuilder private var review: some View {
         Section("Your cycle") {
             LabeledContent("Periods added", value: "\(draft.periods.count)")
-            LabeledContent("Typical cycle", value: draft.profile.typicalCycleDays.map { "\($0) days" } ?? "Not set")
-            LabeledContent("Typical period", value: draft.profile.typicalPeriodDays.map { "\($0) days" } ?? "Not set")
+            LabeledContent("Typical cycle", value: draft.profile.typicalCycleDays.map { "\($0) days" } ?? "Not sure")
+            LabeledContent("Typical period", value: draft.profile.typicalPeriodDays.map { "\($0) days" } ?? "Not sure")
             if let estimate = draft.overview(today: today).estimate {
                 LabeledContent("Next start estimate", value: DayText.range(estimate.earliest, estimate.latest))
                 LabeledContent("Confidence", value: estimate.confidence.rawValue)
@@ -275,7 +276,7 @@ struct OnboardingFlowView: View {
                         .font(.footnote).foregroundStyle(.secondary).accessibilityIdentifier("starterEstimateNotice")
                 }
             } else {
-                Text("An estimate isn’t available with these answers yet. Review your dates and lengths. Widely varying recorded cycles can also prevent an estimate; tracking still works.")
+                Text("You can track without an estimate.")
             }
             Text("Estimates are not medical advice. Do not use for contraception, diagnosis or fertility planning.")
                 .font(.footnote).foregroundStyle(.secondary)
@@ -295,6 +296,11 @@ struct OnboardingFlowView: View {
             }
             }
         }
+    }
+
+    private func unknown(_ field: CycleSetupField) -> Binding<Bool> {
+        Binding(get: { draft.profile.unknownCycleFields?.contains(field) == true },
+                set: { draft.profile.setUnknown(field, $0) })
     }
 
     private func summary(_ values: [String]) -> String { values.isEmpty ? "Not selected" : values.joined(separator: ", ") }
@@ -317,10 +323,10 @@ struct OnboardingFlowView: View {
         do {
             let currentDay = session.today ?? today
             if step == .about || step == .measurements || step == .cycleLength { try draft.profile.validate(today: currentDay) }
-            if step == .cycle && draft.profile.typicalPeriodDays == nil { throw ProfileError.duration }
-            if step == .cycleLength && draft.profile.typicalCycleDays == nil { throw ProfileError.cycleLength }
+            if step == .cycle && draft.profile.typicalPeriodDays == nil && !unknown(.periodLength).wrappedValue { throw ProfileError.duration }
+            if step == .cycleLength && draft.profile.typicalCycleDays == nil && !unknown(.cycleLength).wrappedValue { throw ProfileError.cycleLength }
             if step == .history {
-                guard !draft.periods.isEmpty else { throw ProfileError.lastPeriod }
+                guard !draft.periods.isEmpty || unknown(.lastStart).wrappedValue else { throw ProfileError.lastPeriod }
                 try PeriodValidation.validate(draft.periods, asOf: currentDay)
             }
             if step == .review { try draft.validate(today: currentDay) }

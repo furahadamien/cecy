@@ -11,6 +11,10 @@ struct RecordedDayCard: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text(DayText.full(day)).font(.headline).accessibilityAddTraits(.isHeader)
                 if day == today { Text("Today").font(.subheadline) }
+                if let answer = session.snapshot.dailyBleeding.first(where: { $0.day == day }) {
+                    DailyBleedingRecordView(session: session, observation: answer)
+                    Divider()
+                }
                 if let period = session.snapshot.periods.first(where: { $0.contains(day) }) {
                     PeriodRecordSummary(session: session, period: period,
                                         title: period.start == day ? "Recorded period start" : "Confirmed bleeding day")

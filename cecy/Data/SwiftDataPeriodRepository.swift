@@ -55,7 +55,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
 
     static func local(url: URL, clearLegacyData: @escaping () throws -> Void = {}) throws -> SwiftDataPeriodRepository {
         try ProtectedFiles.directory(url.deletingLastPathComponent(), excludeFromBackup: true)
-        let schema = Schema(versionedSchema: TrackerSchemaV6.self)
+        let schema = Schema(versionedSchema: TrackerSchemaV7.self)
         let configuration = ModelConfiguration("CecyLocal", schema: schema, url: url, cloudKitDatabase: .none)
         return try SwiftDataPeriodRepository(container: ModelContainer(for: schema, migrationPlan: TrackerMigrationPlan.self,
                                                                        configurations: [configuration]), clearLegacyData: clearLegacyData)
@@ -75,7 +75,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
     }
 
     static func inMemory() throws -> SwiftDataPeriodRepository {
-        let schema = Schema(versionedSchema: TrackerSchemaV6.self)
+        let schema = Schema(versionedSchema: TrackerSchemaV7.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         return try SwiftDataPeriodRepository(container: ModelContainer(for: schema, migrationPlan: TrackerMigrationPlan.self,
                                                                        configurations: [configuration]))
@@ -98,10 +98,13 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         try SexualActivityValidation.validate(activities)
         let imports = try context.fetch(FetchDescriptor<TrackerSchemaV6.HealthImportRecord>()).map { try $0.value() }
         guard Set(imports.map(\.id)).count == imports.count else { throw TrackingError.invalidData }
+        let daily = try context.fetch(FetchDescriptor<TrackerSchemaV7.DailyBleedingRecord>()).map { try $0.value() }
+        try DailyBleedingValidation.validate(daily, periods: periods)
         return TrackerSnapshot(periods: periods, onboardingCompletedAt: states.first?.onboardingCompletedAt,
                                symptoms: SymptomValidation.sorted(symptoms), profile: try profiles.first?.value(),
                                sexualActivities: SexualActivityValidation.sorted(activities),
-                               healthImports: imports.sorted { $0.id.uuidString < $1.id.uuidString })
+                               healthImports: imports.sorted { $0.id.uuidString < $1.id.uuidString },
+                               dailyBleeding: DailyBleedingValidation.sorted(daily))
     }
 
     private func writeProfile(_ profile: LocalProfile) throws {
@@ -127,6 +130,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         var candidate = try load()
         guard candidate.onboardingCompletedAt == nil else { throw ProfileError.alreadyCompleted }
         guard candidate.profile == nil || candidate.profile?.id == draft.profile.id else { throw ProfileError.identity }
+        try DailyBleedingValidation.validate(candidate.dailyBleeding, periods: draft.periods)
         do {
             // Only unfinished setup can replace this draft history. Repeated attempts never append duplicates.
             let records = try context.fetch(FetchDescriptor<TrackerSchemaV2.PeriodRecord>())
@@ -145,9 +149,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         guard candidate.profile?.id == profileID else { throw ProfileError.identity }
         if candidate.onboardingCompletedAt != nil { return candidate }
         try candidate.profile?.validate(today: today)
-        guard candidate.profile?.typicalPeriodDays != nil else { throw ProfileError.duration }
-        guard candidate.profile?.typicalCycleDays != nil else { throw ProfileError.cycleLength }
-        guard !candidate.periods.isEmpty else { throw ProfileError.lastPeriod }
+        try candidate.profile?.validateCycleSetup(hasRecordedStart: !candidate.periods.isEmpty)
         try PeriodValidation.validate(candidate.periods, asOf: today)
         guard now.timeIntervalSinceReferenceDate.isFinite else { throw TrackingError.invalidData }
         do {
@@ -164,6 +166,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         var candidate = try load()
         candidate.periods += periods
         try PeriodValidation.validate(candidate.periods, asOf: today)
+        try DailyBleedingValidation.validate(candidate.dailyBleeding, periods: candidate.periods)
         candidate.periods.sort { $0.start < $1.start }
         if completingOnboarding && candidate.onboardingCompletedAt == nil { candidate.onboardingCompletedAt = now }
         do {
@@ -194,6 +197,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         updated.updatedAt = now
         candidate.periods[index] = updated
         try PeriodValidation.validate(candidate.periods, asOf: today)
+        try DailyBleedingValidation.validate(candidate.dailyBleeding, periods: candidate.periods)
         guard let record = try context.fetch(FetchDescriptor<TrackerSchemaV2.PeriodRecord>()).first(where: { $0.id == period.id }) else {
             throw TrackingError.missingRecord
         }
@@ -218,6 +222,8 @@ final class SwiftDataPeriodRepository: PeriodRepository {
             throw TrackingError.missingRecord
         }
         candidate.periods.removeAll { $0.id == id }
+        // A linked deletion needs the explicit retain/unlink review, never a silent cascade.
+        try DailyBleedingValidation.validate(candidate.dailyBleeding, periods: candidate.periods)
         do {
             context.delete(record)
             try saveContext(context)
@@ -362,6 +368,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         var candidate = try load()
         let (period, receipt) = try HealthImportPolicy.prepare(sample: sample, confirmedStart: confirmedStart,
                                                                existing: candidate, today: today, now: now, timeZone: timeZone)
+        try DailyBleedingValidation.validate(candidate.dailyBleeding, periods: candidate.periods + [period])
         do {
             let record = try TrackerSchemaV6.HealthImportRecord(receipt)
             context.insert(TrackerSchemaV2.PeriodRecord(period))
@@ -369,6 +376,88 @@ final class SwiftDataPeriodRepository: PeriodRepository {
             try saveContext(context)
             candidate.periods = (candidate.periods + [period]).sorted { $0.start < $1.start }
             candidate.healthImports = (candidate.healthImports + [receipt]).sorted { $0.id.uuidString < $1.id.uuidString }
+            return candidate
+        } catch { context.rollback(); throw error }
+    }
+
+    func saveDailyBleeding(_ observation: DailyBleedingObservation, editing: Bool,
+                          today: LocalDay, now: Date) throws -> TrackerSnapshot {
+        let snapshot = try load()
+        var review = BleedingReconciliation(snapshot: snapshot)
+        if editing {
+            guard let index = review.observations.firstIndex(where: { $0.id == observation.id }) else { throw TrackingError.missingRecord }
+            review.observations[index] = observation
+        } else {
+            guard !review.observations.contains(where: { $0.id == observation.id }) else { throw TrackingError.invalidData }
+            review.observations.append(observation)
+        }
+        return try reconcileBleeding(review, today: today, now: now)
+    }
+
+    func deleteDailyBleeding(id: UUID) throws -> TrackerSnapshot {
+        var candidate = try load()
+        guard let record = try context.fetch(FetchDescriptor<TrackerSchemaV7.DailyBleedingRecord>()).first(where: { $0.id == id }) else {
+            throw TrackingError.missingRecord
+        }
+        do {
+            context.delete(record)
+            try saveContext(context)
+            candidate.dailyBleeding.removeAll { $0.id == id }
+            return candidate
+        } catch { context.rollback(); throw error }
+    }
+
+    /// Main-actor synchronous read/check/write/save: no suspension or partial publication.
+    /// Only period/daily rows are in the replacement scope; import receipts are immutable here.
+    func reconcileBleeding(_ review: BleedingReconciliation, today: LocalDay, now: Date) throws -> TrackerSnapshot {
+        var candidate = try load()
+        guard candidate.periods == review.expectedPeriods, candidate.dailyBleeding == review.expectedObservations else {
+            throw DailyBleedingError.staleReview
+        }
+        guard now.timeIntervalSinceReferenceDate.isFinite else { throw TrackingError.invalidData }
+        let oldPeriods = Dictionary(uniqueKeysWithValues: candidate.periods.map { ($0.id, $0) })
+        let oldDaily = Dictionary(uniqueKeysWithValues: candidate.dailyBleeding.map { ($0.id, $0) })
+        candidate.periods = review.periods.map { proposed in
+            let original = oldPeriods[proposed.id]
+            var value = Period(id: proposed.id, start: proposed.start, end: proposed.end, flow: proposed.flow,
+                               notes: proposed.notes, createdAt: original?.createdAt ?? now,
+                               updatedAt: original?.updatedAt ?? now)
+            if let original, value != original { value.updatedAt = now }
+            return value
+        }.sorted { $0.start < $1.start }
+        candidate.dailyBleeding = DailyBleedingValidation.sorted(review.observations.map { proposed in
+            let original = oldDaily[proposed.id]
+            var value = DailyBleedingObservation(id: proposed.id, day: proposed.day, state: proposed.state,
+                flow: proposed.flow, periodID: proposed.periodID, createdAt: original?.createdAt ?? now,
+                updatedAt: original?.updatedAt ?? now)
+            if let original, value != original { value.updatedAt = now }
+            return value
+        })
+        try PeriodValidation.validate(candidate.periods, asOf: today)
+        try DailyBleedingValidation.validate(candidate.dailyBleeding, periods: candidate.periods, asOf: today)
+        let periodRecords = try context.fetch(FetchDescriptor<TrackerSchemaV2.PeriodRecord>())
+        let dailyRecords = try context.fetch(FetchDescriptor<TrackerSchemaV7.DailyBleedingRecord>())
+        let periodsByID = Dictionary(uniqueKeysWithValues: periodRecords.map { ($0.id, $0) })
+        let dailyByID = Dictionary(uniqueKeysWithValues: dailyRecords.map { ($0.id, $0) })
+        let periodIDs = Set(candidate.periods.map(\.id))
+        let dailyIDs = Set(candidate.dailyBleeding.map(\.id))
+        do {
+            for record in periodRecords where !periodIDs.contains(record.id) { context.delete(record) }
+            for record in dailyRecords where !dailyIDs.contains(record.id) { context.delete(record) }
+            for value in candidate.periods where oldPeriods[value.id] != value {
+                if let record = periodsByID[value.id] {
+                    record.startKey = value.start.key
+                    record.endKey = value.end?.key
+                    record.flowRaw = value.flow?.rawValue
+                    record.notes = value.notes
+                    record.updatedAt = value.updatedAt
+                } else { context.insert(TrackerSchemaV2.PeriodRecord(value)) }
+            }
+            for value in candidate.dailyBleeding where oldDaily[value.id] != value {
+                if let record = dailyByID[value.id] { record.update(value) }
+                else { context.insert(TrackerSchemaV7.DailyBleedingRecord(value)) }
+            }
+            try saveContext(context)
             return candidate
         } catch { context.rollback(); throw error }
     }
@@ -382,6 +471,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
             let profiles = try context.fetch(FetchDescriptor<TrackerSchemaV4.ProfileRecord>())
             let activities = try context.fetch(FetchDescriptor<TrackerSchemaV5.SexualActivityRecord>())
             let imports = try context.fetch(FetchDescriptor<TrackerSchemaV6.HealthImportRecord>())
+            let daily = try context.fetch(FetchDescriptor<TrackerSchemaV7.DailyBleedingRecord>())
             try clearLegacyData()
             records.forEach { context.delete($0) }
             states.forEach { context.delete($0) }
@@ -389,6 +479,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
             profiles.forEach { context.delete($0) }
             activities.forEach { context.delete($0) }
             imports.forEach { context.delete($0) }
+            daily.forEach { context.delete($0) }
             try saveContext(context)
             return TrackerSnapshot()
         } catch {

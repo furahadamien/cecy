@@ -29,6 +29,9 @@ nonisolated struct DayActivityMarker: Identifiable, Equatable, Sendable {
         if let period = snapshot.periods.first(where: { $0.contains(day) }) {
             markers.append(Self(id: "period", symbol: "drop.fill", title: period.start == day ? "Period start" : "Confirmed bleeding"))
         }
+        if let answer = snapshot.dailyBleeding.first(where: { $0.day == day }) {
+            markers.append(daily(answer))
+        }
         let kinds = Set(snapshot.symptoms.filter { $0.day == day }.map(\.kind))
         for kind in SymptomKind.allCases where kinds.contains(kind) {
             markers.append(Self(id: "symptom.\(kind.rawValue)", symbol: kind.symbol, title: kind.title))
@@ -37,6 +40,10 @@ nonisolated struct DayActivityMarker: Identifiable, Equatable, Sendable {
             markers.append(Self(id: "sexualActivity", symbol: "heart.fill", title: "Sexual activity: \(activity.summary)"))
         }
         return markers
+    }
+
+    static func daily(_ answer: DailyBleedingObservation) -> Self {
+        Self(id: "dailyBleeding", symbol: answer.state.symbol, title: "Daily answer: \(answer.state.title)")
     }
 }
 
@@ -59,6 +66,9 @@ nonisolated struct DayActivityIndex: Equatable, Sendable {
                 values[day, default: []].append(DayActivityMarker(id: "sexualActivity", symbol: "heart.fill",
                     title: "Sexual activity: \(activity.summary)"))
             }
+        }
+        for answer in snapshot.dailyBleeding {
+            values[answer.day, default: []].insert(.daily(answer), at: 0)
         }
         observations = values
     }

@@ -7,6 +7,7 @@ struct CycleHistoryView: View {
 
     var body: some View {
         TrackerPage(title: "Insights", subtitle: "Your cycle history, from recorded starts.") {
+            if let today = session.today { RecordingCoverageCard(session: session, today: today) }
             if let today = session.today { ForTodayCard(session: session, today: today) }
             TrackerCard {
                 NavigationLink {

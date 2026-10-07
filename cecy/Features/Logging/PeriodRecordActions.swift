@@ -6,6 +6,7 @@ struct PeriodRecordActions: View {
     let period: Period
     @State private var editing = false
     @State private var confirmDelete = false
+    @State private var deletionReview: BleedingReconciliation?
     @State private var error: String?
     @AccessibilityFocusState private var errorFocused: Bool
 
@@ -16,7 +17,12 @@ struct PeriodRecordActions: View {
             Button { editing = true } label: { Label("Edit period range", systemImage: "pencil") }
                 .frame(minHeight: 44).accessibilityIdentifier("editPeriod")
                 .accessibilityHint(period.end == nil ? "Edit details or add an end date." : "Edit recorded details.")
-            Button(role: .destructive) { confirmDelete = true } label: { Label("Delete entire period", systemImage: "trash") }
+            Button(role: .destructive) {
+                do {
+                    deletionReview = try BleedingReconciliation.retainingDailyRecordsWhenDeleting(period.id, from: session.snapshot)
+                    confirmDelete = true
+                } catch { self.error = error.localizedDescription; errorFocused = true }
+            } label: { Label("Delete entire period", systemImage: "trash") }
                 .frame(minHeight: 44).accessibilityIdentifier("deletePeriod")
                 .accessibilityLabel("Delete entire period")
             }.buttonStyle(RecordActionButtonStyle())
@@ -25,7 +31,7 @@ struct PeriodRecordActions: View {
         .disabled(session.isSaving)
         .sheet(isPresented: $editing) {
             if let current = session.snapshot.periods.first(where: { $0.id == period.id }), let today = session.today {
-                PeriodEntryView(period: current, today: today, existing: session.snapshot.periods, isEditing: true) { period in
+                PeriodEntryView(period: current, today: today, existing: session.snapshot.periods, isEditing: true, session: session) { period in
                     await session.withPredictionUpdate { session.update(period) }
                 }
             }
@@ -33,13 +39,14 @@ struct PeriodRecordActions: View {
         .alert("Delete this period?", isPresented: $confirmDelete) {
             Button("Delete recorded period", role: .destructive) {
                 Task {
-                    error = await session.withPredictionUpdate { session.delete(id: period.id) }
+                    guard let review = deletionReview else { return }
+                    error = await session.withPredictionUpdate { session.reconcileBleeding(review) }
                     errorFocused = error != nil
                 }
             }
             Button("Keep period", role: .cancel) { }
         } message: {
-            Text("The entire recorded period \(DayText.range(period.start, period.end ?? period.start)), including its flow and note, will be removed—not just the selected day. Cycle calculations will change. This cannot be undone.")
+            Text("Remove the entire period \(DayText.range(period.start, period.end ?? period.start))—not just the selected day—including its flow and note. Daily answers stay saved without a period link. Cycle calculations may change. This cannot be undone.")
         }
     }
 }

@@ -191,6 +191,7 @@ private actor RegistrySpy: UserRegistryServing {
         draft.profile.preferredName = "Synthetic Alex"
         draft.profile.birthDayKey = 19950512
         draft.profile.typicalPeriodDays = 5
+        draft.profile.typicalCycleDays = 28
         draft.periods = [Period(start: try LocalDay(key: 20260902))]
         try account.link(userID: rawID, profileID: draft.profile.id, protectsExistingProfile: false)
         #expect(queue.operations.isEmpty)

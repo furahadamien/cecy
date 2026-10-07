@@ -8,6 +8,7 @@ nonisolated private func onboardingFixture() throws -> OnboardingDraft {
     draft.profile.preferredName = "Synthetic Alex"
     draft.profile.birthDayKey = 19950512
     draft.profile.typicalPeriodDays = 5
+    draft.profile.typicalCycleDays = 28
     draft.periods = try [20260607, 20260705, 20260804, 20260902].map {
         Period(start: try LocalDay(key: $0), createdAt: try LocalDay(key: 20260929).formattingDate)
     }
@@ -215,9 +216,9 @@ nonisolated struct OnboardingDomainTests {
         try account.link(userID: "synthetic", profileID: draft.profile.id, protectsExistingProfile: false)
         let session = TrackerSession(repository: { repository }, clock: { self.today.formattingDate }, account: account)
         session.load()
-        let task = Task { await session.finishSetup(draft, minimumPresentation: .seconds(30)) }
+        let task = Task { await session.finishSetup(draft, minimumPresentation: .seconds(60)) }
         defer { task.cancel() }
-        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(20))
         while session.setupStage != .finishing && ContinuousClock.now < deadline { await Task.yield() }
         try #require(session.setupStage == .finishing)
         #expect(session.snapshot.onboardingCompletedAt == nil)

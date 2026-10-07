@@ -49,18 +49,18 @@ final class TodayQuickActionsUITests: XCTestCase {
         app.buttons["todayDate_20260928"].tap()
         let actions = app.otherElements["todayLogActions"]
         XCTAssertTrue(actions.label.contains("September 28"))
-        for (identifier, title) in [("logPeriod", "Record a period"), ("logSymptoms", "Log symptoms"), ("logSexualActivity", "Log sex")] {
+        for (identifier, title) in [("logPeriod", "Record a period"), ("logSymptoms", "Log symptoms"), ("logSexualActivity", "Log sex"), ("logDailyBleeding", "Daily bleeding")] {
             app.buttons[identifier].tap()
             XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5))
             app.navigationBars.buttons["Cancel"].tap()
             XCTAssertTrue(actions.label.contains("September 28"))
         }
         app.buttons["todayDate_20260930"].tap()
-        for identifier in ["logPeriod", "logSymptoms", "logSexualActivity"] {
+        for identifier in ["logPeriod", "logSymptoms", "logSexualActivity", "logDailyBleeding"] {
             XCTAssertFalse(app.buttons[identifier].isEnabled)
         }
         app.buttons["stripReturnToToday"].tap()
-        for identifier in ["logPeriod", "logSymptoms", "logSexualActivity"] {
+        for identifier in ["logPeriod", "logSymptoms", "logSexualActivity", "logDailyBleeding"] {
             XCTAssertTrue(app.buttons[identifier].isEnabled)
         }
     }
@@ -81,12 +81,12 @@ final class TodayQuickActionsUITests: XCTestCase {
         app.tabBars.buttons["Insights"].tap()
         let options = app.buttons["Daily preparation"]
         UIViewport.reveal(options, in: app); options.tap()
-        let review = app.buttons["reviewAIConsent"]
+        let review = app.buttons["Enable optional insights"]
         UIViewport.reveal(review, in: app); review.tap()
         let enable = app.buttons["enableAI"]
         UIViewport.reveal(enable, in: app); enable.tap()
         XCTAssertTrue(app.navigationBars["Optional insights"].waitForNonExistence(timeout: 5))
-        let toggle = app.switches["dailyInsightsToggle"]
+        let toggle = app.switches["Prepare daily insights"]
         UIViewport.reveal(toggle, in: app)
         XCTAssertEqual(toggle.value as? String, "0")
         // Manual consent alone must not start automatic processing.
