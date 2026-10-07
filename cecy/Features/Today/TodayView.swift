@@ -36,6 +36,7 @@ struct TodayView: View {
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Log for \(DayText.full(selection))")
             .accessibilityIdentifier("todayLogActions")
+            DailyBleedingLogButton(session: session, day: selection)
             TodayCalendarLegend()
             ForEach(session.cycleForecast.cycles.filter { selection != today && $0.contains(selection) }) { cycle in
                 TrackerCard { ProjectedCycleDetails(cycle: cycle) }
@@ -63,8 +64,10 @@ struct TodayView: View {
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("nextPeriodCard")
             CyclePhaseRingView(session: session, today: today, overview: overview)
-            TodayEstimatesCard(forecast: session.cycleForecast, today: today)
-            TrackerCard { UpcomingCycleForecastView(forecast: session.cycleForecast, today: today) }
+            if !session.cycleForecast.cycles.isEmpty {
+                TodayEstimatesCard(forecast: session.cycleForecast, today: today)
+                TrackerCard { UpcomingCycleForecastView(forecast: session.cycleForecast, today: today) }
+            }
             DailyLogCard(session: session, selectedDay: selection, today: today)
             if let confirmation = session.confirmation {
                 TrackerCard {
@@ -108,10 +111,10 @@ struct TodayView: View {
             detail = "Possible start: \(DayText.range(estimate.earliest, estimate.latest)). An estimate, not a deadline. Missing records can affect it."
         case .insufficientHistory:
             title = "More history needed"
-            detail = "Record a period start and your usual cycle length, or add previous starts, for an estimate."
+            detail = "Log periods as they happen. Estimates can come later."
         case .wideVariation:
             title = "Timing uncertain"
-            detail = "Your recorded intervals vary too much for a reliable countdown. Your current cycle day still counts from recorded dates."
+            detail = "Your recorded cycles vary. Keep tracking without a date estimate."
         case .unavailable(let reason):
             title = "Estimate unavailable"
             detail = reason.localizedDescription

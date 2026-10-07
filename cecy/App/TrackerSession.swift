@@ -246,7 +246,8 @@ final class TrackerSession {
             setupStage = .predicting
             await Task.yield()
             try checkAccess()
-            overview = CycleCalculator.overview(periods: staged.periods, today: day, engine: EvidencePredictionEngine(), profile: staged.profile)
+            overview = ForecastAvailabilityPolicy.applying(to: CycleCalculator.overview(
+                periods: staged.periods, today: day, engine: EvidencePredictionEngine(), profile: staged.profile))
             predictionReplay = try PredictionBacktester.evaluate(periods: staged.periods, today: day)
             setupStage = .insights
             await Task.yield()
@@ -294,6 +295,8 @@ final class TrackerSession {
             publish(committed, today: day)
             if !periods.isEmpty { confirmation = periods.count == 1 ? "Period start recorded." : "Previous period dates recorded." }
             return nil
+        } catch let error as DailyBleedingError {
+            return error.localizedDescription
         } catch let error as TrackingError {
             return error.localizedDescription
         } catch {
@@ -308,7 +311,8 @@ final class TrackerSession {
         self.snapshot = snapshot
         activityIndex = DayActivityIndex(snapshot: snapshot)
         self.today = today
-        overview = CycleCalculator.overview(periods: snapshot.periods, today: today, engine: EvidencePredictionEngine(), profile: snapshot.profile)
+        overview = ForecastAvailabilityPolicy.applying(to: CycleCalculator.overview(
+            periods: snapshot.periods, today: today, engine: EvidencePredictionEngine(), profile: snapshot.profile))
         cycleForecast = overview.map { CycleForecast.calculate(overview: $0, profile: snapshot.profile, periods: snapshot.periods, asOf: today) } ?? CycleForecast()
         predictionReplay = try? PredictionBacktester.evaluate(periods: snapshot.periods, today: today)
         statistics = try? CycleStatistics.calculate(periods: snapshot.periods, today: today)
@@ -333,6 +337,25 @@ final class TrackerSession {
     func delete(id: UUID) -> String? {
         mutate(confirmation: "Period deleted.", failure: "This period wasn’t deleted. Try again.") { repository, _, _ in
             try repository.delete(id: id)
+        }
+    }
+
+    func saveDailyBleeding(_ observation: DailyBleedingObservation, editing: Bool = false) -> String? {
+        mutate(confirmation: editing ? "Daily answer updated." : "Daily answer recorded.",
+               failure: "Your daily answer hasn’t been saved. Keep your draft and try again.") {
+            try $0.saveDailyBleeding(observation, editing: editing, today: $1, now: $2)
+        }
+    }
+
+    func deleteDailyBleeding(id: UUID) -> String? {
+        mutate(confirmation: "Daily answer deleted.", failure: "Your daily answer wasn’t deleted. Try again.") { repository, _, _ in
+            try repository.deleteDailyBleeding(id: id)
+        }
+    }
+
+    func reconcileBleeding(_ review: BleedingReconciliation) -> String? {
+        mutate(confirmation: "Reviewed records updated.", failure: "Your reviewed changes haven’t been saved. Try again.") {
+            try $0.reconcileBleeding(review, today: $1, now: $2)
         }
     }
 
@@ -467,6 +490,8 @@ final class TrackerSession {
         } catch let error as SexualActivityError {
             return error.localizedDescription
         } catch let error as HealthImportError {
+            return error.localizedDescription
+        } catch let error as DailyBleedingError {
             return error.localizedDescription
         } catch let error as TrackingError {
             return error.localizedDescription

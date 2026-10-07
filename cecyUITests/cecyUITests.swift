@@ -78,7 +78,8 @@ final class cecyUITests: XCTestCase {
         let app = launch(history: true)
         XCTAssertTrue(app.staticTexts["cycleDay"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.staticTexts["cycleDay"].label, "Day 28")
-        XCTAssertTrue(app.staticTexts["predictionWindow"].label.contains("Sep 29"))
+        // The primary window retains its original lower bound; only display projections clip to today.
+        XCTAssertTrue(app.staticTexts["predictionWindow"].label.contains("Sep 28"))
         app.tabBars.buttons["Calendar"].tap()
         let second = app.buttons["calendarDay_20260902"]
         XCTAssertTrue(second.label.contains("Recorded period start"))
@@ -113,8 +114,10 @@ final class cecyUITests: XCTestCase {
     @MainActor
     func testCalendarGridIdentityAcrossAllLeadingOffsets() {
         let app = launch(history: true)
-        XCTAssertTrue(app.tabBars.buttons["Calendar"].waitForExistence(timeout: 10))
-        app.tabBars.buttons["Calendar"].tap()
+        // iPad exposes top-level tabs as buttons outside a TabBar.
+        let calendar = app.buttons.matching(NSPredicate(format: "label == %@", "Calendar")).firstMatch
+        XCTAssertTrue(calendar.waitForExistence(timeout: 10))
+        calendar.tap()
         // The fixture starts in September 2026. July 2026–March 2027
         // covers every leading-cell count (0...6) in the en_US calendar.
         app.buttons["previousMonth"].tap()
@@ -148,7 +151,7 @@ final class cecyUITests: XCTestCase {
         reveal(recorded, in: app)
         XCTAssertGreaterThanOrEqual(recorded.frame.height, 44)
         recorded.tap()
-        let endDetail = app.otherElements["selectedCalendarDetails"].staticTexts["End not recorded"].firstMatch
+        let endDetail = app.otherElements["calendarRecordedDayCard"].staticTexts["End not recorded"].firstMatch
         reveal(endDetail, in: app)
         XCTAssertTrue(endDetail.exists)
         XCTAssertTrue(recorded.label.contains("Recorded period start"))

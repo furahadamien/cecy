@@ -231,6 +231,17 @@ struct PreparedExport: Identifiable {
         catch { message = "A temporary export could not be removed. Reopen Cecy to retry cleanup. Any shared copies remain outside Cecy’s control." }
     }
 
+    func exportSummary(_ text: String) {
+        guard canAccess, !text.isEmpty else { return }
+        do {
+            preparedExport = PreparedExport(url: try exports.prepareSummary(Data(text.utf8)))
+            message = nil
+        } catch {
+            preparedExport = nil
+            message = "The summary couldn’t be prepared. Try again."
+        }
+    }
+
     /// Ancillary cleanup precedes record deletion. A failure preserves records but may already disable reminders.
     func prepareForReset() throws {
         guard canAccess, !isAuthenticating, !isChangingReminders else { throw TrackingError.invalidData }

@@ -138,6 +138,9 @@ struct DailyLogDetailsView: View {
             ForEach(session.snapshot.symptoms.filter { $0.day == day }) { entry in
                 SymptomRecordView(session: session, entry: entry)
             }
+            ForEach(session.snapshot.dailyBleeding.filter { $0.day == day }) { answer in
+                TrackerCard { DailyBleedingRecordView(session: session, observation: answer) }
+            }
             ForEach(session.snapshot.sexualActivities.filter { $0.day == day }) { entry in
                 SexualActivityRecordView(session: session, entry: entry)
             }

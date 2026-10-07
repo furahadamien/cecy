@@ -19,7 +19,11 @@ final class TodayDetailsAndWelcomeUITests: XCTestCase {
     }
 
     @MainActor private func tap(_ button: XCUIElement, in app: XCUIApplication) {
-        UIViewport.reveal(button, in: app)
+        let top = app.navigationBars.firstMatch.exists ? app.navigationBars.firstMatch.frame.maxY : 60
+        let bottom = app.tabBars.firstMatch.isHittable ? app.tabBars.firstMatch.frame.minY : app.frame.maxY - 24
+        if !button.isHittable || button.frame.midY <= top || button.frame.midY >= bottom {
+            UIViewport.reveal(button, in: app)
+        }
         button.tap()
     }
 

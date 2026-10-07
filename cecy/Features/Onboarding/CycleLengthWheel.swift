@@ -24,6 +24,35 @@ struct CycleLengthWheel: View {
     }
 }
 
+struct OnboardingCycleLengthField: View {
+    let title: String
+    let range: ClosedRange<Int>
+    let suggestedDays: Int
+    let identifier: String
+    @Binding var value: Int?
+    @Binding var isUnknown: Bool
+
+    var body: some View {
+        SelectionFlowLayout {
+            SelectionChip(title: "Choose length", selected: value != nil) {
+                isUnknown = false
+                if value == nil { value = suggestedDays }
+            }
+            .accessibilityIdentifier(identifier + "Known")
+            SelectionChip(title: "Not sure", selected: isUnknown && value == nil) {
+                value = nil
+                isUnknown = true
+            }
+            .accessibilityIdentifier(identifier + "Unknown")
+        }
+        if value != nil {
+            CycleLengthWheel(title: title, range: range,
+                             days: Binding(get: { value ?? suggestedDays }, set: { value = $0 }),
+                             identifier: identifier)
+        }
+    }
+}
+
 /// Existing profiles remain unanswered until Add is tapped; merely opening Settings never adopts defaults.
 struct CyclePreferenceField: View {
     let title: String

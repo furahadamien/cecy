@@ -36,7 +36,8 @@ import XCTest
     static func next(in app: XCUIApplication) {
         let next = app.buttons["onboardingContinue"]
         XCTAssertTrue(next.waitForExistence(timeout: 5))
-        let isWelcome = app.staticTexts["onboardingHeading"].label == "Understand your cycle."
+        let heading = app.staticTexts["onboardingHeading"]
+        let isWelcome = heading.exists && heading.label == "Understand your cycle."
         XCTAssertEqual(next.label, isWelcome ? "Get started" : "Continue")
         XCTAssertFalse(app.buttons["continueWithApple"].exists)
         let earlyAccountCopy = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@", "Apple", "account"))
@@ -100,8 +101,10 @@ import XCTest
         skipIdentity(in: app)
         lastStart(in: app)
         next(in: app)
+        app.buttons["onboardingPeriodLengthKnown"].tap()
         XCTAssertEqual(app.pickerWheels.firstMatch.value as? String, "5 days")
         next(in: app)
+        app.buttons["onboardingCycleLengthKnown"].tap()
         XCTAssertEqual(app.pickerWheels.firstMatch.value as? String, "28 days")
         next(in: app)
         XCTAssertFalse(app.scrollViews["commonSymptoms"].exists)
@@ -303,11 +306,15 @@ final class OnboardingUITests: XCTestCase {
         OnboardingUITestSupport.skipIdentity(in: app)
         OnboardingUITestSupport.lastStart(in: app)
         OnboardingUITestSupport.next(in: app)
+        let knownPeriod = app.buttons["onboardingPeriodLengthKnown"]
+        OnboardingUITestSupport.reveal(knownPeriod, in: app); knownPeriod.tap()
         let duration = app.pickerWheels.firstMatch
         XCTAssertEqual(duration.value as? String, "5 days")
         OnboardingUITestSupport.reveal(duration, in: app)
         duration.adjust(toPickerWheelValue: "7 days")
         OnboardingUITestSupport.next(in: app)
+        let knownCycle = app.buttons["onboardingCycleLengthKnown"]
+        OnboardingUITestSupport.reveal(knownCycle, in: app); knownCycle.tap()
         let cycle = app.pickerWheels.firstMatch
         OnboardingUITestSupport.reveal(cycle, in: app)
         XCTAssertEqual(cycle.value as? String, "28 days")

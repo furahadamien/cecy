@@ -121,16 +121,16 @@ final class WellnessPrerequisiteUITests: XCTestCase {
         let log = app.buttons["logSymptoms"]
         reveal(log, in: app); log.tap()
         XCTAssertTrue(app.navigationBars["Log symptoms"].waitForExistence(timeout: 5), app.debugDescription)
-        let digestive = app.buttons.matching(NSPredicate(format: "label == %@", "Digestive changes")).firstMatch
-        XCTAssertTrue(digestive.waitForExistence(timeout: 5), app.debugDescription)
-        for _ in 0..<5 {
-            if digestive.isHittable { break }
-            app.collectionViews.firstMatch.swipeUp()
-        }
+        let search = app.textFields["symptomSearch"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap(); search.typeText("Digestive changes")
+        let digestive = app.buttons["symptomKind_digestiveChanges"]
+        UIViewport.reveal(digestive, in: app)
         XCTAssertTrue(digestive.isHittable, app.debugDescription)
         digestive.tap()
         let save = app.buttons["saveSymptom"]
         XCTAssertTrue(save.isEnabled); save.tap()
+        XCTAssertTrue(app.navigationBars["Log symptoms"].waitForNonExistence(timeout: 10))
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["logPeriod"].waitForExistence(timeout: 15))
         app.tabBars.buttons["Insights"].tap()

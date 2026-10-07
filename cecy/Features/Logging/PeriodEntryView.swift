@@ -46,6 +46,9 @@ struct PeriodEntryView: View {
     @State private var confirmDiscard = false
     @State private var addingBleeding = false
     @State private var entryKindChosen: Bool
+    @State private var initialReview: BleedingReconciliation?
+    @State private var pendingReview: BleedingReconciliation?
+    @State private var confirmLinks = false
     @AccessibilityFocusState private var errorFocused: Bool
     let today: LocalDay
     let existing: [Period]
@@ -54,11 +57,15 @@ struct PeriodEntryView: View {
     let continuation: Period?
     let newPeriod: Period
     let onSave: (Period) async -> String?
+    let session: TrackerSession?
 
     init(period: Period, today: LocalDay, existing: [Period], isDraft: Bool = false,
-         isEditing: Bool = false, continuation: Period? = nil, onSave: @escaping (Period) async -> String?) {
+         isEditing: Bool = false, continuation: Period? = nil, session: TrackerSession? = nil,
+         onSave: @escaping (Period) async -> String?) {
         _draft = State(initialValue: PeriodDraft(period: period))
         _entryKindChosen = State(initialValue: continuation == nil)
+        _initialReview = State(initialValue: session.map { BleedingReconciliation(snapshot: $0.snapshot) })
+        self.session = session
         self.continuation = continuation
         self.newPeriod = period
         self.today = today
@@ -154,12 +161,13 @@ struct PeriodEntryView: View {
                     Button(isEditing ? "Save changes" : (isDraft ? "Add to list" : addingBleeding ? "Save bleeding" : "Save period")) {
                         guard !isSaving else { return }
                         let period = draft.period
-                        isSaving = true
-                        Task {
-                            saveError = await onSave(period)
-                            isSaving = false
-                            if saveError == nil { dismiss() } else { errorFocused = true }
-                        }
+                        if var review = initialReview {
+                            review.replacePeriod(period)
+                            if !review.detachedAnswers.isEmpty {
+                                pendingReview = review
+                                confirmLinks = true
+                            } else { save() }
+                        } else { save() }
                     }
                     .disabled(!entryKindChosen || validationMessage != nil || isSaving || (isEditing && !draft.hasChanges))
                     .accessibilityIdentifier("savePeriod")
@@ -170,6 +178,12 @@ struct PeriodEntryView: View {
                 Button("Discard changes", role: .destructive) { dismiss() }
                 Button("Keep editing", role: .cancel) { }
             }
+            .alert("Keep daily answers separately?", isPresented: $confirmLinks) {
+                Button("Save reviewed changes") { save(review: pendingReview) }
+                Button("Keep editing", role: .cancel) { pendingReview = nil }
+            } message: {
+                Text("\(pendingReview?.detachedAnswers.count ?? 0) daily answers fall outside the new dates. They will stay saved without a period link. No daily answers will be deleted.")
+            }
             .onChange(of: draft.start) { _, start in
                 if draft.end < start { draft.end = start }
                 saveError = nil
@@ -178,6 +192,19 @@ struct PeriodEntryView: View {
             .onChange(of: draft.includesEnd) { _, _ in saveError = nil }
             .onChange(of: draft.flow) { _, _ in saveError = nil }
             .onChange(of: draft.notes) { _, _ in saveError = nil }
+        }
+    }
+
+    private func save(review: BleedingReconciliation? = nil) {
+        guard !isSaving else { return }
+        let period = draft.period
+        isSaving = true
+        Task {
+            if let review, let session {
+                saveError = await session.withPredictionUpdate { session.reconcileBleeding(review) }
+            } else { saveError = await onSave(period) }
+            isSaving = false
+            if saveError == nil { dismiss() } else { errorFocused = true }
         }
     }
 

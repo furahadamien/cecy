@@ -45,6 +45,7 @@ struct PrivacySettingsView: View {
                 }
                 DisclosureGroup("What’s included?") {
                     Text("Dates, record IDs, flow, observation types and ratings. Private notes are optional; predictions are not included.")
+                    Text("Daily bleeding answers are included. Days without an answer are not filled in.")
                     Text("Accepted Apple Health period dates are included. Health sample identifiers and source metadata are not exported.")
                     Text("Sexual activity is excluded unless enabled above. Partner answers require both this option and Include personal profile. Activity notes also require Include private notes.")
                     Text("Personal profile includes your name, birth date, gender answer, measurements and preferences, including wellness choices and food allergies. Apple identity is never exported.")
@@ -105,7 +106,7 @@ private struct StorageSettingsInfoView: View {
     }
 }
 
-private struct ExportShareSheet: UIViewControllerRepresentable {
+struct ExportShareSheet: UIViewControllerRepresentable {
     let url: URL
     let completion: @MainActor () -> Void
     func makeUIViewController(context: Context) -> UIActivityViewController {

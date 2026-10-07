@@ -45,7 +45,8 @@ final class DeviceFeedbackRoundFiveUITests: XCTestCase {
         let legend = app.otherElements["todayCalendarLegend"]
         XCTAssertTrue(legend.waitForExistence(timeout: 5))
         let items = legend.staticTexts.allElementsBoundByIndex
-        XCTAssertEqual(items.count, 7)
+        XCTAssertEqual(items.count, 8)
+        XCTAssertTrue(legend.buttons["dailyBleedingLegend"].exists)
         XCTAssertEqual(legend.scrollViews.count, 0)
         XCTAssertGreaterThan((items.map(\.frame.minY).max() ?? 0) - (items.map(\.frame.minY).min() ?? 0), 5)
         for item in items {
@@ -55,7 +56,7 @@ final class DeviceFeedbackRoundFiveUITests: XCTestCase {
         }
         XCTAssertFalse(app.staticTexts["Dashed dates are possible starts, not recorded bleeding. Symptoms use their individual icons."].exists)
         XCTAssertFalse(app.staticTexts["todayStripSelectedDate"].exists)
-        XCTAssertFalse(app.staticTexts["September 29, 2026"].exists)
+        XCTAssertFalse(app.scrollViews["todayDateStrip"].staticTexts["September 29, 2026"].exists)
         let date = app.buttons["todayDate_20260929"]
         XCTAssertTrue(date.exists)
         XCTAssertGreaterThanOrEqual(date.frame.width, 44)
@@ -69,7 +70,8 @@ final class DeviceFeedbackRoundFiveUITests: XCTestCase {
         let legend = app.otherElements["todayCalendarLegend"]
         reveal(legend, app: app)
         let items = legend.staticTexts.allElementsBoundByIndex
-        XCTAssertEqual(items.count, 7)
+        XCTAssertEqual(items.count, 8)
+        XCTAssertTrue(legend.buttons["dailyBleedingLegend"].exists)
         XCTAssertEqual(legend.scrollViews.count, 0)
         for item in items {
             XCTAssertGreaterThanOrEqual(item.frame.minX, legend.frame.minX - 1)
@@ -107,7 +109,8 @@ final class DeviceFeedbackRoundFiveUITests: XCTestCase {
         app.tabBars.buttons["Calendar"].tap()
         let legend = app.otherElements["calendarLegend"]
         reveal(legend, app: app)
-        XCTAssertEqual(legend.staticTexts.count, 7)
+        XCTAssertEqual(legend.staticTexts.count, 8)
+        XCTAssertTrue(legend.buttons["dailyBleedingLegend"].exists)
         XCTAssertTrue(legend.staticTexts["Estimated fertile window"].exists)
         XCTAssertTrue(legend.staticTexts["Expected bleeding · Not recorded"].exists)
         XCTAssertFalse(app.staticTexts["A dot beside the date marks today. Tap a date for all records."].exists)
@@ -175,7 +178,11 @@ final class DeviceFeedbackRoundFiveUITests: XCTestCase {
         app.buttons["onboardingSkip"].tap()
         OnboardingUITestSupport.skipIdentity(in: app)
         OnboardingUITestSupport.lastStart(in: app)
-        for _ in 0..<3 { OnboardingUITestSupport.next(in: app) }
+        OnboardingUITestSupport.next(in: app)
+        app.buttons["onboardingPeriodLengthKnown"].tap()
+        OnboardingUITestSupport.next(in: app)
+        app.buttons["onboardingCycleLengthKnown"].tap()
+        OnboardingUITestSupport.next(in: app)
         XCTAssertEqual(app.staticTexts["onboardingHeading"].label, "Common symptoms")
         app.buttons["onboardingSkip"].tap()
         XCTAssertEqual(app.staticTexts["onboardingHeading"].label, "Cycle context")

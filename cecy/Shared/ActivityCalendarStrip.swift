@@ -158,7 +158,10 @@ struct ActivityCalendarStrip: View {
 struct TodayCalendarLegend: View {
     @Environment(\.colorScheme) private var colorScheme
     var body: some View {
-        legendItems
+        VStack(alignment: .leading, spacing: 8) {
+            legendItems
+            DailyBleedingLegend()
+        }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("todayCalendarLegend")
@@ -183,5 +186,21 @@ struct TodayCalendarLegend: View {
         }
         .font(.caption2)
         .lineLimit(1)
+    }
+}
+
+struct DailyBleedingLegend: View {
+    var body: some View {
+        DisclosureGroup {
+            SelectionFlowLayout {
+                ForEach(DailyBleedingState.allCases, id: \.self) { state in
+                    Label(state.title, systemImage: state.symbol)
+                }
+            }.padding(.top, 4)
+        } label: {
+            Text("Daily answers").frame(minHeight: 44)
+        }
+        .font(.caption)
+        .accessibilityIdentifier("dailyBleedingLegend")
     }
 }

@@ -47,7 +47,7 @@ final class HistoricalLoggingUITests: XCTestCase {
         app.navigationBars.buttons["Cancel"].tap()
     }
 
-    @MainActor func testPastStartDoesNotRemoveFutureReferenceOrExistingRecord() {
+    @MainActor func testShortIntervalKeepsRecordsWithoutDatedFallback() {
         let app = launch()
         app.buttons["expandTodayCalendar"].tap()
         app.buttons["todayPreviousMonth"].tap()
@@ -59,12 +59,17 @@ final class HistoricalLoggingUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["confirmedBleedingDays"].label.contains("1 confirmed"))
         app.buttons["savePeriod"].tap()
         XCTAssertTrue(app.navigationBars["Record a period"].waitForNonExistence(timeout: 8))
-        let reference = app.staticTexts["referencePrediction"]
-        reveal(reference, app: app)
-        XCTAssertTrue(reference.exists)
-        XCTAssertTrue(app.staticTexts["nextPeriodCenter"].label.contains("Sep 30"))
+        let countdown = app.staticTexts["periodCountdown"]
+        UIViewport.reveal(countdown, in: app)
+        XCTAssertEqual(countdown.label, "Estimate unavailable")
+        XCTAssertFalse(app.staticTexts["nextPeriodCenter"].exists)
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Calendar"].waitForExistence(timeout: 10))
         app.tabBars.buttons["Calendar"].tap()
         XCTAssertTrue(app.buttons["calendarDay_20260902"].label.contains("Recorded period start"))
+        app.buttons["previousMonth"].tap()
+        XCTAssertTrue(app.buttons["calendarDay_20260828"].label.contains("Recorded period start"))
+        app.buttons["nextMonth"].tap()
         app.buttons["nextMonth"].tap()
         app.buttons["calendarDay_20261001"].tap()
         let period = app.buttons["calendarLogPeriod"]
@@ -74,13 +79,13 @@ final class HistoricalLoggingUITests: XCTestCase {
         XCTAssertFalse(app.buttons["logSexualActivity"].isEnabled)
     }
 
-    @MainActor func testOldLastStartShowsUpcomingPeriodNotPastPrimaryWindow() {
+    @MainActor func testOldLastStartKeepsPrimaryWindowSeparateFromUpcomingProjection() {
         let app = launch("oldStart")
         let center = app.staticTexts["nextPeriodCenter"]
         reveal(center, app: app)
-        XCTAssertTrue(center.label.contains("Oct 8"))
-        XCTAssertTrue(app.staticTexts["projectedPrediction"].exists)
-        XCTAssertFalse(app.staticTexts["passedWindow"].exists)
+        XCTAssertTrue(center.label.contains("Jan 29"))
+        XCTAssertEqual(app.staticTexts["periodCountdown"].label, "Estimated window passed")
+        XCTAssertFalse(app.staticTexts["projectedPrediction"].exists)
         app.tabBars.buttons["Calendar"].tap()
         app.buttons["nextMonth"].tap()
         XCTAssertTrue(app.buttons["calendarDay_20261008"].label.contains("Possible period start"))

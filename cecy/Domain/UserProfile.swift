@@ -81,6 +81,10 @@ nonisolated enum TrackingGoal: String, Codable, CaseIterable, Sendable {
     }
 }
 
+nonisolated enum CycleSetupField: String, Codable, Sendable {
+    case periodLength, cycleLength, lastStart
+}
+
 nonisolated struct LocalProfile: Codable, Equatable, Sendable, Identifiable {
     var id = UUID()
     var preferredName = ""
@@ -99,6 +103,27 @@ nonisolated struct LocalProfile: Codable, Equatable, Sendable, Identifiable {
     var wellnessPreferences: WellnessPreferences?
     var genderIdentity: GenderIdentity?
     var sexualPartners: Set<SexualPartnerPreference>?
+    // Missing in legacy payloads means no explicit unknown answer, not guessed defaults.
+    var unknownCycleFields: Set<CycleSetupField>?
+
+    mutating func setUnknown(_ field: CycleSetupField, _ unknown: Bool) {
+        var fields = unknownCycleFields ?? []
+        if unknown { fields.insert(field) } else { fields.remove(field) }
+        if unknown {
+            switch field {
+            case .periodLength: typicalPeriodDays = nil
+            case .cycleLength: typicalCycleDays = nil
+            case .lastStart: break // The setup answer never deletes recorded history.
+            }
+        }
+        unknownCycleFields = fields.isEmpty ? nil : fields
+    }
+
+    func validateCycleSetup(hasRecordedStart: Bool) throws {
+        guard typicalPeriodDays != nil || unknownCycleFields?.contains(.periodLength) == true else { throw ProfileError.duration }
+        guard typicalCycleDays != nil || unknownCycleFields?.contains(.cycleLength) == true else { throw ProfileError.cycleLength }
+        guard hasRecordedStart || unknownCycleFields?.contains(.lastStart) == true else { throw ProfileError.lastPeriod }
+    }
 
     mutating func togglePartner(_ partner: SexualPartnerPreference) {
         var choices = sexualPartners ?? []
@@ -149,10 +174,10 @@ nonisolated enum ProfileError: Error, LocalizedError {
         case .name: "Enter a preferred name of up to 80 characters."
         case .birthday: "Choose your date of birth, no later than today."
         case .measurement: "Enter a valid positive height or weight, or leave it blank."
-        case .duration: "Choose a period length between 1 and 30 days."
+        case .duration: "Choose 1–30 days, or Not sure."
         case .selection: "Choose None or Prefer not to say on its own."
-        case .lastPeriod: "Choose when your last period started, no later than today."
-        case .cycleLength: "Choose a typical cycle of 10–120 days, at least as long as your typical period. This range is an app limit, not a medical definition."
+        case .lastPeriod: "Choose a past start date, or I don’t remember."
+        case .cycleLength: "Choose 10–120 days, at least your period length, or Not sure."
         case .notReady: "Unlock Cecy and try again. Your setup has not finished."
         case .identity: "Sign in with the Apple Account linked to this local profile. To change accounts, first delete the local profile and records in Settings."
         case .alreadyCompleted: "Setup is already complete. Edit your profile in Settings."
@@ -161,12 +186,7 @@ nonisolated enum ProfileError: Error, LocalizedError {
 }
 
 nonisolated struct OnboardingDraft: Equatable, Sendable {
-    var profile: LocalProfile = {
-        var value = LocalProfile()
-        value.typicalPeriodDays = CycleSetupPolicy.defaultPeriodDays
-        value.typicalCycleDays = CycleSetupPolicy.defaultCycleDays
-        return value
-    }()
+    var profile = LocalProfile()
     var periods: [Period] = []
     var dailyReminder = false
     var windowReminder = false
@@ -176,15 +196,14 @@ nonisolated struct OnboardingDraft: Equatable, Sendable {
 
     func validate(today: LocalDay) throws {
         try profile.validate(today: today)
-        guard profile.typicalPeriodDays != nil else { throw ProfileError.duration }
-        guard profile.typicalCycleDays != nil else { throw ProfileError.cycleLength }
-        guard !periods.isEmpty else { throw ProfileError.lastPeriod }
+        try profile.validateCycleSetup(hasRecordedStart: !periods.isEmpty)
         try PeriodValidation.validate(periods, asOf: today)
         guard (0...23).contains(reminderHour), (0...59).contains(reminderMinute) else { throw TrackingError.invalidData }
     }
 
     func overview(today: LocalDay) -> CycleOverview {
-        CycleCalculator.overview(periods: periods, today: today, engine: EvidencePredictionEngine(), profile: profile)
+        ForecastAvailabilityPolicy.applying(to: CycleCalculator.overview(
+            periods: periods, today: today, engine: EvidencePredictionEngine(), profile: profile))
     }
     func statistics(today: LocalDay) -> CycleStatistics? {
         try? CycleStatistics.calculate(periods: periods, today: today)

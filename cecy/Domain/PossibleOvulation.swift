@@ -98,24 +98,10 @@ nonisolated struct CycleForecast: Equatable, Sendable {
 
     static func calculate(overview: CycleOverview, profile: LocalProfile?, periods: [Period] = [],
                           asOf today: LocalDay? = nil) -> CycleForecast {
-        guard let start = overview.latestStart else {
-            return CycleForecast(ovulationUnavailableReason: "A usable period estimate is needed to project ovulation.")
+        let eligible = ForecastAvailabilityPolicy.applying(to: overview)
+        guard let start = eligible.latestStart, let estimate = eligible.estimate else {
+            return CycleForecast(ovulationUnavailableReason: "Ovulation timing unavailable.")
         }
-        var estimate = overview.estimate
-        var referenceNotice: String?
-        // Conflicting/implausible intervals must not silently erase the saved usual-cycle
-        // reference. This fallback is explicitly NOT a history-supported prediction.
-        let usable = estimate.map { CycleSetupPolicy.cycleDays.contains(start.days(until: $0.center)) } ?? false
-        if !usable {
-            if let fallback = try? BaselinePredictionEngine().predict(intervals: [], latestStart: start, profile: profile),
-               case .available(let value) = fallback {
-                estimate = value
-                referenceNotice = "Provisional reference from your saved typical cycle length. Recorded starts are too variable or incomplete for a history-based estimate; review whether nearby starts belong to one period."
-            } else {
-                return CycleForecast(ovulationUnavailableReason: "Review your period starts or add a typical cycle length in Profile to show a provisional forecast.")
-            }
-        }
-        guard let estimate else { return CycleForecast() }
         // Exactly the same rounded median (or entered usual length) as the period engine.
         let length = start.days(until: estimate.center)
         guard length > 0 else { return CycleForecast() }
@@ -150,7 +136,6 @@ nonisolated struct CycleForecast: Equatable, Sendable {
             }
             var cycle = ProjectedCycle(index: index, period: period, ovulation: ovulation,
                                        ovulationWarnings: warnings, ovulationBasis: basis)
-            cycle.referenceNotice = referenceNotice
             if let duration, duration.maximum < length,
                let end = try? center.adding(days: duration.days - 1),
                let envelopeEnd = try? latest.adding(days: duration.maximum - 1) {

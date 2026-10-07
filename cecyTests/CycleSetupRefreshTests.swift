@@ -13,9 +13,9 @@ nonisolated struct StarterPredictionTests {
         return p
     }
 
-    @Test func defaultsBelongToSetupNotLegacyProfiles() throws {
-        #expect(OnboardingDraft().profile.typicalPeriodDays == 5)
-        #expect(OnboardingDraft().profile.typicalCycleDays == 28)
+    @Test func newSetupAndLegacyProfilesDoNotInventLengths() throws {
+        #expect(OnboardingDraft().profile.typicalPeriodDays == nil)
+        #expect(OnboardingDraft().profile.typicalCycleDays == nil)
         #expect(LocalProfile().typicalCycleDays == nil)
         let legacy = profile(cycle: nil)
         let data = try JSONEncoder().encode(legacy)
@@ -118,6 +118,8 @@ nonisolated struct StarterPredictionTests {
         var draft = OnboardingDraft()
         draft.profile.preferredName = "Synthetic"
         draft.profile.birthDayKey = 19950512
+        draft.profile.typicalPeriodDays = 5
+        draft.profile.typicalCycleDays = 28
         draft.periods = [Period(start: try LocalDay(key: 20260902))]
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

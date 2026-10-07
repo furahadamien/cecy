@@ -136,27 +136,40 @@ private struct MeasurementWheelField: View {
     }
 }
 
-struct ProfileCycleFields: View {
+struct ProfilePredictabilityFields: View {
     @Binding var profile: LocalProfile
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Usually predictable?").font(.headline)
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    ForEach(CyclePredictability.allCases, id: \.self) { choice in
-                        SelectionChip(title: choice.title, selected: profile.predictability == choice) {
-                            profile.predictability = choice
-                        }
-                        .accessibilityIdentifier("profilePredictability_\(choice.rawValue)")
+            SelectionFlowLayout {
+                ForEach(CyclePredictability.allCases, id: \.self) { choice in
+                    SelectionChip(title: choice.title, selected: profile.predictability == choice) {
+                        profile.predictability = choice
                     }
-                }.padding(.vertical, 4)
+                    .accessibilityIdentifier("profilePredictability_\(choice.rawValue)")
+                }
             }
             .accessibilityIdentifier("profilePredictability")
         }
+    }
+}
+
+struct ProfileCycleFields: View {
+    @Binding var profile: LocalProfile
+    var body: some View {
+        ProfilePredictabilityFields(profile: $profile)
         CyclePreferenceField(title: "Typical period length", range: CycleSetupPolicy.periodDays,
-                             defaultValue: 5, identifier: "profileDuration", value: $profile.typicalPeriodDays)
+                             defaultValue: 5, identifier: "profileDuration", value: Binding(
+                                get: { profile.typicalPeriodDays }, set: {
+                                    profile.typicalPeriodDays = $0
+                                    profile.setUnknown(.periodLength, $0 == nil)
+                                }))
         CyclePreferenceField(title: "Typical cycle length", range: CycleSetupPolicy.cycleDays,
-                             defaultValue: 28, identifier: "profileCycleLength", value: $profile.typicalCycleDays)
+                             defaultValue: 28, identifier: "profileCycleLength", value: Binding(
+                                get: { profile.typicalCycleDays }, set: {
+                                    profile.typicalCycleDays = $0
+                                    profile.setUnknown(.cycleLength, $0 == nil)
+                                }))
     }
 }
 

@@ -174,7 +174,8 @@ private struct TrackerTabs: View {
                 let existing = PeriodLogSelection.existing(on: day, periods: session.snapshot.periods)
                 PeriodEntryView(period: existing ?? Period(start: day, end: day), today: currentDay,
                                 existing: session.snapshot.periods, isEditing: existing != nil,
-                                continuation: existing == nil ? PeriodLogSelection.continuation(on: day, periods: session.snapshot.periods) : nil) { period in
+                                continuation: existing == nil ? PeriodLogSelection.continuation(on: day, periods: session.snapshot.periods) : nil,
+                                session: session) { period in
                     await session.withPredictionUpdate {
                         if session.snapshot.periods.contains(where: { $0.id == period.id }) {
                             return session.update(period)
