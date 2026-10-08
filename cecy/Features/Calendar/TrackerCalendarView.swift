@@ -245,9 +245,9 @@ struct TrackerCalendarView: View {
 
     private var loggingActions: some View {
         VStack(alignment: .leading, spacing: 8) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(spacing: 8) {
                 periodLogButton
-                TrackerCompactLogActions(horizontalSpacing: 4) {
+                TrackerCompactLogActions {
                     SymptomLogButton(session: session, day: selection, title: "Symptoms", compact: true)
                     SexualActivityLogButton(session: session, day: selection, compact: true)
                     DailyBleedingLogButton(session: session, day: selection)

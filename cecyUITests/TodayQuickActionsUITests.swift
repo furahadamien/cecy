@@ -72,6 +72,7 @@ final class TodayQuickActionsUITests: XCTestCase {
 
     @MainActor func testLoggingRemainsReachableAtLargestTextSize() {
         let app = launch(largeText: true)
+        let actions = app.otherElements["todayLogActions"]
         for identifier in ["logPeriod", "logSymptoms", "logSexualActivity", "logDailyBleeding"] {
             let button = app.buttons[identifier]
             UIViewport.reveal(button, in: app)
@@ -79,6 +80,7 @@ final class TodayQuickActionsUITests: XCTestCase {
             XCTAssertGreaterThanOrEqual(button.frame.height, 44)
             XCTAssertGreaterThanOrEqual(button.frame.minX, 0)
             XCTAssertLessThanOrEqual(button.frame.maxX, app.frame.maxX)
+            XCTAssertEqual(button.frame.midX, actions.frame.midX, accuracy: 1)
         }
     }
 

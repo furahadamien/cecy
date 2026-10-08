@@ -37,6 +37,16 @@ final class DailyBleedingUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 5), .completed, row.debugDescription)
     }
 
+    @MainActor private func assertCenteredActions(_ actions: XCUIElement, period: XCUIElement, in app: XCUIApplication) {
+        let symptoms = actions.buttons["logSymptoms"].frame
+        let sex = actions.buttons["logSexualActivity"].frame
+        let bleeding = actions.buttons["logDailyBleeding"].frame
+        XCTAssertEqual(period.frame.midX, app.frame.midX, accuracy: 1)
+        XCTAssertEqual(symptoms.minX - app.frame.minX, app.frame.maxX - bleeding.maxX, accuracy: 1)
+        XCTAssertEqual(sex.minX - symptoms.maxX, 16, accuracy: 1)
+        XCTAssertEqual(bleeding.minX - sex.maxX, 16, accuracy: 1)
+    }
+
     @MainActor func testCalendarPeriodAboveOtherActionsAndKeepDateGuards() {
         let app = launch()
         app.tabBars.buttons["Calendar"].tap()
@@ -46,6 +56,7 @@ final class DailyBleedingUITests: XCTestCase {
         let first = actions.buttons[identifiers[0]]
         UIViewport.reveal(actions.buttons["logDailyBleeding"], in: app)
         XCTAssertEqual(first.label, "Log period")
+        assertCenteredActions(actions, period: first, in: app)
         var previous: CGRect?
         for id in identifiers {
             let button = actions.buttons[id]
@@ -88,6 +99,7 @@ final class DailyBleedingUITests: XCTestCase {
             XCTAssertGreaterThanOrEqual(button.frame.height, 44)
             XCTAssertGreaterThanOrEqual(button.frame.minX, app.frame.minX)
             XCTAssertLessThanOrEqual(button.frame.maxX, app.frame.maxX)
+            XCTAssertEqual(button.frame.midX, actions.frame.midX, accuracy: 1)
         }
         actions.buttons["logDailyBleeding"].tap()
         XCTAssertTrue(app.navigationBars["Daily bleeding"].waitForExistence(timeout: 5))
@@ -100,6 +112,7 @@ final class DailyBleedingUITests: XCTestCase {
         let first = actions.buttons[identifiers[0]]
         XCTAssertTrue(first.waitForExistence(timeout: 5))
         XCTAssertEqual(first.label, "Log period")
+        assertCenteredActions(actions, period: first, in: app)
         var previous: CGRect?
         for id in identifiers {
             let button = actions.buttons[id]

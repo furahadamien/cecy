@@ -22,7 +22,7 @@ struct TodayView: View {
         TrackerPage(title: "Today") {
             ActivityCalendarStrip(today: today, activityIndex: session.activityIndex,
                                   forecast: session.cycleForecast, selection: $selection)
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(spacing: 8) {
                 Button { onLog(selection) } label: {
                     Label("Log period", systemImage: "drop.fill")
                 }

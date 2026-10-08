@@ -107,7 +107,7 @@ struct TrackerCompactLogButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         let palette = TrackerPalette(scheme: colorScheme)
         configuration.label
-            .font(compactLabels ? .caption2.weight(.semibold) : .footnote.weight(.semibold))
+            .font(compactLabels ? .caption.weight(.semibold) : .footnote.weight(.semibold))
             .labelStyle(CompactLogLabelStyle(compact: compactLabels))
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
@@ -123,22 +123,22 @@ struct TrackerCompactLogButtonStyle: ButtonStyle {
 
 struct TrackerCompactLogActions<Content: View>: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    var horizontalSpacing: CGFloat = 6
+    var horizontalSpacing: CGFloat = 16
     @ViewBuilder var content: Content
 
     var body: some View {
         Group {
             if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 6) { content }
+                VStack(spacing: 6) { content }
             } else {
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: horizontalSpacing) { content }
                         .fixedSize(horizontal: true, vertical: false)
-                    VStack(alignment: .leading, spacing: 6) { content }
+                    VStack(spacing: 6) { content }
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 }
 
