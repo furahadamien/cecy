@@ -22,17 +22,19 @@ struct TodayView: View {
         TrackerPage(title: "Today") {
             ActivityCalendarStrip(today: today, activityIndex: session.activityIndex,
                                   forecast: session.cycleForecast, selection: $selection)
-            TrackerCompactLogActions {
+            VStack(alignment: .leading, spacing: 8) {
                 Button { onLog(selection) } label: {
-                    Label("Period", systemImage: "drop.fill")
+                    Label("Log period", systemImage: "drop.fill")
                 }
                 .buttonStyle(TrackerCompactLogButtonStyle(prominent: true))
-                .accessibilityLabel("Period")
+                .accessibilityLabel("Log period")
                 .accessibilityHint("Record a period start or update its end date.")
                 .accessibilityIdentifier("logPeriod")
-                SymptomLogButton(session: session, day: selection, title: "Symptoms", compact: true)
-                SexualActivityLogButton(session: session, day: selection, compact: true)
-                DailyBleedingLogButton(session: session, day: selection)
+                TrackerCompactLogActions {
+                    SymptomLogButton(session: session, day: selection, title: "Symptoms", compact: true)
+                    SexualActivityLogButton(session: session, day: selection, compact: true)
+                    DailyBleedingLogButton(session: session, day: selection)
+                }
             }
             .environment(\.compactLogLabels, true)
             .disabled(selection > today)

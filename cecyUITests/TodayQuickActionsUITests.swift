@@ -32,10 +32,14 @@ final class TodayQuickActionsUITests: XCTestCase {
             XCTAssertGreaterThanOrEqual(button.frame.minY, strip.frame.maxY)
             XCTAssertLessThanOrEqual(button.frame.maxY, nextPeriod.frame.minY)
             XCTAssertLessThan(button.frame.maxY, app.tabBars.firstMatch.frame.minY)
-            XCTAssertEqual(button.frame.midY, period.frame.midY, accuracy: 1)
         }
-        XCTAssertLessThan(period.frame.maxX, symptoms.frame.minX)
+        XCTAssertEqual(period.label, "Log period")
+        for button in [symptoms, sex, app.buttons["logDailyBleeding"]] {
+            XCTAssertGreaterThan(button.frame.minY, period.frame.maxY)
+            XCTAssertEqual(button.frame.midY, symptoms.frame.midY, accuracy: 1)
+        }
         XCTAssertLessThan(symptoms.frame.maxX, sex.frame.minX)
+        XCTAssertLessThan(sex.frame.maxX, app.buttons["logDailyBleeding"].frame.minX)
         let countdown = app.staticTexts["periodCountdown"]
         UIViewport.reveal(countdown, in: app)
         XCTAssertEqual(countdown.label, "About 1 day")
@@ -68,7 +72,7 @@ final class TodayQuickActionsUITests: XCTestCase {
 
     @MainActor func testLoggingRemainsReachableAtLargestTextSize() {
         let app = launch(largeText: true)
-        for identifier in ["logPeriod", "logSymptoms", "logSexualActivity"] {
+        for identifier in ["logPeriod", "logSymptoms", "logSexualActivity", "logDailyBleeding"] {
             let button = app.buttons[identifier]
             UIViewport.reveal(button, in: app)
             XCTAssertTrue(button.isHittable)

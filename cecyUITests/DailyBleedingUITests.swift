@@ -37,25 +37,28 @@ final class DailyBleedingUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 5), .completed, row.debugDescription)
     }
 
-    @MainActor func testCalendarLoggingActionsShareOneRowAndKeepDateGuards() {
+    @MainActor func testCalendarPeriodAboveOtherActionsAndKeepDateGuards() {
         let app = launch()
         app.tabBars.buttons["Calendar"].tap()
         tap("calendarDay_20260928", in: app)
         let actions = app.otherElements["calendarLoggingActions"]
         let identifiers = ["calendarLogPeriod", "logSymptoms", "logSexualActivity", "logDailyBleeding"]
         let first = actions.buttons[identifiers[0]]
-        UIViewport.reveal(first, in: app)
+        UIViewport.reveal(actions.buttons["logDailyBleeding"], in: app)
+        XCTAssertEqual(first.label, "Log period")
         var previous: CGRect?
         for id in identifiers {
             let button = actions.buttons[id]
             XCTAssertTrue(button.isHittable)
             XCTAssertGreaterThanOrEqual(button.frame.height, 44)
             XCTAssertGreaterThanOrEqual(button.frame.width, 44)
-            XCTAssertEqual(button.frame.midY, first.frame.midY, accuracy: 1,
-                           identifiers.map { "\($0): \(actions.buttons[$0].frame)" }.joined(separator: ", "))
             XCTAssertTrue(app.frame.contains(button.frame))
-            if let previous { XCTAssertGreaterThanOrEqual(button.frame.minX, previous.maxX) }
-            previous = button.frame
+            if id != identifiers[0] {
+                XCTAssertGreaterThan(button.frame.minY, first.frame.maxY)
+                XCTAssertEqual(button.frame.midY, actions.buttons["logSymptoms"].frame.midY, accuracy: 1)
+                if let previous { XCTAssertGreaterThanOrEqual(button.frame.minX, previous.maxX) }
+                previous = button.frame
+            }
         }
         actions.buttons["logDailyBleeding"].tap()
         XCTAssertTrue(app.navigationBars["Daily bleeding"].waitForExistence(timeout: 5))
@@ -69,7 +72,13 @@ final class DailyBleedingUITests: XCTestCase {
 
     @MainActor func testCalendarLoggingActionsAtLargestText() {
         let app = launch(large: true)
-        app.tabBars.buttons["Calendar"].tap()
+        let calendar = app.tabBars.buttons["Calendar"]
+        for _ in 0..<2 {
+            calendar.tap()
+            let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "selected == true"), object: calendar)
+            if XCTWaiter.wait(for: [selected], timeout: 3) == .completed { break }
+        }
+        XCTAssertTrue(calendar.isSelected)
         tap("calendarDay_20260902", in: app)
         let actions = app.otherElements["calendarLoggingActions"]
         for id in ["calendarLogPeriod", "logSymptoms", "logSexualActivity", "logDailyBleeding"] {
@@ -84,12 +93,13 @@ final class DailyBleedingUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Daily bleeding"].waitForExistence(timeout: 5))
     }
 
-    @MainActor func testTodayLoggingActionsShareOneRow() {
+    @MainActor func testTodayPeriodAboveOtherActions() {
         let app = launch()
         let actions = app.otherElements["todayLogActions"]
         let identifiers = ["logPeriod", "logSymptoms", "logSexualActivity", "logDailyBleeding"]
         let first = actions.buttons[identifiers[0]]
         XCTAssertTrue(first.waitForExistence(timeout: 5))
+        XCTAssertEqual(first.label, "Log period")
         var previous: CGRect?
         for id in identifiers {
             let button = actions.buttons[id]
@@ -97,11 +107,13 @@ final class DailyBleedingUITests: XCTestCase {
             XCTAssertTrue(button.isHittable)
             XCTAssertGreaterThanOrEqual(button.frame.height, 44)
             XCTAssertGreaterThanOrEqual(button.frame.width, 44)
-            XCTAssertEqual(button.frame.midY, first.frame.midY, accuracy: 1,
-                           identifiers.map { "\($0): \(actions.buttons[$0].frame)" }.joined(separator: ", "))
             XCTAssertTrue(app.frame.contains(button.frame))
-            if let previous { XCTAssertGreaterThanOrEqual(button.frame.minX, previous.maxX) }
-            previous = button.frame
+            if id != identifiers[0] {
+                XCTAssertGreaterThan(button.frame.minY, first.frame.maxY)
+                XCTAssertEqual(button.frame.midY, actions.buttons["logSymptoms"].frame.midY, accuracy: 1)
+                if let previous { XCTAssertGreaterThanOrEqual(button.frame.minX, previous.maxX) }
+                previous = button.frame
+            }
         }
     }
 

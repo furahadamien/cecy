@@ -72,7 +72,7 @@ final class DeviceFeedbackRoundFiveUITests: XCTestCase {
     @MainActor func testTodayCompactLoggingKeepsEntryActions() {
         let app = launch()
         for (identifier, title, sheet) in [
-            ("logPeriod", "Period", "Record a period"),
+            ("logPeriod", "Log period", "Record a period"),
             ("logDailyBleeding", "Other bleeding", "Daily bleeding"),
             ("logSymptoms", "Symptoms", "Log symptoms"),
             ("logSexualActivity", "Log sex", "Log sex")
@@ -119,7 +119,7 @@ final class DeviceFeedbackRoundFiveUITests: XCTestCase {
         let period = app.buttons["calendarLogPeriod"]
         let symptoms = app.buttons["logSymptoms"]
         let sex = app.buttons["logSexualActivity"]
-        reveal(period, app: app)
+        reveal(sex, app: app)
         for button in [period, symptoms, sex] {
             XCTAssertTrue(button.isHittable)
             XCTAssertGreaterThanOrEqual(button.frame.height, 44)
@@ -132,7 +132,7 @@ final class DeviceFeedbackRoundFiveUITests: XCTestCase {
         XCTAssertEqual(app.buttons.matching(identifier: "calendarLogPeriod").count, 1)
         XCTAssertEqual(app.buttons.matching(identifier: "logSymptoms").count, 1)
         XCTAssertEqual(app.buttons.matching(identifier: "logSexualActivity").count, 1)
-        for (button, title) in [(period, "Period"), (symptoms, "Symptoms"), (sex, "Log sex")] {
+        for (button, title) in [(period, "Log period"), (symptoms, "Symptoms"), (sex, "Log sex")] {
             let text = button.staticTexts[title]
             XCTAssertTrue(text.exists)
             XCTAssertGreaterThanOrEqual(text.frame.minY, button.frame.minY)

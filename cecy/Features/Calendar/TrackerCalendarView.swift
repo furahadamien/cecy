@@ -245,9 +245,13 @@ struct TrackerCalendarView: View {
 
     private var loggingActions: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TrackerCompactLogActions(horizontalSpacing: 4) {
-                loggingButtons
-                DailyBleedingLogButton(session: session, day: selection)
+            VStack(alignment: .leading, spacing: 8) {
+                periodLogButton
+                TrackerCompactLogActions(horizontalSpacing: 4) {
+                    SymptomLogButton(session: session, day: selection, title: "Symptoms", compact: true)
+                    SexualActivityLogButton(session: session, day: selection, compact: true)
+                    DailyBleedingLogButton(session: session, day: selection)
+                }
             }
             .environment(\.compactLogLabels, true)
             .disabled(selection > today)
@@ -261,17 +265,14 @@ struct TrackerCalendarView: View {
         .accessibilityIdentifier("calendarLoggingActions")
     }
 
-    @ViewBuilder
-    private var loggingButtons: some View {
+    private var periodLogButton: some View {
         Button { onLog(selection) } label: {
-            Label("Period", systemImage: "drop.fill")
+            Label("Log period", systemImage: "drop.fill")
         }
         .buttonStyle(TrackerCompactLogButtonStyle(prominent: true))
-        .accessibilityLabel("Period")
+        .accessibilityLabel("Log period")
         .accessibilityIdentifier("calendarLogPeriod")
         .accessibilityHint(record(on: selection) == nil ? "Record actual bleeding days." : "Edit this period or its confirmed bleeding dates.")
-        SymptomLogButton(session: session, day: selection, title: "Symptoms", compact: true)
-        SexualActivityLogButton(session: session, day: selection, compact: true)
     }
 }
 
