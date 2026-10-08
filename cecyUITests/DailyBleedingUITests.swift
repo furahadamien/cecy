@@ -267,12 +267,18 @@ final class DailyBleedingUITests: XCTestCase {
             XCTAssertEqual(toggle.value as? String, "0")
         }
         tap("previewSummary", in: app)
-        let text = app.staticTexts["summaryPreviewText"]
-        XCTAssertTrue(text.waitForExistence(timeout: 5))
-        XCTAssertTrue(text.label.contains("Days logged: 0 of 90"))
-        XCTAssertTrue(text.label.contains("end not recorded"))
-        XCTAssertFalse(text.label.contains("Synthetic Alex"))
-        XCTAssertFalse(text.label.contains("Cramps"))
+        let preview = app.otherElements["summaryPreviewText"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 5))
+        XCTAssertTrue(preview.staticTexts["summaryPreviewTitle"].exists)
+        XCTAssertTrue(preview.otherElements["summarySection_DAILY ANSWERS"].exists)
+        XCTAssertTrue(preview.otherElements["summarySection_RECORDED PERIODS"].exists)
+        XCTAssertFalse(preview.otherElements["summarySection_SYMPTOMS AND WELLNESS"].exists)
+        XCTAssertFalse(preview.otherElements["summarySection_CURRENT SELF-REPORTED CONTEXT"].exists)
+        let text = preview.staticTexts.allElementsBoundByIndex.map(\.label).joined(separator: "\n")
+        XCTAssertTrue(text.contains("Days logged: 0 of 90"))
+        XCTAssertTrue(text.contains("end not recorded"))
+        XCTAssertFalse(text.contains("Synthetic Alex"))
+        XCTAssertFalse(text.contains("Cramps"))
         app.buttons["shareSummary"].tap()
         let close = app.buttons["Close"]
         XCTAssertTrue(close.waitForExistence(timeout: 10))
@@ -296,10 +302,15 @@ final class DailyBleedingUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["recordingCoverage"].label, "Days logged: 1 of 30")
         tap("appointmentSummary", in: app)
         tap("previewSummary", in: app)
-        let text = app.staticTexts["summaryPreviewText"]
-        XCTAssertTrue(text.waitForExistence(timeout: 5))
-        XCTAssertTrue(text.label.contains("Not sure: 1"))
-        XCTAssertTrue(text.label.contains("Not logged: 89"))
+        let preview = app.otherElements["summaryPreviewText"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 5))
+        for label in ["summaryPreviewTitle", "Not logged: 89", "Not sure: 1"] {
+            let text = preview.staticTexts[label]
+            UIViewport.reveal(text, in: app)
+            XCTAssertTrue(text.isHittable)
+            XCTAssertGreaterThanOrEqual(text.frame.minX, app.frame.minX)
+            XCTAssertLessThanOrEqual(text.frame.maxX, app.frame.maxX)
+        }
         XCTAssertGreaterThanOrEqual(app.buttons["shareSummary"].frame.height, 44)
     }
 

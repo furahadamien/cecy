@@ -34,35 +34,45 @@ final class TodayQuickActionsUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Record a period"].waitForNonExistence(timeout: 10))
     }
 
-    @MainActor private func assertCurrentPeriodCard(in app: XCUIApplication, estimated: Bool) {
-        let card = app.otherElements["currentPeriodCard"]
-        UIViewport.reveal(card, in: app)
-        XCTAssertTrue(card.staticTexts[estimated ? "You may be on your period" : "You’re on your period"].exists)
-        XCTAssertFalse(card.staticTexts["Estimated · Not recorded"].exists)
-        XCTAssertEqual(card.staticTexts["Recorded today"].exists, !estimated)
-        XCTAssertLessThan(card.frame.maxY, app.otherElements["nextPeriodCard"].frame.minY)
+    @MainActor private func assertCurrentPeriodStatus(in app: XCUIApplication, estimated: Bool) {
+        let status = app.descendants(matching: .any)["currentPeriodStatus"].firstMatch
+        UIViewport.reveal(status, in: app)
+        XCTAssertEqual(status.label, estimated ? "You may be on your period" : "You’re on your period")
+        XCTAssertEqual(status.frame.midX, app.frame.midX, accuracy: 1)
+        XCTAssertGreaterThanOrEqual(status.frame.minX, app.frame.minX)
+        XCTAssertLessThanOrEqual(status.frame.maxX, app.frame.maxX)
+        XCTAssertFalse(app.otherElements["currentPeriodCard"].exists)
+        XCTAssertFalse(app.staticTexts["Estimated · Not recorded"].exists)
+        XCTAssertFalse(app.staticTexts["Recorded today"].exists)
+        XCTAssertLessThan(status.frame.maxY, app.otherElements["nextPeriodCard"].frame.minY)
     }
 
-    @MainActor func testRecordedCurrentPeriodCardAppearsAboveCountdownAndSurvivesRelaunch() {
+    @MainActor func testRecordedCurrentPeriodStatusAppearsAboveCountdownAndSurvivesRelaunch() {
         let app = launch()
-        XCTAssertFalse(app.otherElements["currentPeriodCard"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["currentPeriodStatus"].firstMatch.exists)
         logPeriodForSelectedDay(in: app)
-        assertCurrentPeriodCard(in: app, estimated: false)
+        assertCurrentPeriodStatus(in: app, estimated: false)
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["logPeriod"].waitForExistence(timeout: 10))
-        assertCurrentPeriodCard(in: app, estimated: false)
+        assertCurrentPeriodStatus(in: app, estimated: false)
     }
 
-    @MainActor func testEstimatedCurrentPeriodCardUsesTodayNotSelectedDate() {
+    @MainActor func testCurrentPeriodStatusRemainsCenteredAtLargestTextSize() {
+        let app = launch(largeText: true)
+        logPeriodForSelectedDay(in: app)
+        assertCurrentPeriodStatus(in: app, estimated: false)
+    }
+
+    @MainActor func testEstimatedCurrentPeriodStatusUsesTodayNotSelectedDate() {
         let app = launch()
         app.buttons["todayDate_20260928"].tap()
         logPeriodForSelectedDay(in: app)
         // Yesterday is recorded; today's remaining period day is only estimated.
-        assertCurrentPeriodCard(in: app, estimated: true)
+        assertCurrentPeriodStatus(in: app, estimated: true)
         let today = app.buttons["stripReturnToToday"]
         UIViewport.reveal(today, in: app)
         today.tap()
-        assertCurrentPeriodCard(in: app, estimated: true)
+        assertCurrentPeriodStatus(in: app, estimated: true)
     }
 
     @MainActor func testLoggingIsImmediatelyBelowDaysWithoutScrollingAndCountdownIsPrimary() {

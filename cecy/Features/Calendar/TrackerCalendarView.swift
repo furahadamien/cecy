@@ -267,7 +267,11 @@ struct TrackerCalendarView: View {
 
     private var periodLogButton: some View {
         Button { onLog(selection) } label: {
-            Label("Log period", systemImage: "drop.fill")
+            Label {
+                Text("Log period")
+            } icon: {
+                Image(systemName: "drop.fill").foregroundStyle(.red)
+            }
         }
         .buttonStyle(TrackerCompactLogButtonStyle(prominent: true))
         .accessibilityLabel("Log period")

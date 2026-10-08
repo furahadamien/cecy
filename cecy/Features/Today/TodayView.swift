@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct TodayView: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Bindable var session: TrackerSession
     let today: LocalDay
     let overview: CycleOverview
@@ -25,7 +24,11 @@ struct TodayView: View {
                                   forecast: session.cycleForecast, selection: $selection)
             VStack(spacing: 8) {
                 Button { onLog(selection) } label: {
-                    Label("Log period", systemImage: "drop.fill")
+                    Label {
+                        Text("Log period")
+                    } icon: {
+                        Image(systemName: "drop.fill").foregroundStyle(.red)
+                    }
                 }
                 .buttonStyle(TrackerCompactLogButtonStyle(prominent: true))
                 .accessibilityLabel("Log period")
@@ -47,20 +50,21 @@ struct TodayView: View {
             }
             if let status = TodayCurrentPeriodStatus(periods: session.snapshot.periods,
                                                      forecast: session.cycleForecast, today: today) {
-                TrackerCard {
-                    Label {
-                        Text(status.title)
-                    } icon: {
-                        Image(systemName: status == .recorded ? "drop.fill" : "drop")
-                            .foregroundStyle(TrackerPalette(scheme: colorScheme).recorded)
-                    }
-                    .font(.headline).accessibilityAddTraits(.isHeader)
-                    if let detail = status.detail {
-                        Text(detail).font(.subheadline).foregroundStyle(.secondary)
-                    }
+                HStack(spacing: 10) {
+                    Image(systemName: "drop.fill")
+                        .font(.title3)
+                        .foregroundStyle(.red)
+                        .accessibilityHidden(true)
+                    Text(status.title)
+                        .font(.system(.headline, design: .rounded, weight: .semibold))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .accessibilityElement(children: .contain)
-                .accessibilityIdentifier("currentPeriodCard")
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(status.title)
+                .accessibilityIdentifier("currentPeriodStatus")
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 4)
             }
             TrackerCard(highlighted: true) {
                 Label("Until your next period", systemImage: "leaf").font(.subheadline.weight(.medium))
@@ -127,10 +131,6 @@ nonisolated enum TodayCurrentPeriodStatus: Equatable {
 
     var title: String {
         self == .recorded ? "You’re on your period" : "You may be on your period"
-    }
-
-    var detail: String? {
-        self == .recorded ? "Recorded today" : nil
     }
 }
 

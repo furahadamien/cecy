@@ -5,6 +5,60 @@ import Testing
 nonisolated struct AppointmentSummaryTests {
     let end = try! LocalDay(key: 20261007)
 
+    @Test func structuredPreviewPreservesExactPlainTextExport() throws {
+        var options = AppointmentSummaryOptions()
+        options.symptoms = true
+        options.context = true
+        let document = try AppointmentSummary.document(snapshot: TrackerSnapshot(), start: end, end: end, options: options)
+        #expect(document.sections.map(\.kind) == [.dailyAnswers, .periods, .symptoms, .context])
+        let expected = """
+        Cecy · Appointment summary
+        2026-10-07 – 2026-10-07
+        Saved entries only. Records may be incomplete; not a medical interpretation.
+
+        DAILY ANSWERS
+        Days logged: 0 of 1
+        Not logged: 1
+        Bleeding: 0
+        Spotting: 0
+        No bleeding: 0
+        Not sure: 0
+        Not logged does not mean no bleeding. Not sure is a recorded uncertain answer.
+        No daily answers recorded in this range.
+
+        RECORDED PERIODS
+        Periods overlapping these dates; original dates shown. Daily answers are counted separately.
+        No periods recorded in this range.
+        No completed start-to-start intervals within these dates.
+        Unknown ends and the current open interval are not assumed complete.
+
+        SYMPTOMS AND WELLNESS
+        0 entries on 0 days.
+        No symptom entries recorded in this range.
+
+        CURRENT SELF-REPORTED CONTEXT
+        Current profile answers, not a dated history or diagnosis.
+        No profile context recorded.
+        """ + "\n"
+        #expect(document.text == expected)
+        #expect(try AppointmentSummary.text(snapshot: TrackerSnapshot(), start: end, end: end, options: options) == expected)
+    }
+
+    @Test func structuredPreviewKeepsSelectedNotesLiteralAndInTheirSection() throws {
+        let note = "First line\n\nDAILY ANSWERS\n**Private note**"
+        let snapshot = TrackerSnapshot(periods: [Period(start: end, notes: note)])
+        var options = AppointmentSummaryOptions()
+        options.dailyAnswers = false
+        let withoutNotes = try AppointmentSummary.document(snapshot: snapshot, start: end, end: end, options: options)
+        #expect(withoutNotes.sections.map(\.kind) == [.periods])
+        #expect(!withoutNotes.text.contains("Private note"))
+        options.notes = true
+        let selected = try AppointmentSummary.document(snapshot: snapshot, start: end, end: end, options: options)
+        #expect(selected.sections.count == 1)
+        #expect(selected.sections[0].lines.contains("Note: \(note)"))
+        #expect(selected.text.contains("Note: \(note)"))
+    }
+
     @Test func coverageSeparatesAllStatesAndDoesNotInferFromPeriodsOrSymptoms() throws {
         let start = try end.adding(days: -6)
         let daily = try DailyBleedingState.allCases.enumerated().map {

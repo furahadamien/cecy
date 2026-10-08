@@ -17,7 +17,7 @@ import Testing
         for offset in 0...3 {
             let status = TodayCurrentPeriodStatus(periods: [period], forecast: CycleForecast(), today: try start.adding(days: offset))
             #expect(status == .recorded)
-            #expect(status?.detail == "Recorded today")
+            #expect(status?.title == "You’re on your period")
         }
         #expect(TodayCurrentPeriodStatus(periods: [Period(start: start)], forecast: CycleForecast(), today: start) == .recorded)
         #expect(TodayCurrentPeriodStatus(periods: [Period(start: start)], forecast: CycleForecast(), today: try start.adding(days: 1)) == nil)
@@ -29,7 +29,6 @@ import Testing
         for offset in 1...4 {
             let status = currentPeriodStatus(periods: periods, today: try start.adding(days: offset))
             #expect(status == .estimated)
-            #expect(status?.detail == nil)
             #expect(status?.title == "You may be on your period")
         }
         #expect(currentPeriodStatus(periods: [], today: start) == nil)
