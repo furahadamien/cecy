@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct TodayView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Bindable var session: TrackerSession
     let today: LocalDay
     let overview: CycleOverview
@@ -43,6 +44,23 @@ struct TodayView: View {
             .accessibilityIdentifier("todayLogActions")
             ForEach(session.cycleForecast.cycles.filter { selection != today && $0.contains(selection) }) { cycle in
                 TrackerCard { ProjectedCycleDetails(cycle: cycle) }
+            }
+            if let status = TodayCurrentPeriodStatus(periods: session.snapshot.periods,
+                                                     forecast: session.cycleForecast, today: today) {
+                TrackerCard {
+                    Label {
+                        Text(status.title)
+                    } icon: {
+                        Image(systemName: status == .recorded ? "drop.fill" : "drop")
+                            .foregroundStyle(TrackerPalette(scheme: colorScheme).recorded)
+                    }
+                    .font(.headline).accessibilityAddTraits(.isHeader)
+                    if let detail = status.detail {
+                        Text(detail).font(.subheadline).foregroundStyle(.secondary)
+                    }
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("currentPeriodCard")
             }
             TrackerCard(highlighted: true) {
                 Label("Until your next period", systemImage: "leaf").font(.subheadline.weight(.medium))
@@ -91,6 +109,29 @@ struct TodayView: View {
         }
     }
 
+}
+
+/// Uses today's evidence, not the selected calendar day or an assumed ongoing period.
+nonisolated enum TodayCurrentPeriodStatus: Equatable {
+    case recorded, estimated
+
+    init?(periods: [Period], forecast: CycleForecast, today: LocalDay) {
+        if periods.contains(where: { $0.contains(today) }) {
+            self = .recorded
+        } else if forecast.bleeding(on: today) != nil {
+            self = .estimated
+        } else {
+            return nil
+        }
+    }
+
+    var title: String {
+        self == .recorded ? "You’re on your period" : "You may be on your period"
+    }
+
+    var detail: String? {
+        self == .recorded ? "Recorded today" : nil
+    }
 }
 
 /// Presentation only: never rolls a missed estimate into an unrecorded new cycle.

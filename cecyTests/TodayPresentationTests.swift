@@ -3,6 +3,61 @@ import Testing
 @testable import cecy
 
 @MainActor struct TodayPresentationTests {
+    private func currentPeriodStatus(periods: [Period], today: LocalDay,
+                                     daily: [DailyBleedingObservation] = []) -> TodayCurrentPeriodStatus? {
+        let overview = CycleCalculator.overview(periods: periods, today: today)
+        let forecast = CycleForecast.calculate(overview: overview, profile: nil, periods: periods,
+                                               asOf: today, dailyBleeding: daily)
+        return TodayCurrentPeriodStatus(periods: periods, forecast: forecast, today: today)
+    }
+
+    @Test func currentPeriodUsesRecordedDaysEvenWithoutForecast() throws {
+        let start = try LocalDay(key: 20261007)
+        let period = Period(start: start, end: try start.adding(days: 3))
+        for offset in 0...3 {
+            let status = TodayCurrentPeriodStatus(periods: [period], forecast: CycleForecast(), today: try start.adding(days: offset))
+            #expect(status == .recorded)
+            #expect(status?.detail == "Recorded today")
+        }
+        #expect(TodayCurrentPeriodStatus(periods: [Period(start: start)], forecast: CycleForecast(), today: start) == .recorded)
+        #expect(TodayCurrentPeriodStatus(periods: [Period(start: start)], forecast: CycleForecast(), today: try start.adding(days: 1)) == nil)
+    }
+
+    @Test func currentPeriodEstimatesAreLabelledAndDoNotUseStartWindowAlone() throws {
+        let start = try LocalDay(key: 20261007)
+        let periods = [Period(start: start)]
+        for offset in 1...4 {
+            let status = currentPeriodStatus(periods: periods, today: try start.adding(days: offset))
+            #expect(status == .estimated)
+            #expect(status?.detail == nil)
+            #expect(status?.title == "You may be on your period")
+        }
+        #expect(currentPeriodStatus(periods: [], today: start) == nil)
+        #expect(currentPeriodStatus(periods: periods, today: try start.adding(days: 5)) == nil)
+        #expect(currentPeriodStatus(periods: periods, today: try start.adding(days: 27)) == nil)
+        #expect(currentPeriodStatus(periods: periods, today: try start.adding(days: 28)) == .estimated)
+    }
+
+    @Test func currentPeriodEndCorrectionsReplaceEstimates() throws {
+        let start = try LocalDay(key: 20261007)
+        let today = try start.adding(days: 3)
+        var period = Period(start: start)
+        #expect(currentPeriodStatus(periods: [period], today: today) == .estimated)
+        period.end = try start.adding(days: 1)
+        #expect(currentPeriodStatus(periods: [period], today: today) == nil)
+        period.end = today
+        #expect(currentPeriodStatus(periods: [period], today: today) == .recorded)
+    }
+
+    @Test(arguments: DailyBleedingState.allCases)
+    func dailyAnswersDoNotBecomePeriodsOrLeaveConflictingEstimates(state: DailyBleedingState) throws {
+        let start = try LocalDay(key: 20261007)
+        let today = try start.adding(days: 1)
+        let daily = [DailyBleedingObservation(day: today, state: state)]
+        #expect(currentPeriodStatus(periods: [], today: today, daily: daily) == nil)
+        #expect(currentPeriodStatus(periods: [Period(start: start)], today: today, daily: daily) == nil)
+    }
+
     private func estimate(center: LocalDay) throws -> PredictionOutcome {
         .available(CyclePrediction(center: center, earliest: try center.adding(days: -3),
                                    latest: try center.adding(days: 3), confidence: .low, sourceLengths: [28]))
