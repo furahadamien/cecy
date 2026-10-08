@@ -87,7 +87,7 @@ nonisolated struct AdaptiveForecastTests {
 
     @Test func unknownAndIncompatibleDurationsDoNotInventBleeding() throws {
         let unknown = forecast([Period(start: start)], profile: profile(bleeding: nil))
-        #expect(unknown.cycles.allSatisfy { $0.bleeding == nil && $0.fertileWindow != nil })
+        #expect(unknown.cycles.allSatisfy { $0.bleedingDuration?.usesDefault == true && $0.bleeding != nil && $0.fertileWindow != nil })
         let equal = forecast([Period(start: start)], profile: profile(cycle: 28, bleeding: 28))
         #expect(equal.cycles.allSatisfy { $0.bleeding == nil })
         let short = forecast([Period(start: start)], profile: profile(cycle: 10))
@@ -134,6 +134,8 @@ nonisolated struct AdaptiveForecastTests {
         #expect(session.cycleForecast.cycles.first?.bleedingDuration?.days == 6)
         #expect(session.snapshot.periods.count == 2 && session.snapshot.periods.last?.end == nil)
         #expect(session.delete(id: first.id) == nil)
-        #expect(session.cycleForecast.cycles.isEmpty) // no measured cycle or entered length remains
+        #expect(session.overview?.estimate?.basis == .cecyDefault)
+        #expect(session.cycleForecast.cycles.first?.bleedingDuration?.usesDefault == true)
+        #expect(session.snapshot.periods.count == 1 && session.snapshot.periods.first?.id == edited.id && session.snapshot.periods.first?.end == nil)
     }
 }

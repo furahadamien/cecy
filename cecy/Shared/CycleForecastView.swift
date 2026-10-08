@@ -10,7 +10,7 @@ struct TodayEstimatesCard: View {
             let fertile = forecast.fertile(on: today)
             let ovulation = forecast.ovulation(on: today)
             let period = forecast.period(on: today)
-            if bleeding != nil { Label("Expected bleeding day · Not recorded", systemImage: "drop") }
+            if bleeding != nil { Label("Estimated period day · Not recorded", systemImage: "drop") }
             if period != nil { Label("Within a possible period-start window", systemImage: "circle.dashed") }
             if fertile != nil { Label("Within an estimated fertile window", systemImage: "leaf") }
             if ovulation != nil { Label("Possible ovulation today · Not confirmed", systemImage: "circle.dotted") }
@@ -34,6 +34,10 @@ struct ProjectedCycleDetails: View {
     var body: some View {
         let palette = TrackerPalette(scheme: colorScheme)
         VStack(alignment: .leading, spacing: 20) {
+            if let notice = cycle.starterNotice {
+                Text(notice).font(.footnote).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("forecastStarterNotice")
+            }
             if cycle.referenceNotice != nil || !cycle.ovulationWarnings.isEmpty {
                 SelectionFlowLayout {
                     if cycle.referenceNotice != nil {

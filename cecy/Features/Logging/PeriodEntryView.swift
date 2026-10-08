@@ -80,6 +80,10 @@ struct PeriodEntryView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Text("A period start is cycle day 1. Add an end date when known. For spotting or uncertain bleeding, use Other bleeding.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 if let continuation {
                     Section {
                         Text("Is this a new period or more bleeding days?").font(.headline)

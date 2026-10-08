@@ -56,12 +56,14 @@ nonisolated struct CyclePhaseTimeline: Equatable, Sendable {
     let fertileDays: ClosedRange<Int>?
     let warnings: [String]
     let bleedingIsEstimated: Bool
+    var currentDayHasAnswer = false
 
     var markerDay: Int? { (1...length).contains(cycleDay) ? cycleDay : nil }
     var currentPhase: CyclePhase? {
         if recordedBleeding.contains(cycleDay) { return .menstrual }
         guard warnings.isEmpty, let day = markerDay else { return nil }
-        return segments.first { $0.days.contains(day) }?.phase
+        let phase = segments.first { $0.days.contains(day) }?.phase
+        return currentDayHasAnswer && phase == .menstrual ? nil : phase
     }
     var currentIsRecorded: Bool { recordedBleeding.contains(cycleDay) }
 
@@ -89,7 +91,8 @@ nonisolated struct CyclePhaseTimeline: Equatable, Sendable {
         }
         return Self(start: start, length: length, cycleDay: start.days(until: today) + 1, segments: segments,
                     recordedBleeding: 1...(knownDays ?? 1), fertileDays: fertile,
-                    warnings: cycle.ovulationWarnings, bleedingIsEstimated: knownDays == nil)
+                    warnings: cycle.ovulationWarnings, bleedingIsEstimated: knownDays == nil,
+                    currentDayHasAnswer: forecast.answeredDays.contains(today))
     }
 
     func dateRange(for phase: CyclePhase) -> ForecastInterval? {

@@ -68,7 +68,7 @@ nonisolated enum PredictionConfidence: String, Sendable {
     case low = "Low", moderate = "Moderate"
 }
 
-nonisolated enum PredictionBasis: Equatable, Sendable { case recordedHistory, usualCycle }
+nonisolated enum PredictionBasis: Equatable, Sendable { case recordedHistory, usualCycle, cecyDefault }
 
 nonisolated struct CyclePrediction: Equatable, Sendable {
     let center: LocalDay
@@ -79,6 +79,13 @@ nonisolated struct CyclePrediction: Equatable, Sendable {
     var basis: PredictionBasis = .recordedHistory
     var reportedCycleDays: Int? = nil
     var reportedPeriodDays: Int? = nil
+    var starterNotice: String? {
+        switch basis {
+        case .recordedHistory: nil
+        case .usualCycle: "Starter estimate · Your typical \(reportedCycleDays ?? CycleSetupPolicy.defaultCycleDays)-day cycle. Not measured history."
+        case .cecyDefault: "Starter estimate · Cecy’s \(CycleSetupPolicy.defaultCycleDays)-day default. Not your measured cycle."
+        }
+    }
     func contains(_ day: LocalDay) -> Bool { earliest <= day && day <= latest }
 }
 
@@ -103,7 +110,9 @@ nonisolated extension CyclePredicting {
 /// Unified median window. Assumptions supply an input only when no measured interval exists.
 nonisolated struct BaselinePredictionEngine: CyclePredicting {
     func predict(intervals: [CycleInterval], latestStart: LocalDay) throws -> PredictionOutcome {
-        try predict(intervals: intervals, latestStart: latestStart, profile: nil)
+        // Replay has no historical profile/default assumptions to score.
+        if intervals.isEmpty { return .insufficientHistory(completedIntervals: 0) }
+        return try predict(intervals: intervals, latestStart: latestStart, profile: nil)
     }
 
     func predict(intervals: [CycleInterval], latestStart: LocalDay, profile: LocalProfile?) throws -> PredictionOutcome {
@@ -113,9 +122,9 @@ nonisolated struct BaselinePredictionEngine: CyclePredicting {
         let usesReportedLength = lengths.isEmpty
         let inputs: [Int]
         if usesReportedLength {
-            guard let days = profile?.typicalCycleDays else { return .insufficientHistory(completedIntervals: 0) }
+            let days = profile?.typicalCycleDays ?? CycleSetupPolicy.defaultCycleDays
             guard CycleSetupPolicy.cycleDays.contains(days),
-                  profile?.typicalPeriodDays.map({ CycleSetupPolicy.periodDays.contains($0) && $0 <= days }) ?? true else {
+                  profile?.typicalPeriodDays.map({ CycleSetupPolicy.periodDays.contains($0) && (profile?.typicalCycleDays == nil || $0 <= days) }) ?? true else {
                 throw TrackingError.invalidData
             }
             inputs = [days]
@@ -136,7 +145,7 @@ nonisolated struct BaselinePredictionEngine: CyclePredicting {
             latest: try latestStart.adding(days: maximum + padding),
             confidence: lengths.count == 6 && maximum - minimum <= 7 ? .moderate : .low,
             sourceLengths: lengths,
-            basis: usesReportedLength ? .usualCycle : .recordedHistory,
+            basis: usesReportedLength ? (profile?.typicalCycleDays == nil ? .cecyDefault : .usualCycle) : .recordedHistory,
             reportedCycleDays: usesReportedLength ? profile?.typicalCycleDays : nil,
             reportedPeriodDays: usesReportedLength ? profile?.typicalPeriodDays : nil
         ))

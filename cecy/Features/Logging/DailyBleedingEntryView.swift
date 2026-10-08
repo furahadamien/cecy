@@ -1,13 +1,18 @@
 import SwiftUI
 
 struct DailyBleedingLogButton: View {
+    @Environment(\.colorScheme) private var colorScheme
     let session: TrackerSession
     let day: LocalDay
     @State private var showing = false
 
     var body: some View {
-        Button { showing = true } label: { Label("Daily bleeding", systemImage: "drop.circle") }
+        Button { showing = true } label: {
+            Label("Other bleeding", systemImage: "drop.circle.fill")
+                .foregroundStyle(TrackerPalette(scheme: colorScheme).accent)
+        }
             .buttonStyle(TrackerCompactLogButtonStyle())
+            .accessibilityHint("Record spotting or a daily bleeding check-in. Does not start a cycle.")
             .accessibilityIdentifier("logDailyBleeding")
             .disabled(session.isSaving || session.today.map { day > $0 } != false)
             .sheet(isPresented: $showing) { DailyBleedingEntryView(session: session, day: day) }
@@ -69,6 +74,8 @@ struct DailyBleedingEntryView: View {
             Form {
                 Section {
                     Text(DayText.full(day)).font(.headline)
+                    Text("Log spotting or a daily check-in. To start a cycle or change period dates, use Period.")
+                        .font(.footnote).foregroundStyle(.secondary)
                     ForEach(DailyBleedingState.allCases, id: \.self) { choice in
                         Button {
                             state = choice

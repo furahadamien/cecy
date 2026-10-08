@@ -13,7 +13,7 @@ extension DailyBleedingState {
     nonisolated var symbol: String {
         switch self {
         case .bleeding: "drop.circle.fill"
-        case .spotting: "circle.dotted"
+        case .spotting: "circle.fill"
         case .noBleeding: "minus.circle"
         case .unsure: "questionmark.circle"
         }

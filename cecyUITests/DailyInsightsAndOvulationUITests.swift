@@ -65,11 +65,11 @@ final class DailyInsightsAndOvulationUITests: XCTestCase {
         app.buttons["todayNextMonth"].tap()
         let bleeding = app.buttons["todayMonthDate_20261004"]
         XCTAssertTrue(bleeding.waitForExistence(timeout: 5))
-        XCTAssertTrue((bleeding.value as? String ?? "").contains("Expected bleeding day"))
-        XCTAssertFalse((app.buttons["todayMonthDate_20261005"].value as? String ?? "").contains("Expected bleeding day"))
+        XCTAssertTrue((bleeding.value as? String ?? "").contains("Estimated period day"))
+        XCTAssertFalse((app.buttons["todayMonthDate_20261005"].value as? String ?? "").contains("Estimated period day"))
         bleeding.tap()
         app.buttons["expandTodayCalendar"].tap()
-        XCTAssertTrue((app.buttons["todayDate_20261004"].value as? String ?? "").contains("Expected bleeding day"))
+        XCTAssertTrue((app.buttons["todayDate_20261004"].value as? String ?? "").contains("Estimated period day"))
         app.tabBars.buttons["Calendar"].tap()
         let fertileDate = app.buttons["calendarDay_20260911"]
         XCTAssertTrue(fertileDate.waitForExistence(timeout: 5))

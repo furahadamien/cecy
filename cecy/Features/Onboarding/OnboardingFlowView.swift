@@ -271,8 +271,8 @@ struct OnboardingFlowView: View {
             if let estimate = draft.overview(today: today).estimate {
                 LabeledContent("Next start estimate", value: DayText.range(estimate.earliest, estimate.latest))
                 LabeledContent("Confidence", value: estimate.confidence.rawValue)
-                if estimate.basis == .usualCycle {
-                    Text("Starter estimate · based on your usual cycle length, not measured cycle history. The range is provisional, not a probability.")
+                if let notice = estimate.starterNotice {
+                    Text(notice)
                         .font(.footnote).foregroundStyle(.secondary).accessibilityIdentifier("starterEstimateNotice")
                 }
             } else {

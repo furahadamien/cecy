@@ -83,9 +83,12 @@ nonisolated struct CycleDomainTests {
         for count in 0...3 {
             let periods = Array(try history([28, 29]).prefix(count))
             let overview = CycleCalculator.overview(periods: periods, today: try day(20210101))
-            if count < 2 {
+            if count == 0 {
                 #expect(overview.estimate == nil)
                 #expect(overview.prediction == .insufficientHistory(completedIntervals: 0))
+            } else if count == 1 {
+                #expect(overview.estimate?.basis == .cecyDefault)
+                #expect(overview.estimate?.sourceLengths.isEmpty == true)
             } else {
                 #expect(overview.estimate?.sourceLengths.count == count - 1)
                 #expect(overview.estimate?.confidence == .low)

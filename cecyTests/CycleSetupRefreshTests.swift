@@ -45,10 +45,10 @@ nonisolated struct StarterPredictionTests {
         #expect(try CycleStatistics.calculate(periods: periods, today: today).bleeding == nil)
     }
 
-    @Test func missingProfileOrStartDoesNotInventAnEstimate() throws {
+    @Test func missingLengthUsesDefaultButMissingStartHasNoEstimate() throws {
         let periods = [Period(start: try LocalDay(key: 20260902))]
-        #expect(CycleCalculator.overview(periods: periods, today: today).estimate == nil)
-        #expect(CycleCalculator.overview(periods: periods, today: today, profile: profile(cycle: nil)).estimate == nil)
+        #expect(CycleCalculator.overview(periods: periods, today: today).estimate?.basis == .cecyDefault)
+        #expect(CycleCalculator.overview(periods: periods, today: today, profile: profile(cycle: nil)).estimate?.basis == .cecyDefault)
         #expect(CycleCalculator.overview(periods: [], today: today, profile: profile()).estimate == nil)
     }
 
@@ -137,7 +137,8 @@ nonisolated struct StarterPredictionTests {
         #expect(session.saveProfile(p) == nil)
         #expect(try session.overview?.estimate?.center == original.adding(days: 3))
         p.typicalCycleDays = nil
-        #expect(session.saveProfile(p) == nil && session.overview?.estimate == nil)
+        #expect(session.saveProfile(p) == nil && session.overview?.estimate?.basis == .cecyDefault)
+        #expect(session.snapshot.profile?.typicalCycleDays == nil)
         // Completed legacy profiles do not have to re-answer newly added fields.
         #expect(try reopened.completeOnboarding(profileID: p.id, today: today, now: Date()).onboardingCompletedAt != nil)
         #expect(session.delete(id: draft.periods[0].id) == nil && session.overview?.estimate == nil)

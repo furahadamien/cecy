@@ -8,8 +8,8 @@ nonisolated struct DayActivityMarker: Identifiable, Equatable, Sendable {
     /// Presentation only: predictions never become recorded activities.
     static func calendar(recorded: [Self], forecast: CycleForecast, day: LocalDay) -> [Self] {
         var estimates: [Self] = []
-        if forecast.bleeding(on: day) != nil {
-            estimates.append(Self(id: "forecast.bleeding", symbol: "drop", title: "Expected bleeding, not recorded"))
+        if !recorded.contains(where: { $0.id == "period" || $0.id == "dailyBleeding" }), forecast.bleeding(on: day) != nil {
+            estimates.append(Self(id: "forecast.bleeding", symbol: "drop", title: "Estimated period day, not recorded"))
         }
         if forecast.fertile(on: day) != nil {
             estimates.append(Self(id: "forecast.fertile", symbol: "leaf", title: "Estimated fertile window"))

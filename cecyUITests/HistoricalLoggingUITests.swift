@@ -56,7 +56,8 @@ final class HistoricalLoggingUITests: XCTestCase {
         reveal(log, app: app); log.tap()
         XCTAssertTrue(app.navigationBars["Record a period"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.buttons["savePeriod"].label, "Save period")
-        XCTAssertTrue(app.staticTexts["confirmedBleedingDays"].label.contains("1 confirmed"))
+        XCTAssertEqual(app.switches["includeEndDate"].value as? String, "0")
+        XCTAssertFalse(app.staticTexts["confirmedBleedingDays"].exists)
         app.buttons["savePeriod"].tap()
         XCTAssertTrue(app.navigationBars["Record a period"].waitForNonExistence(timeout: 8))
         let countdown = app.staticTexts["periodCountdown"]

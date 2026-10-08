@@ -24,10 +24,11 @@ struct TodayView: View {
                                   forecast: session.cycleForecast, selection: $selection)
             TrackerCompactLogActions {
                 Button { onLog(selection) } label: {
-                    Label("Log period", systemImage: "drop")
+                    Label("Period", systemImage: "drop.fill")
                 }
                 .buttonStyle(TrackerCompactLogButtonStyle(prominent: true))
-                .accessibilityLabel("Log period and bleeding days")
+                .accessibilityLabel("Period")
+                .accessibilityHint("Record a period start or update its end date.")
                 .accessibilityIdentifier("logPeriod")
                 SymptomLogButton(session: session, day: selection, title: "Symptoms", compact: true)
                 SexualActivityLogButton(session: session, day: selection, compact: true)
@@ -38,7 +39,6 @@ struct TodayView: View {
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Log for \(DayText.full(selection))")
             .accessibilityIdentifier("todayLogActions")
-            TodayCalendarLegend()
             ForEach(session.cycleForecast.cycles.filter { selection != today && $0.contains(selection) }) { cycle in
                 TrackerCard { ProjectedCycleDetails(cycle: cycle) }
             }
@@ -142,8 +142,8 @@ struct PredictionSummary: View {
                     .accessibilityIdentifier("nextPeriodCenter")
                 Label("\(estimate.confidence.rawValue) confidence · Rough estimate", systemImage: "circle.dashed")
                     .font(.subheadline)
-                if estimate.basis == .usualCycle, let length = estimate.reportedCycleDays {
-                    Text("Starter estimate · based on your usual \(length)-day cycle, not measured cycle history.")
+                if let notice = estimate.starterNotice {
+                    Text(notice)
                         .font(.subheadline).accessibilityIdentifier("starterPrediction")
                 }
                 Text("Possible start dates, not confirmed bleeding days. Missing records can affect timing.").font(.footnote).foregroundStyle(.secondary)
@@ -178,12 +178,12 @@ struct PredictionExplanation: View {
                     Text("Possible next start dates, not a predicted bleeding duration.")
                     Text("\(estimate.confidence.rawValue) confidence · Provisional")
                 }
-                if estimate.basis == .usualCycle {
+                if let notice = estimate.starterNotice {
                     TrackerCard {
                         Text("A starting point, not measured history").font(.headline)
-                        Text("We add your usual cycle length (\(estimate.reportedCycleDays ?? 28) days) to your latest recorded start. The range adds three days on either side as a provisional display rule, not a measured probability or Apple’s algorithm.")
-                        Text("The same calculation uses measured intervals as soon as they are available—there is no four-period threshold. With no completed interval, your usual length supplies the starting point and confidence stays low. If the window passes, we don’t invent another period or roll the estimate forward.")
-                        Text("Your typical bleeding duration does not create an end date. Add confirmed ends separately.")
+                        Text(notice)
+                        Text("We count from your recorded start, with three days on either side of the estimated next start. This is a rough range, not a probability.")
+                        Text("New records replace assumptions. Estimated period days never become recorded days, and an overdue estimate does not start a new cycle.")
                     }
                 } else {
                 TrackerCard {

@@ -132,7 +132,8 @@ nonisolated struct PredictionEvidence: Equatable, Sendable {
 /// One production pipeline at every record count; replay never imports today's profile assumptions.
 nonisolated struct EvidencePredictionEngine: CyclePredicting {
     func predict(intervals: [CycleInterval], latestStart: LocalDay) throws -> PredictionOutcome {
-        try predict(intervals: intervals, latestStart: latestStart, profile: nil)
+        if intervals.isEmpty { return .insufficientHistory(completedIntervals: 0) }
+        return try predict(intervals: intervals, latestStart: latestStart, profile: nil)
     }
 
     func predict(intervals: [CycleInterval], latestStart: LocalDay, profile: LocalProfile?) throws -> PredictionOutcome {

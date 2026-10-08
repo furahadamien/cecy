@@ -172,7 +172,7 @@ private struct TrackerTabs: View {
             let currentDay = session.today ?? today
             if day <= currentDay {
                 let existing = PeriodLogSelection.existing(on: day, periods: session.snapshot.periods)
-                PeriodEntryView(period: existing ?? Period(start: day, end: day), today: currentDay,
+                PeriodEntryView(period: existing ?? Period(start: day), today: currentDay,
                                 existing: session.snapshot.periods, isEditing: existing != nil,
                                 continuation: existing == nil ? PeriodLogSelection.continuation(on: day, periods: session.snapshot.periods) : nil,
                                 session: session) { period in

@@ -25,11 +25,16 @@ final class DailyBleedingUITests: XCTestCase {
         UIViewport.reveal(row, in: app)
         let value = enabled ? "1" : "0"
         if row.value as? String != value {
-            if row.switches.firstMatch.exists { row.switches.firstMatch.tap() }
+            if row.switches.firstMatch.exists {
+                let control = row.switches.firstMatch
+                UIViewport.reveal(control, in: app)
+                XCTAssertTrue(control.isHittable)
+                control.tap()
+            }
             else { row.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap() }
         }
         let changed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", value), object: row)
-        XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 5), .completed)
+        XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 5), .completed, row.debugDescription)
     }
 
     @MainActor func testCalendarLoggingActionsShareOneRowAndKeepDateGuards() {
@@ -191,8 +196,9 @@ final class DailyBleedingUITests: XCTestCase {
         tap("logDailyBleeding", in: app)
         tap("dailyState_bleeding", in: app)
         setSwitch("dailyPeriodLink", to: true, in: app)
+        XCTAssertTrue(app.buttons["saveDailyBleeding"].isEnabled)
         app.buttons["saveDailyBleeding"].tap()
-        XCTAssertTrue(app.navigationBars["Daily bleeding"].waitForNonExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Daily bleeding"].waitForNonExistence(timeout: 10), app.debugDescription)
         tap("deletePeriod", in: app)
         XCTAssertTrue(app.alerts.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Daily answers stay saved'")).firstMatch.exists)
         app.alerts.buttons["Delete recorded period"].tap()
@@ -317,8 +323,9 @@ final class DailyBleedingUITests: XCTestCase {
         tap("logDailyBleeding", in: app)
         tap("dailyState_bleeding", in: app)
         setSwitch("dailyPeriodLink", to: true, in: app)
+        XCTAssertTrue(app.buttons["saveDailyBleeding"].isEnabled)
         app.buttons["saveDailyBleeding"].tap()
-        XCTAssertTrue(app.navigationBars["Daily bleeding"].waitForNonExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Daily bleeding"].waitForNonExistence(timeout: 10), app.debugDescription)
         tap("calendarLogPeriod", in: app)
         setSwitch("includeEndDate", to: false, in: app)
         XCTAssertTrue(app.buttons["savePeriod"].isEnabled)

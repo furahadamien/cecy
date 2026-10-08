@@ -313,7 +313,7 @@ final class TrackerSession {
         self.today = today
         overview = ForecastAvailabilityPolicy.applying(to: CycleCalculator.overview(
             periods: snapshot.periods, today: today, engine: EvidencePredictionEngine(), profile: snapshot.profile))
-        cycleForecast = overview.map { CycleForecast.calculate(overview: $0, profile: snapshot.profile, periods: snapshot.periods, asOf: today) } ?? CycleForecast()
+        cycleForecast = overview.map { CycleForecast.calculate(overview: $0, profile: snapshot.profile, periods: snapshot.periods, asOf: today, dailyBleeding: snapshot.dailyBleeding) } ?? CycleForecast()
         predictionReplay = try? PredictionBacktester.evaluate(periods: snapshot.periods, today: today)
         statistics = try? CycleStatistics.calculate(periods: snapshot.periods, today: today)
         privacy.trackingChanged(prediction: overview?.estimate, now: clock(), timeZone: zone())

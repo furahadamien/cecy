@@ -24,12 +24,13 @@ final class TodayQuickActionsUITests: XCTestCase {
         let symptoms = app.buttons["logSymptoms"]
         let sex = app.buttons["logSexualActivity"]
         let strip = app.scrollViews["todayDateStrip"]
-        let legend = app.otherElements["todayCalendarLegend"]
-        for button in [period, symptoms, sex] {
+        XCTAssertFalse(app.otherElements["todayCalendarLegend"].exists)
+        let nextPeriod = app.otherElements["nextPeriodCard"]
+        for button in [period, symptoms, sex, app.buttons["logDailyBleeding"]] {
             XCTAssertTrue(button.isHittable)
             XCTAssertGreaterThanOrEqual(button.frame.height, 44)
             XCTAssertGreaterThanOrEqual(button.frame.minY, strip.frame.maxY)
-            XCTAssertLessThanOrEqual(button.frame.maxY, legend.frame.minY)
+            XCTAssertLessThanOrEqual(button.frame.maxY, nextPeriod.frame.minY)
             XCTAssertLessThan(button.frame.maxY, app.tabBars.firstMatch.frame.minY)
             XCTAssertEqual(button.frame.midY, period.frame.midY, accuracy: 1)
         }

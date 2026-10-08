@@ -12,6 +12,7 @@ nonisolated struct BleedingDurationEstimate: Equatable, Sendable {
     let minimum: Int
     let maximum: Int
     let measuredCount: Int
+    var usesDefault = false
 
     static func calculate(periods: [Period], profile: LocalProfile?, latestStart: LocalDay) -> Self? {
         // Only explicit end dates, never an assumed end derived from the profile.
@@ -24,8 +25,12 @@ nonisolated struct BleedingDurationEstimate: Equatable, Sendable {
             return Self(days: Int(median.rounded(.toNearestOrAwayFromZero)), minimum: first,
                         maximum: last, measuredCount: values.count)
         }
-        guard let days = profile?.typicalPeriodDays, CycleSetupPolicy.periodDays.contains(days) else { return nil }
-        return Self(days: days, minimum: days, maximum: days, measuredCount: 0)
+        if let days = profile?.typicalPeriodDays, CycleSetupPolicy.periodDays.contains(days) {
+            return Self(days: days, minimum: days, maximum: days, measuredCount: 0)
+        }
+        guard periods.filter({ $0.start <= latestStart }).count <= 1 else { return nil }
+        let days = CycleSetupPolicy.defaultPeriodDays
+        return Self(days: days, minimum: days, maximum: days, measuredCount: 0, usesDefault: true)
     }
 }
 
@@ -48,6 +53,7 @@ nonisolated struct ProjectedCycle: Identifiable, Equatable, Sendable {
     var ovulationWarnings: [String] = []
     var ovulationBasis: String = "Calendar estimate only; ovulation is not confirmed."
     var referenceNotice: String?
+    var starterNotice: String?
     var id: Int { index }
     var isLaterProjection: Bool { index > 0 }
     var assumption: String {
@@ -67,19 +73,45 @@ nonisolated struct ProjectedCycle: Identifiable, Equatable, Sendable {
 nonisolated struct CycleForecast: Equatable, Sendable {
     var cycles: [ProjectedCycle] = []
     var ovulationUnavailableReason: String?
+    var currentBleeding: ForecastInterval?
+    var recordedPeriods: [Period] = []
+    var answeredDays: Set<LocalDay> = []
+
+    private func hasRecordedPeriod(on day: LocalDay) -> Bool {
+        var lower = 0
+        var upper = recordedPeriods.count
+        while lower < upper {
+            let middle = (lower + upper) / 2
+            if recordedPeriods[middle].start <= day { lower = middle + 1 } else { upper = middle }
+        }
+        return lower > 0 && recordedPeriods[lower - 1].contains(day)
+    }
 
     func nextPeriod(onOrAfter day: LocalDay) -> ProjectedCycle? {
         cycles.first { $0.period.center >= day }
     }
 
-    func period(on day: LocalDay) -> ProjectedCycle? { cycles.first { $0.period.contains(day) } }
+    func period(on day: LocalDay) -> ProjectedCycle? {
+        guard !hasRecordedPeriod(on: day), !answeredDays.contains(day) else { return nil }
+        return cycles.first { $0.period.contains(day) }
+    }
     // An uncertainty envelope is not a series of ovulation days or a fertile window.
-    func ovulation(on day: LocalDay) -> ProjectedCycle? { cycles.first { $0.ovulation?.center == day } }
-    func bleeding(on day: LocalDay) -> ProjectedCycle? { cycles.first { $0.bleeding?.contains(day) == true } }
-    func fertile(on day: LocalDay) -> ProjectedCycle? { cycles.first { $0.fertileWindow?.contains(day) == true } }
+    func ovulation(on day: LocalDay) -> ProjectedCycle? {
+        guard !hasRecordedPeriod(on: day) else { return nil }
+        return cycles.first { $0.ovulation?.center == day }
+    }
+    func bleeding(on day: LocalDay) -> ProjectedCycle? {
+        guard !hasRecordedPeriod(on: day), !answeredDays.contains(day) else { return nil }
+        if currentBleeding?.contains(day) == true { return cycles.first { $0.index == 0 } }
+        return cycles.first { $0.bleeding?.contains(day) == true }
+    }
+    func fertile(on day: LocalDay) -> ProjectedCycle? {
+        guard !hasRecordedPeriod(on: day) else { return nil }
+        return cycles.first { $0.fertileWindow?.contains(day) == true }
+    }
     func additionalDayDescription(_ day: LocalDay) -> String {
         var parts: [String] = []
-        if bleeding(on: day) != nil { parts.append("Expected bleeding day, not recorded") }
+        if bleeding(on: day) != nil { parts.append("Estimated period day, not recorded") }
         if let cycle = fertile(on: day) {
             parts.append("Estimated fertile window, not confirmed; other days are not safe days")
             if !cycle.ovulationWarnings.isEmpty { parts.append("Timing may not apply with your cycle context") }
@@ -97,7 +129,7 @@ nonisolated struct CycleForecast: Equatable, Sendable {
     }
 
     static func calculate(overview: CycleOverview, profile: LocalProfile?, periods: [Period] = [],
-                          asOf today: LocalDay? = nil) -> CycleForecast {
+                          asOf today: LocalDay? = nil, dailyBleeding: [DailyBleedingObservation] = []) -> CycleForecast {
         let eligible = ForecastAvailabilityPolicy.applying(to: overview)
         guard let start = eligible.latestStart, let estimate = eligible.estimate else {
             return CycleForecast(ovulationUnavailableReason: "Ovulation timing unavailable.")
@@ -107,10 +139,17 @@ nonisolated struct CycleForecast: Equatable, Sendable {
         guard length > 0 else { return CycleForecast() }
         let warnings = OvulationNotice.contextWarnings(profile?.cycleContext ?? [])
         let duration = BleedingDurationEstimate.calculate(periods: periods, profile: profile, latestStart: start)
-        let basis = estimate.basis == .usualCycle
-            ? "Based on your entered \(length)-day typical cycle, not measured cycle history."
-            : "Based on \(estimate.sourceLengths.count) measured start-to-start interval(s). Period dates alone cannot reliably identify ovulation."
+        let basis = estimate.starterNotice
+            ?? "Based on \(estimate.sourceLengths.count) measured start-to-start interval(s). Period dates alone cannot reliably identify ovulation."
         var result = CycleForecast()
+        result.recordedPeriods = periods.sorted { $0.start < $1.start }
+        result.answeredDays = Set(dailyBleeding.map(\.day))
+        if let latestPeriod = periods.first(where: { $0.start == start }), latestPeriod.end == nil,
+           let duration, duration.days < length, duration.days > 1,
+           let first = try? start.adding(days: 1),
+           let last = try? start.adding(days: duration.days - 1) {
+            result.currentBleeding = ForecastInterval(start: first, end: last)
+        }
         // Retain the original three for calendar history, plus the cycle preceding
         // today's next center and three upcoming centers. Bounded work even after years.
         let elapsed = today.map { estimate.center.days(until: $0) } ?? 0
@@ -136,6 +175,10 @@ nonisolated struct CycleForecast: Equatable, Sendable {
             }
             var cycle = ProjectedCycle(index: index, period: period, ovulation: ovulation,
                                        ovulationWarnings: warnings, ovulationBasis: basis)
+            cycle.starterNotice = estimate.starterNotice
+            if duration?.usesDefault == true {
+                cycle.starterNotice = [cycle.starterNotice, "Period duration uses Cecy’s \(CycleSetupPolicy.defaultPeriodDays)-day default."].compactMap { $0 }.joined(separator: " ")
+            }
             if let duration, duration.maximum < length,
                let end = try? center.adding(days: duration.days - 1),
                let envelopeEnd = try? latest.adding(days: duration.maximum - 1) {
@@ -166,7 +209,7 @@ nonisolated extension CycleOverview {
 }
 
 nonisolated enum OvulationNotice {
-    static let explanation = "The single green dotted date estimates ovulation about 14 days before a projected period; it does not detect it. Leaf markers show an estimated six-day fertile window ending on that date, not six days of ovulation. Timing uncertainty uses an approximate 10–16-day offset and can extend beyond the highlighted days. Period history cannot measure your individual ovulation timing, even with regular cycles. Context such as hormonal contraception can make these estimates inapplicable. Later projections are less certain. Unmarked days are not safe days. Do not use these estimates for contraception, diagnosis or as the sole guide for conception."
+    static let explanation = "Ovulation is estimated about 14 days before the next period, not confirmed. The estimated fertile window is the six days ending on that date. Actual timing can fall outside these dates, especially with irregular cycles or hormonal contraception. Unmarked days are not safe days. Do not use these estimates for contraception, diagnosis or as the sole guide for conception."
 
     static func contextWarnings(_ contexts: Set<CycleContext>) -> [String] {
         CycleContext.allCases.filter { contexts.contains($0) }.compactMap { context in

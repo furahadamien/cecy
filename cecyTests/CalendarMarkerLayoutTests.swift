@@ -20,9 +20,9 @@ import Testing
                         DayActivityMarker(id: "sexualActivity", symbol: "heart.fill", title: "Sexual activity"),
                         DayActivityMarker(id: "symptom.cramps", symbol: "bolt", title: "Cramps")]
         let combined = DayActivityMarker.calendar(recorded: recorded, forecast: forecast, day: day)
-        #expect(combined.count == 4)
-        #expect(combined.first?.id == "forecast.bleeding" && combined.first?.symbol == "drop")
-        #expect(combined.map(\.id) == ["forecast.bleeding", "period", "symptoms", "sexualActivity"])
+        #expect(combined.count == 3)
+        #expect(combined.first?.id == "period" && combined.first?.symbol == "drop.fill")
+        #expect(combined.map(\.id) == ["period", "symptoms", "sexualActivity"])
         #expect(combined.first(where: { $0.id == "symptoms" })?.title == "Cramps")
         #expect(Set(combined.map(\.id)).count == combined.count)
     }

@@ -155,50 +155,18 @@ struct ActivityCalendarStrip: View {
     }
 }
 
-struct TodayCalendarLegend: View {
-    @Environment(\.colorScheme) private var colorScheme
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            legendItems
-            DailyBleedingLegend()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("todayCalendarLegend")
-    }
-
-    private var legendItems: some View {
-        let palette = TrackerPalette(scheme: colorScheme)
-        return SelectionFlowLayout {
-            Label("Period", systemImage: "drop.fill").foregroundStyle(palette.recorded)
-                .accessibilityLabel("Recorded period")
-            Label("Estimate", systemImage: "circle.dashed").foregroundStyle(palette.recorded)
-                .accessibilityLabel("Possible starts and expected bleeding, shown with dashed dates")
-            Label("Ovulation", systemImage: "circle.dotted").foregroundStyle(palette.accent)
-                .accessibilityLabel("One possible ovulation date per cycle, shown with dots; uncertain, not confirmed")
-            Label("Bleeding", systemImage: "drop").foregroundStyle(palette.recorded)
-                .accessibilityLabel("Expected bleeding, not recorded")
-            Label("Fertile", systemImage: "leaf").foregroundStyle(palette.accent)
-                .accessibilityLabel("Estimated fertile window; dates outside it are not safe days")
-            Label("Symptoms", systemImage: "waveform.path.ecg")
-            Label("Sex", systemImage: "heart.fill").foregroundStyle(palette.sexualActivity)
-                .accessibilityLabel("Sexual activity")
-        }
-        .font(.caption2)
-        .lineLimit(1)
-    }
-}
-
 struct DailyBleedingLegend: View {
+    @Environment(\.colorScheme) private var colorScheme
     var body: some View {
         DisclosureGroup {
             SelectionFlowLayout {
                 ForEach(DailyBleedingState.allCases, id: \.self) { state in
-                    Label(state.title, systemImage: state.symbol)
+                    Label("Logged: \(state.title)", systemImage: state.symbol)
+                        .foregroundStyle(TrackerPalette(scheme: colorScheme).accent)
                 }
             }.padding(.top, 4)
         } label: {
-            Text("Daily answers").frame(minHeight: 44)
+            Text("Daily bleeding answers").frame(minHeight: 44)
         }
         .font(.caption)
         .accessibilityIdentifier("dailyBleedingLegend")

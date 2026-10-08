@@ -81,20 +81,22 @@ struct TrackerCalendarView: View {
                             }
                             if !listLayout { loggingActions }
                             VStack(alignment: .leading, spacing: 8) {
-                                Label("Recorded start or confirmed bleeding day", systemImage: "drop.fill")
+                                Label("Recorded period", systemImage: "drop.fill")
                                     .foregroundStyle(palette.recorded)
-                                Label("Possible starts / expected bleeding · Dashed border", systemImage: "circle.dashed")
+                                Label("Estimated period start", systemImage: "circle.dashed")
                                     .foregroundStyle(palette.recorded)
-                                Label("Possible ovulation · Dotted border", systemImage: "circle.dotted")
+                                Label("Estimated ovulation · Not confirmed", systemImage: "circle.dotted")
                                     .foregroundStyle(palette.accent)
-                                Label("Expected bleeding · Not recorded", systemImage: "drop")
+                                Label("Estimated period days · Not recorded", systemImage: "drop")
                                     .foregroundStyle(palette.recorded)
                                 Label("Estimated fertile window", systemImage: "leaf")
                                     .foregroundStyle(palette.accent)
                                 Label { Text("Sexual activity") } icon: {
                                     Image(systemName: "heart.fill").foregroundStyle(palette.sexualActivity)
                                 }
-                                Label("Symptoms · One marker per day", systemImage: "waveform.path.ecg")
+                                Label("Logged symptoms", systemImage: "waveform.path.ecg")
+                                Label("Daily bleeding log · Not a period start", systemImage: "drop.circle.fill")
+                                    .foregroundStyle(palette.accent)
                                 DailyBleedingLegend()
                             }
                             .font(.footnote).foregroundStyle(.secondary).padding(8)
@@ -262,10 +264,10 @@ struct TrackerCalendarView: View {
     @ViewBuilder
     private var loggingButtons: some View {
         Button { onLog(selection) } label: {
-            Label("Log period", systemImage: "drop")
+            Label("Period", systemImage: "drop.fill")
         }
         .buttonStyle(TrackerCompactLogButtonStyle(prominent: true))
-        .accessibilityLabel("Record a period")
+        .accessibilityLabel("Period")
         .accessibilityIdentifier("calendarLogPeriod")
         .accessibilityHint(record(on: selection) == nil ? "Record actual bleeding days." : "Edit this period or its confirmed bleeding dates.")
         SymptomLogButton(session: session, day: selection, title: "Symptoms", compact: true)
