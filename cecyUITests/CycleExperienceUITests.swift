@@ -40,6 +40,23 @@ final class CycleExperienceUITests: XCTestCase {
         XCTAssertLessThan(estimates.frame.minY, app.otherElements["upcomingCycleForecast"].frame.minY)
     }
 
+    @MainActor func testRingSegmentStillOpensExistingPhaseDetails() {
+        let app = launch()
+        let ring = app.descendants(matching: .any)["phaseRingSummary"].firstMatch
+        UIViewport.reveal(ring, in: app)
+        // Right-hand arc is day 8 of the fixture's 28-day cycle: follicular.
+        let radius = min(ring.frame.width, ring.frame.height) * 0.4
+        ring.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: ring.frame.width / 2 + radius, dy: ring.frame.height / 2)).tap()
+        XCTAssertTrue(app.staticTexts["phaseDayRange"].waitForExistence(timeout: 5), "Ring frame: \(ring.frame)\n\(app.debugDescription)")
+        XCTAssertEqual(app.staticTexts["phaseDayRange"].label, "Estimated days 6–14")
+        XCTAssertTrue(app.staticTexts["phaseExplanation"].exists)
+        app.buttons["Done"].tap()
+        tap("cyclePhase_follicular", in: app)
+        XCTAssertTrue(app.staticTexts["phaseDayRange"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["phaseDayRange"].label, "Estimated days 6–14")
+    }
+
     @MainActor func testMovedTilesAndCalendarHistoryActions() {
         let app = launch()
         XCTAssertFalse(app.otherElements["forTodayCard"].exists)

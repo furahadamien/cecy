@@ -3,6 +3,24 @@ import Testing
 @testable import cecy
 
 @MainActor struct CalendarMarkerLayoutTests {
+    @Test func estimatedBleedingUsesDateOutlineWithoutRemovingUnderlyingEstimate() throws {
+        let (start, forecast) = try fixture()
+        let day = try start.adding(days: 29)
+        let markers = DayActivityMarker.calendar(recorded: [], forecast: forecast, day: day)
+        #expect(markers.contains { $0.id == "forecast.bleeding" })
+        #expect(forecast.bleeding(on: day) != nil)
+        #expect(!DayActivityIcons.visibleMarkers(markers).contains { $0.id == "forecast.bleeding" })
+        #expect(forecast.additionalDayDescription(day).contains("Estimated period day"))
+        let recorded = [
+            DayActivityMarker(id: "period", symbol: "drop.fill", title: "Recorded period"),
+            DayActivityMarker(id: "dailyBleeding", symbol: "drop.circle.fill", title: "Daily bleeding"),
+            DayActivityMarker(id: "symptoms", symbol: "waveform.path.ecg", title: "Symptoms"),
+            DayActivityMarker(id: "sexualActivity", symbol: "heart.fill", title: "Sexual activity"),
+            DayActivityMarker(id: "forecast.fertile", symbol: "leaf", title: "Estimated fertile window")
+        ]
+        #expect(DayActivityIcons.visibleMarkers(recorded + markers) == recorded + markers.filter { $0.id != "forecast.bleeding" })
+    }
+
     private func fixture() throws -> (LocalDay, CycleForecast) {
         let day = try LocalDay(key: 20261001)
         var profile = LocalProfile()

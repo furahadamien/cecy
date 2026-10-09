@@ -79,7 +79,7 @@ final class DeviceFeedbackRoundFiveUITests: XCTestCase {
         ] {
             let button = app.buttons[identifier]
             reveal(button, app: app)
-            XCTAssertEqual(button.frame.height, 44, accuracy: 1)
+            XCTAssertGreaterThanOrEqual(button.frame.height, 44)
             XCTAssertGreaterThanOrEqual(button.frame.width, 44)
             XCTAssertLessThan(button.frame.width, 150)
             let text = button.staticTexts[title]
@@ -98,10 +98,11 @@ final class DeviceFeedbackRoundFiveUITests: XCTestCase {
         app.tabBars.buttons["Calendar"].tap()
         let legend = app.otherElements["calendarLegend"]
         reveal(legend, app: app)
-        XCTAssertEqual(legend.staticTexts.count, 9)
+        XCTAssertEqual(legend.staticTexts.count, 8)
         XCTAssertTrue(legend.buttons["dailyBleedingLegend"].exists)
         XCTAssertTrue(legend.staticTexts["Estimated fertile window"].exists)
-        XCTAssertTrue(legend.staticTexts["Estimated period days · Not recorded"].exists)
+        XCTAssertTrue(legend.staticTexts["Estimated period dates · Not recorded"].exists)
+        XCTAssertFalse(legend.staticTexts["Estimated period days · Not recorded"].exists)
         XCTAssertTrue(legend.staticTexts["Daily bleeding log · Not a period start"].exists)
         for item in legend.staticTexts.allElementsBoundByIndex {
             XCTAssertFalse(item.label.lowercased().contains("dotted"))

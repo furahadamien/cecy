@@ -84,6 +84,7 @@ struct TrackerPrimaryButtonStyle: PrimitiveButtonStyle {
 
 extension EnvironmentValues {
     @Entry var compactLogLabels = false
+    @Entry var todayLogCards = false
 }
 
 private struct CompactLogLabelStyle: LabelStyle {
@@ -102,10 +103,25 @@ struct TrackerCompactLogButtonStyle: ButtonStyle {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.compactLogLabels) private var compactLabels
+    @Environment(\.todayLogCards) private var todayCards
     var prominent = false
 
+    @ViewBuilder
     func makeBody(configuration: Configuration) -> some View {
         let palette = TrackerPalette(scheme: colorScheme)
+        if todayCards {
+            configuration.label
+                .font(.caption.weight(.semibold))
+                .labelStyle(TodayLogLabelStyle())
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 4)
+                .frame(minWidth: 64, maxWidth: .infinity, minHeight: 56)
+                .foregroundStyle(palette.accent)
+                .contentShape(Rectangle())
+                .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1) : 0.45)
+        } else {
         configuration.label
             .font(compactLabels ? .caption.weight(.semibold) : .footnote.weight(.semibold))
             .labelStyle(CompactLogLabelStyle(compact: compactLabels))
@@ -118,6 +134,16 @@ struct TrackerCompactLogButtonStyle: ButtonStyle {
             .background(prominent ? palette.action : palette.sage, in: Capsule())
             .contentShape(Capsule())
             .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1) : 0.45)
+        }
+    }
+}
+
+private struct TodayLogLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(spacing: 4) {
+            configuration.icon.font(.title2)
+            configuration.title
+        }
     }
 }
 
@@ -146,20 +172,26 @@ struct TrackerPage<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
     let title: String
     var subtitle: String? = nil
+    var showsHeading = true
+    var backgroundColor: Color? = nil
+    var sectionSpacing: CGFloat = TrackerLayout.sectionSpacing
+    var topInset: CGFloat = TrackerLayout.pageInset
     @ViewBuilder var content: Content
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: TrackerLayout.sectionSpacing) {
-                TrackerPageHeading(title: title, subtitle: subtitle)
+            VStack(alignment: .leading, spacing: sectionSpacing) {
+                if showsHeading { TrackerPageHeading(title: title, subtitle: subtitle) }
                 content
             }
             .frame(maxWidth: TrackerLayout.readableWidth, alignment: .leading)
-            .padding(TrackerLayout.pageInset)
+            .padding(.horizontal, TrackerLayout.pageInset)
+            .padding(.top, topInset)
+            .padding(.bottom, TrackerLayout.pageInset)
             .frame(maxWidth: .infinity)
         }
         .fontDesign(.rounded)
-        .background(TrackerPalette(scheme: colorScheme).background.ignoresSafeArea())
+        .background((backgroundColor ?? TrackerPalette(scheme: colorScheme).background).ignoresSafeArea())
         .predictionUpdateProgress()
     }
 }
@@ -185,11 +217,12 @@ struct TrackerCard<Content: View>: View {
     @Environment(\.colorSchemeContrast) private var contrast
     var highlighted = false
     var padding: CGFloat = 20
+    var spacing: CGFloat = 14
     @ViewBuilder var content: Content
 
     var body: some View {
         let palette = TrackerPalette(scheme: colorScheme)
-        VStack(alignment: .leading, spacing: 14) { content }
+        VStack(alignment: .leading, spacing: spacing) { content }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(padding)
             .background(highlighted ? palette.sage : palette.surface,

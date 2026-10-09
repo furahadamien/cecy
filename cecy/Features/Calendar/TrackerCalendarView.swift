@@ -83,12 +83,10 @@ struct TrackerCalendarView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Label("Recorded period", systemImage: "drop.fill")
                                     .foregroundStyle(palette.recorded)
-                                Label("Estimated period start", systemImage: "circle.dashed")
+                                Label("Estimated period dates · Not recorded", systemImage: "circle.dashed")
                                     .foregroundStyle(palette.recorded)
                                 Label("Estimated ovulation · Not confirmed", systemImage: "circle.dotted")
                                     .foregroundStyle(palette.accent)
-                                Label("Estimated period days · Not recorded", systemImage: "drop")
-                                    .foregroundStyle(palette.recorded)
                                 Label("Estimated fertile window", systemImage: "leaf")
                                     .foregroundStyle(palette.accent)
                                 Label { Text("Sexual activity") } icon: {
