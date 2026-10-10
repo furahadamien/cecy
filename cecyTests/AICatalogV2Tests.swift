@@ -46,6 +46,8 @@ nonisolated struct AICatalogV2Tests {
                 let _: CycleSummaryResult = try RemoteAIService.decode(bytes, status: 200, task: task)
             case .answerCycleQuestion:
                 let _: CycleQuestionResult = try RemoteAIService.decode(bytes, status: 200, task: task)
+            case .dailyInsightsV2:
+                let _: DailyInsightsResult = try RemoteAIService.decode(bytes, status: 200, task: task)
             }
         }
     }
@@ -126,6 +128,7 @@ nonisolated struct AICatalogV2Tests {
         case .wellness(let context): result = try encode(context)
         case .summary(let context): result = try encode(context)
         case .question(let context): result = try encode(context)
+        case .dailyInsights(let context): result = try encode(context)
         }
         #expect(result.count <= RemoteAIService.maximumRequestBytes)
         let text = String(decoding: result, as: UTF8.self)

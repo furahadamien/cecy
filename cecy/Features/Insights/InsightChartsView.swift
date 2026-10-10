@@ -17,8 +17,7 @@ struct InsightChartsView: View {
 
     var body: some View {
         TrackerCard {
-            Label(cycles.isEmpty && !starts.isEmpty ? "Your recorded starts" : "Your cycle lengths", systemImage: "chart.xyaxis.line")
-                .font(.headline).accessibilityAddTraits(.isHeader)
+            InsightSectionHeader(title: cycles.isEmpty && !starts.isEmpty ? "Your recorded starts" : "Your cycle lengths", symbol: "chart.xyaxis.line")
             if cycles.isEmpty {
                 if let first = starts.first, let last = starts.last {
                     Chart(starts) { period in
@@ -71,8 +70,7 @@ struct InsightChartsView: View {
             }
         }
         TrackerCard {
-            Label("What you’ve logged", systemImage: "chart.bar.xaxis")
-                .font(.headline).accessibilityAddTraits(.isHeader)
+            InsightSectionHeader(title: "What you’ve logged", symbol: "chart.bar.xaxis")
             if counts.isEmpty {
                 Text("Log an observation to start your 90-day picture.")
                     .font(.subheadline).foregroundStyle(.secondary)

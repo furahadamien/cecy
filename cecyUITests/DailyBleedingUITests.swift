@@ -47,7 +47,7 @@ final class DailyBleedingUITests: XCTestCase {
         XCTAssertEqual(bleeding.minX - sex.maxX, 16, accuracy: 1)
     }
 
-    @MainActor func testCalendarPeriodAboveOtherActionsAndKeepDateGuards() {
+    @MainActor func testCalendarActionsShareOneRowAndKeepDateGuards() {
         let app = launch()
         app.tabBars.buttons["Calendar"].tap()
         tap("calendarDay_20260928", in: app)
@@ -56,7 +56,8 @@ final class DailyBleedingUITests: XCTestCase {
         let first = actions.buttons[identifiers[0]]
         UIViewport.reveal(actions.buttons["logDailyBleeding"], in: app)
         XCTAssertEqual(first.label, "Log period")
-        assertCenteredActions(actions, period: first, in: app)
+        XCTAssertEqual(first.frame.minX - app.frame.minX,
+                       app.frame.maxX - actions.buttons["logDailyBleeding"].frame.maxX, accuracy: 1)
         var previous: CGRect?
         for id in identifiers {
             let button = actions.buttons[id]
@@ -65,8 +66,7 @@ final class DailyBleedingUITests: XCTestCase {
             XCTAssertGreaterThanOrEqual(button.frame.width, 44)
             XCTAssertTrue(app.frame.contains(button.frame))
             if id != identifiers[0] {
-                XCTAssertGreaterThan(button.frame.minY, first.frame.maxY)
-                XCTAssertEqual(button.frame.midY, actions.buttons["logSymptoms"].frame.midY, accuracy: 1)
+                XCTAssertEqual(button.frame.minY, first.frame.minY, accuracy: 1)
                 if let previous { XCTAssertGreaterThanOrEqual(button.frame.minX, previous.maxX) }
                 previous = button.frame
             }

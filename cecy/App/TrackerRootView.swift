@@ -144,12 +144,24 @@ struct TrackerRootView: View {
 }
 
 private struct TrackerTabs: View {
+    @Environment(\.scenePhase) private var scenePhase
     let session: TrackerSession
     let today: LocalDay
     let overview: CycleOverview
     @State private var selectedTab = 0
     @State private var loggingDay: LocalDay?
     @State private var showHistory = false
+    @State private var showDailyInsights = false
+
+    private struct InsightPresentationKey: Equatable {
+        let day: LocalDay
+        let active: Bool
+        let onToday: Bool
+        let available: Bool
+        let enabled: Bool
+        let ready: Bool
+        let occupied: Bool
+    }
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -189,6 +201,25 @@ private struct TrackerTabs: View {
         }
         .sheet(isPresented: $showHistory) {
             NavigationStack { HistoryEntryView(session: session, today: session.today ?? today, isOnboarding: false) }
+        }
+        .sheet(isPresented: $showDailyInsights) {
+            NavigationStack {
+                AIFeatureView(session: session, feature: .wellness)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showDailyInsights = false }.accessibilityIdentifier("closeDailyInsights")
+                        }
+                    }
+            }
+        }
+        .task(id: InsightPresentationKey(day: today, active: scenePhase == .active,
+                onToday: selectedTab == 0, available: session.privacy.canAccess && !session.isUpdatingPredictions,
+                enabled: session.privacy.dailyInsightsEnabled, ready: session.dailyInsightOutput != nil,
+                occupied: loggingDay != nil || showHistory || showDailyInsights)) {
+            guard scenePhase == .active, selectedTab == 0, session.privacy.canAccess,
+                  !session.isUpdatingPredictions, loggingDay == nil, !showHistory, !showDailyInsights,
+                  !session.privacy.dailyInsightsEnabled || session.dailyInsightOutput != nil else { return }
+            if session.privacy.reserveDailyInsightPresentation(on: today) { showDailyInsights = true }
         }
     }
 }

@@ -16,6 +16,8 @@ import Observation
     @ObservationIgnored private var deadline: Task<Void, Never>?
     @ObservationIgnored private let service: any AIService
     @ObservationIgnored private let timeout: Duration
+    /// Called once for a validated result that passed the final access check.
+    @ObservationIgnored var onOutput: (@MainActor (AIRequest, AIOutput) -> Void)?
 
     init(service: any AIService, timeout: Duration = .seconds(75)) {
         self.service = service
@@ -58,6 +60,9 @@ import Observation
                 case .question(let context):
                     let value = try await service.answerCycleQuestion(context: context)
                     try value.validate(); result = .question(value)
+                case .dailyInsights(let context):
+                    let value = try await service.getDailyInsights(context: context)
+                    try value.validate(for: context); result = .dailyInsights(value)
                 }
                 guard let self, token == generation, !Task.isCancelled else { return }
                 guard canAccess() else { invalidate(); return }
@@ -69,6 +74,7 @@ import Observation
                 isLoading = false
                 work = nil
                 deadline?.cancel(); deadline = nil
+                onOutput?(request, result)
             } catch {
                 guard let self, token == generation, !Task.isCancelled else { return }
                 guard canAccess() else { invalidate(); return }

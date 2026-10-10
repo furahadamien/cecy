@@ -16,9 +16,11 @@ struct DailyLogCard: View {
                 }
                 .navigationBarTitleDisplayMode(.inline)
             } label: {
-                Label("View all daily logs", systemImage: "clock.arrow.circlepath")
+                TrackerCard(padding: 12) {
+                    TrackerNavigationLabel(title: "View all daily logs", symbol: "clock.arrow.circlepath")
+                }
             }
-            .buttonStyle(RecordActionButtonStyle())
+            .buttonStyle(.plain)
             .accessibilityIdentifier("dailyLogHistory")
         }
     }

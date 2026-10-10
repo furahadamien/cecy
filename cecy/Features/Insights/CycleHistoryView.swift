@@ -1,15 +1,20 @@
 import SwiftUI
 
 struct CycleHistoryView: View {
+    @Environment(\.colorScheme) private var colorScheme
     let session: TrackerSession
     let overview: CycleOverview
     @State private var showExplanation = false
 
     var body: some View {
-        TrackerPage(title: "Insights", subtitle: "Your cycle history, from recorded starts.") {
+        TrackerPage(title: "Insights", showsHeading: false,
+                    backgroundColor: colorScheme == .dark ? TrackerPalette(scheme: colorScheme).background : Color(red: 0.965, green: 0.980, blue: 0.963),
+                    sectionSpacing: 16, topInset: 6) {
+            Text("Your cycle history, from recorded starts.").font(.caption).foregroundStyle(.secondary)
             if let today = session.today { RecordingCoverageCard(session: session, today: today) }
             if let today = session.today { ForTodayCard(session: session, today: today) }
             TrackerCard {
+                InsightSectionHeader(title: "Explore your records", symbol: "square.text.square")
                 NavigationLink {
                     AIFeatureView(session: session, feature: .records)
                 } label: { TrackerNavigationLabel(title: "Generate insights", symbol: "sparkles") }
@@ -48,14 +53,14 @@ struct CycleHistoryView: View {
                 InsightChartsView(intervals: overview.intervals, symptoms: session.snapshot.symptoms, today: today,
                                   periods: session.snapshot.periods)
             }
-            TrackerCard(highlighted: true) {
-                Text("Completed cycle intervals").font(.headline).accessibilityAddTraits(.isHeader)
+            TrackerCard {
+                InsightSectionHeader(title: "Completed cycle intervals", symbol: "calendar")
                 Text("An interval is the number of calendar days between two recorded starts. Bleeding end dates are not needed to calculate it.")
                 if overview.intervals.isEmpty {
                     Text("Completed intervals appear after two period starts are recorded.")
                         .foregroundStyle(.secondary)
                 } else {
-                    Text("\(overview.intervals.count) completed intervals")
+                    Text("\(overview.intervals.count) completed intervals").font(.title3.weight(.semibold))
                         .accessibilityIdentifier("intervalCount")
                 }
             }
@@ -64,30 +69,35 @@ struct CycleHistoryView: View {
             }
             if let statistics = session.statistics { CycleStatisticsView(statistics: statistics) }
             if overview.estimate != nil {
-                Button("View prediction evidence") { showExplanation = true }
-                    .buttonStyle(.bordered).frame(minHeight: 44)
+                Button { showExplanation = true } label: {
+                    TrackerCard(padding: 12) {
+                        TrackerNavigationLabel(title: "View prediction evidence", symbol: "chart.bar.doc.horizontal")
+                    }
+                }.buttonStyle(.plain)
             }
             ForEach(overview.intervals.reversed()) { interval in
                 TrackerCard {
                     Text("\(interval.length) days").font(TrackerTypography.sectionTitle).monospacedDigit()
                     Text("Start: \(DayText.full(interval.start))")
                     Text("Next start: \(DayText.full(interval.nextStart))")
-                    NavigationLink("Your cycle summary") {
+                    Divider()
+                    NavigationLink {
                         AIFeatureView(session: session, feature: .summary(interval.start))
-                    }
+                    } label: { TrackerNavigationLabel(title: "Your cycle summary", symbol: "doc.text") }
                     .frame(minHeight: 44).accessibilityIdentifier("cycleSummaryAI_\(interval.start.key)")
                 }
                 .accessibilityElement(children: .contain)
             }
             if let start = overview.latestStart {
                 TrackerCard {
-                    Text("Latest recorded start").font(.headline)
-                    Text(DayText.full(start))
+                    InsightSectionHeader(title: "Latest recorded start", symbol: "drop.fill")
+                    Text(DayText.full(start)).font(.title3.weight(.semibold))
                     Text("The interval since this start is not complete, so its length is still unknown.")
                         .font(.footnote).foregroundStyle(.secondary)
-                    NavigationLink("Summary of available records") {
+                    Divider()
+                    NavigationLink {
                         AIFeatureView(session: session, feature: .summary(start))
-                    }
+                    } label: { TrackerNavigationLabel(title: "Summary of available records", symbol: "doc.text") }
                     .frame(minHeight: 44).accessibilityIdentifier("cycleSummaryAI_\(start.key)")
                 }
             }

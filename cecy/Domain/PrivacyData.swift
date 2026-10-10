@@ -21,10 +21,14 @@ nonisolated struct PrivacyPreferences: Codable, Equatable, Sendable {
     var dailyInsightsEnabled: Bool?
     // Attempt is reserved before sending, preventing repeat requests after relaunch/failure.
     var dailyInsightAttemptDay: Int?
+    // Renew automatic consent when its payload expands from record facts to wellness preferences.
+    var dailyInsightConsentVersion: Int?
+    var dailyInsightPresentationDay: Int?
 
     func validate() throws {
         guard version == 1, (0...23).contains(reminderHour), (0...59).contains(reminderMinute) else { throw TrackingError.invalidData }
         if let dailyInsightAttemptDay { _ = try LocalDay(key: dailyInsightAttemptDay) }
+        if let dailyInsightPresentationDay { _ = try LocalDay(key: dailyInsightPresentationDay) }
     }
 }
 

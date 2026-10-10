@@ -20,9 +20,15 @@ struct PreparedExport: Identifiable {
     private(set) var aiBlocked = false
     var aiEnabled: Bool { !aiBlocked && preferences.aiConsent?.isCurrent == true }
     private var dailyInsightsBlocked = false
-    var dailyInsightsEnabled: Bool { aiEnabled && !dailyInsightsBlocked && preferences.dailyInsightsEnabled == true }
+    /// v3 adds phase estimates, today's bleeding answer and skincare guidance to automatic requests.
+    static let dailyConsentVersion = 3
+    var dailyInsightsEnabled: Bool {
+        aiEnabled && !dailyInsightsBlocked && preferences.dailyInsightsEnabled == true
+            && preferences.dailyInsightConsentVersion == Self.dailyConsentVersion
+    }
 
     @ObservationIgnored private let storage: any PrivacyPreferenceStoring
+    @ObservationIgnored private let dailyInsightStore: any DailyInsightStoring
     @ObservationIgnored private let authentication: any DeviceAuthenticating
     @ObservationIgnored private let exports: any ExportFileManaging
     @ObservationIgnored private var generation = 0
@@ -32,8 +38,10 @@ struct PreparedExport: Identifiable {
     @ObservationIgnored private var timeZone = TimeZone.current
 
     init(storage: any PrivacyPreferenceStoring, authentication: any DeviceAuthenticating,
-         exports: any ExportFileManaging, delivery: any ReminderDelivering) {
+         exports: any ExportFileManaging, delivery: any ReminderDelivering,
+         dailyInsights: (any DailyInsightStoring)? = nil) {
         self.storage = storage
+        dailyInsightStore = dailyInsights ?? MemoryDailyInsightStore()
         self.authentication = authentication
         self.exports = exports
         reminders = ReminderCoordinator(delivery: delivery)
@@ -115,7 +123,7 @@ struct PreparedExport: Identifiable {
 
     func setAIEnabled(_ enabled: Bool, now: Date = Date()) -> String? {
         guard canAccess else { return "Unlock Cecy before changing insight consent." }
-        if !enabled { aiBlocked = true }
+        if !enabled { aiBlocked = true; clearDailyInsight() }
         var candidate = preferences
         let renewingConsent = enabled && preferences.aiConsent?.isCurrent != true
         candidate.aiConsent = enabled ? AIConsentRecord(noticeVersion: AIConsentRecord.currentVersion, grantedAt: now) : nil
@@ -139,6 +147,10 @@ struct PreparedExport: Identifiable {
         if !enabled { dailyInsightsBlocked = true }
         var candidate = preferences
         candidate.dailyInsightsEnabled = enabled
+        if enabled {
+            if candidate.dailyInsightConsentVersion != Self.dailyConsentVersion { candidate.dailyInsightAttemptDay = nil }
+            candidate.dailyInsightConsentVersion = Self.dailyConsentVersion
+        }
         do {
             try storage.save(candidate)
             preferences = candidate
@@ -164,6 +176,43 @@ struct PreparedExport: Identifiable {
             return false
         }
     }
+
+    /// Reserve before presenting; relaunches and tab changes must not repeat today's prompt.
+    func reserveDailyInsightPresentation(on day: LocalDay) -> Bool {
+        guard canAccess, preferences.dailyInsightPresentationDay != day.key else { return false }
+        var candidate = preferences
+        candidate.dailyInsightPresentationDay = day.key
+        do {
+            try storage.save(candidate)
+            preferences = candidate
+            return true
+        } catch { return false }
+    }
+
+    /// Returns only the result generated for `day`. Older results have expired and are deleted.
+    func dailyInsight(for day: LocalDay) -> DailyInsightsResult? {
+        guard canAccess, aiEnabled else { return nil }
+        guard let stored = try? dailyInsightStore.load() else {
+            try? dailyInsightStore.clear() // Unreadable or invalid: discard rather than show.
+            return nil
+        }
+        guard stored.dayKey == day.key else {
+            try? dailyInsightStore.clear()
+            return nil
+        }
+        return stored.insights
+    }
+
+    @discardableResult
+    func saveDailyInsight(_ insights: DailyInsightsResult, for day: LocalDay) -> Bool {
+        guard canAccess, aiEnabled else { return false }
+        do {
+            try dailyInsightStore.save(StoredDailyInsight(dayKey: day.key, insights: insights))
+            return true
+        } catch { return false }
+    }
+
+    func clearDailyInsight() { try? dailyInsightStore.clear() }
 
     func trackingChanged(prediction: CyclePrediction?, now: Date, timeZone: TimeZone) {
         self.prediction = prediction
@@ -250,6 +299,8 @@ struct PreparedExport: Identifiable {
         candidate.aiConsent = nil
         candidate.dailyInsightsEnabled = nil
         candidate.dailyInsightAttemptDay = nil
+        candidate.dailyInsightConsentVersion = nil
+        candidate.dailyInsightPresentationDay = nil
         dailyInsightsBlocked = true
         candidate.dailyReminder = false
         candidate.windowReminder = false
@@ -257,6 +308,7 @@ struct PreparedExport: Identifiable {
         candidate.reminderMinute = 0
         try storage.save(candidate)
         preferences = candidate
+        try dailyInsightStore.clear()
         reminders.replace(with: [], enabled: false)
         preparedExport = nil
         try exports.clean()
@@ -276,15 +328,23 @@ struct PreparedExport: Identifiable {
         return TrackerPrivacy(storage: FilePrivacyPreferences(url: support.appendingPathComponent("preferences.json")),
                               authentication: DeviceOwnerAuthentication(),
                               exports: ProtectedExportFiles(directory: FileManager.default.temporaryDirectory.appendingPathComponent("CecyExports", isDirectory: true)),
-                              delivery: LocalReminderDelivery())
+                              delivery: LocalReminderDelivery(),
+                              dailyInsights: FileDailyInsightStore(url: support.appendingPathComponent("daily-insight.json")))
     }
 
     #if DEBUG
     static func testing(id: UUID) -> TrackerPrivacy {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("CecyUITests").appendingPathComponent(id.uuidString)
-        return TrackerPrivacy(storage: FilePrivacyPreferences(url: root.appendingPathComponent("privacy/preferences.json")),
+        let privacy = TrackerPrivacy(storage: FilePrivacyPreferences(url: root.appendingPathComponent("privacy/preferences.json")),
                               authentication: FixedDeviceAuthentication(succeeds: ProcessInfo.processInfo.environment["CECY_UI_AUTH"] == "success"),
-                              exports: ProtectedExportFiles(directory: root.appendingPathComponent("exports")), delivery: MemoryReminderDelivery())
+                              exports: ProtectedExportFiles(directory: root.appendingPathComponent("exports")), delivery: MemoryReminderDelivery(),
+                              dailyInsights: FileDailyInsightStore(url: root.appendingPathComponent("privacy/daily-insight.json")))
+        privacy.start()
+        // Unrelated UI suites model an already-dismissed daily prompt. Dedicated popup tests opt in.
+        if ProcessInfo.processInfo.environment["CECY_UI_DAILY_POPUP"] != "1", let day = try? LocalDay(key: 20260929) {
+            _ = privacy.reserveDailyInsightPresentation(on: day)
+        }
+        return privacy
     }
     #endif
 }

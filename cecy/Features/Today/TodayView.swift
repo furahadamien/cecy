@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct TodayView: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var session: TrackerSession
     let today: LocalDay
     let overview: CycleOverview
@@ -19,79 +21,31 @@ struct TodayView: View {
     }
 
     var body: some View {
-        TrackerPage(title: "Today") {
+        TrackerPage(title: "Today", showsHeading: false,
+                    backgroundColor: colorScheme == .dark ? TrackerPalette(scheme: colorScheme).background : Color(red: 0.965, green: 0.980, blue: 0.963),
+                    sectionSpacing: 12, topInset: 6) {
             ActivityCalendarStrip(today: today, activityIndex: session.activityIndex,
-                                  forecast: session.cycleForecast, selection: $selection)
-            VStack(spacing: 8) {
-                Button { onLog(selection) } label: {
-                    Label {
-                        Text("Log period")
-                    } icon: {
-                        Image(systemName: "drop.fill").foregroundStyle(.red)
-                    }
-                }
-                .buttonStyle(TrackerCompactLogButtonStyle(prominent: true))
-                .accessibilityLabel("Log period")
-                .accessibilityHint("Record a period start or update its end date.")
-                .accessibilityIdentifier("logPeriod")
-                TrackerCompactLogActions {
-                    SymptomLogButton(session: session, day: selection, title: "Symptoms", compact: true)
-                    SexualActivityLogButton(session: session, day: selection, compact: true)
-                    DailyBleedingLogButton(session: session, day: selection)
+                                  forecast: session.cycleForecast, selection: $selection, compact: true)
+            hero
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(spacing: 10) { loggingButtons }
+                } else {
+                    HStack(alignment: .top, spacing: 8) { loggingButtons }
                 }
             }
-            .environment(\.compactLogLabels, true)
+            .environment(\.todayLogCards, true)
             .disabled(selection > today)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Log for \(DayText.full(selection))")
             .accessibilityIdentifier("todayLogActions")
-            ForEach(session.cycleForecast.cycles.filter { selection != today && $0.contains(selection) }) { cycle in
-                TrackerCard { ProjectedCycleDetails(cycle: cycle) }
-            }
-            if let status = TodayCurrentPeriodStatus(periods: session.snapshot.periods,
-                                                     forecast: session.cycleForecast, today: today) {
-                HStack(spacing: 10) {
-                    Image(systemName: "drop.fill")
-                        .font(.title3)
-                        .foregroundStyle(.red)
-                        .accessibilityHidden(true)
-                    Text(status.title)
-                        .font(.system(.headline, design: .rounded, weight: .semibold))
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(status.title)
-                .accessibilityIdentifier("currentPeriodStatus")
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.vertical, 4)
-            }
-            TrackerCard(highlighted: true) {
-                Label("Until your next period", systemImage: "leaf").font(.subheadline.weight(.medium))
-                let countdown = TodayPeriodCountdown(outcome: overview.prediction, today: today)
-                Text(countdown.title)
-                    .font(TrackerTypography.metric).monospacedDigit()
-                    .accessibilityIdentifier("periodCountdown")
-                if let day = overview.currentDay, let start = overview.latestStart {
-                    Text("Day \(day)")
-                        .font(.subheadline).foregroundStyle(.secondary).monospacedDigit()
-                        .accessibilityIdentifier("cycleDay")
-                        .accessibilityHint("Current cycle, counted from your recorded start on \(DayText.full(start))")
-                }
-                if overview.estimate != nil {
-                    PredictionSummary(outcome: overview.prediction, today: today)
-                    Button("How this estimate works") { showExplanation = true }
-                        .frame(minHeight: 44)
-                } else {
-                    Text(countdown.detail).font(.footnote).foregroundStyle(.secondary)
-                }
-            }
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("nextPeriodCard")
             CyclePhaseRingView(session: session, today: today, overview: overview)
+            ForEach(session.cycleForecast.cycles.filter { selection != today && $0.contains(selection) }) { cycle in
+                TrackerCard { ProjectedCycleDetails(cycle: cycle, todayStyle: true) }
+            }
+            DailyInsightsCard(session: session)
             if !session.cycleForecast.cycles.isEmpty {
-                TodayEstimatesCard(forecast: session.cycleForecast, today: today)
-                TrackerCard { UpcomingCycleForecastView(forecast: session.cycleForecast, today: today) }
+                TrackerCard { UpcomingCycleForecastView(forecast: session.cycleForecast, today: today, todayStyle: true) }
             }
             DailyLogCard(session: session, selectedDay: selection, today: today)
             if let confirmation = session.confirmation {
@@ -113,14 +67,124 @@ struct TodayView: View {
         }
     }
 
+    private var hero: some View {
+        TrackerCard(padding: 12, spacing: 8) {
+            if dynamicTypeSize > .large {
+                VStack(spacing: 20) { heroRing.frame(height: 250); countdown }
+            } else {
+                TodayHeroColumns {
+                    heroRing
+                    countdown
+                }
+            }
+            if let estimate = overview.estimate {
+                Label("\(estimate.confidence.rawValue) confidence · Rough estimate", systemImage: "circle.dashed")
+                    .font(.caption).foregroundStyle(.secondary)
+                if let notice = estimate.starterNotice {
+                    Text(notice).font(.caption).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("starterPrediction")
+                }
+            }
+            if let status = TodayCurrentPeriodStatus(periods: session.snapshot.periods,
+                                                     forecast: session.cycleForecast, today: today, dailyBleeding: session.snapshot.dailyBleeding) {
+                Divider()
+                HStack(spacing: 12) {
+                    Image(systemName: "drop.fill").font(.title3).foregroundStyle(TrackerPalette(scheme: colorScheme).recorded).accessibilityHidden(true)
+                    Text(status.title)
+                        .font(.system(.headline, design: .rounded, weight: .semibold))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(status.title)
+                .accessibilityIdentifier("currentPeriodStatus")
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 2)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("nextPeriodCard")
+    }
+
+    private var heroRing: some View {
+        CyclePhaseRingView(session: session, today: today, overview: overview, ringOnly: true)
+    }
+
+    private var countdown: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if overview.estimate != nil {
+                Button { showExplanation = true } label: {
+                    HStack(spacing: 6) {
+                        Text("Until your next period")
+                        Image(systemName: "questionmark.circle").accessibilityHidden(true)
+                    }
+                    .font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("How this estimate works")
+            } else {
+                Text("Until your next period").font(.caption.weight(.medium)).foregroundStyle(.secondary)
+            }
+            let value = TodayPeriodCountdown(outcome: overview.prediction, today: today)
+            Text(value.title).font(.system(.title2, design: .rounded, weight: .bold)).monospacedDigit()
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("periodCountdown")
+            if overview.estimate != nil {
+                PredictionSummary(outcome: overview.prediction, today: today, compact: true)
+            } else {
+                Text(value.detail).font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder private var loggingButtons: some View {
+        Button { onLog(selection) } label: {
+            Label { Text("Log period") } icon: { Image(systemName: "drop.fill").foregroundStyle(TrackerPalette(scheme: colorScheme).recorded) }
+        }
+        .buttonStyle(TrackerCompactLogButtonStyle(prominent: true))
+        .accessibilityLabel("Log period")
+        .accessibilityHint("Record a period start or update its end date.")
+        .accessibilityIdentifier("logPeriod")
+        SymptomLogButton(session: session, day: selection, title: "Symptoms", compact: true)
+        SexualActivityLogButton(session: session, day: selection, compact: true)
+        DailyBleedingLogButton(session: session, day: selection)
+    }
+
+}
+
+/// Propose each column's actual width rather than testing unwrapped text widths.
+private struct TodayHeroColumns: Layout {
+    private func columns(_ width: CGFloat) -> (ring: CGFloat, detail: CGFloat) {
+        let ring = min(250, width * 0.44)
+        return (ring, max(0, width - ring - 12))
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard subviews.count == 2 else { return .zero }
+        let width = proposal.width ?? 330
+        let sizes = columns(width)
+        let detail = subviews[1].sizeThatFits(ProposedViewSize(width: sizes.detail, height: nil))
+        return CGSize(width: width, height: max(sizes.ring, detail.height))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard subviews.count == 2 else { return }
+        let sizes = columns(bounds.width)
+        subviews[0].place(at: CGPoint(x: bounds.minX, y: bounds.midY - sizes.ring / 2), anchor: .topLeading,
+                          proposal: ProposedViewSize(width: sizes.ring, height: sizes.ring))
+        subviews[1].place(at: CGPoint(x: bounds.minX + sizes.ring + 12, y: bounds.minY), anchor: .topLeading,
+                          proposal: ProposedViewSize(width: sizes.detail, height: bounds.height))
+    }
 }
 
 /// Uses today's evidence, not the selected calendar day or an assumed ongoing period.
 nonisolated enum TodayCurrentPeriodStatus: Equatable {
     case recorded, estimated
 
-    init?(periods: [Period], forecast: CycleForecast, today: LocalDay) {
-        if periods.contains(where: { $0.contains(today) }) {
+    init?(periods: [Period], forecast: CycleForecast, today: LocalDay, dailyBleeding: [DailyBleedingObservation] = []) {
+        if PeriodLogSelection.existing(on: today, periods: periods, dailyBleeding: dailyBleeding) != nil {
             self = .recorded
         } else if forecast.bleeding(on: today) != nil {
             self = .estimated
@@ -170,26 +234,29 @@ struct PredictionSummary: View {
     @Environment(\.colorScheme) private var colorScheme
     let outcome: PredictionOutcome
     let today: LocalDay
+    var compact = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: compact ? 6 : 12) {
             if case .available(let estimate) = outcome {
-                VStack(alignment: .leading, spacing: 8) {
-                Label("Estimated period start window", systemImage: "circle.dashed").font(.headline)
+                VStack(alignment: .leading, spacing: compact ? 4 : 8) {
+                Label("Estimated period start window", systemImage: "circle.dashed").font(compact ? .caption : .headline)
                 Text(DayText.range(estimate.earliest, estimate.latest))
-                    .font(TrackerTypography.sectionTitle).accessibilityIdentifier("predictionWindow")
+                    .font(compact ? .subheadline.weight(.semibold) : TrackerTypography.sectionTitle).accessibilityIdentifier("predictionWindow")
                 }
-                .frame(maxWidth: .infinity, alignment: .leading).padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading).padding(compact ? 8 : 12)
                 .background(TrackerPalette(scheme: colorScheme).recordedSurface, in: RoundedRectangle(cornerRadius: 16))
-                Text("Around \(DayText.short(estimate.center))").font(.subheadline)
+                Text("Around \(DayText.short(estimate.center))").font(compact ? .caption : .subheadline)
                     .accessibilityIdentifier("nextPeriodCenter")
+                if !compact {
                 Label("\(estimate.confidence.rawValue) confidence · Rough estimate", systemImage: "circle.dashed")
-                    .font(.subheadline)
+                    .font(compact ? .caption : .subheadline)
                 if let notice = estimate.starterNotice {
                     Text(notice)
-                        .font(.subheadline).accessibilityIdentifier("starterPrediction")
+                        .font(compact ? .caption : .subheadline).foregroundStyle(.secondary).accessibilityIdentifier("starterPrediction")
                 }
-                Text("Possible start dates, not confirmed bleeding days. Missing records can affect timing.").font(.footnote).foregroundStyle(.secondary)
+                    Text("Possible start dates, not confirmed bleeding days. Missing records can affect timing.").font(.footnote).foregroundStyle(.secondary)
+                }
             } else {
             switch outcome {
             case .available:

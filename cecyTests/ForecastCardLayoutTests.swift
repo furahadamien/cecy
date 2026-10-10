@@ -21,6 +21,8 @@ import UIKit
                 let view = VStack(spacing: 24) {
                     TrackerCard { UpcomingCycleForecastView(forecast: forecast, today: today) }
                     TrackerCard { ProjectedCycleDetails(cycle: cycle) }
+                    TrackerCard { UpcomingCycleForecastView(forecast: forecast, today: today, calendarStyle: true) }
+                    TrackerCard { ProjectedCycleDetails(cycle: cycle, calendarStyle: true) }
                 }
                 .environment(\.dynamicTypeSize, size)
                 .environment(\.colorScheme, scheme)

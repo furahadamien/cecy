@@ -33,7 +33,7 @@ nonisolated enum DailyBleedingError: Error, LocalizedError, Equatable {
         switch self {
         case .duplicateDay: "An answer already exists for this day. Review and edit that answer instead."
         case .invalidFlow: "A flow amount can only be saved with bleeding."
-        case .invalidAssociation: "Review the daily answer’s period link before changing these records. An unknown end does not confirm additional bleeding days."
+        case .invalidAssociation: "This day cannot be linked to those period dates. Review the recorded start and any confirmed end first."
         case .episodeConflict: "This daily answer conflicts with a recorded period. Review the period dates and daily answer together, or cancel."
         case .staleReview: "These records changed after review began. Review the latest records before saving."
         case .unavailable: "Daily bleeding records aren’t available in this store. No records were changed."
@@ -42,6 +42,14 @@ nonisolated enum DailyBleedingError: Error, LocalizedError, Equatable {
 }
 
 nonisolated enum DailyBleedingValidation {
+    /// An explicit day may belong to an open period without implying bleeding on intervening days.
+    /// A confirmed end and the next recorded start remain hard boundaries.
+    static func canAssociate(_ day: LocalDay, with period: Period, periods: [Period]) -> Bool {
+        guard day >= period.start else { return false }
+        if let end = period.end { return day <= end }
+        return !periods.contains { $0.start > period.start && $0.start <= day }
+    }
+
     static func sorted(_ observations: [DailyBleedingObservation]) -> [DailyBleedingObservation] {
         observations.sorted { $0.day < $1.day }
     }
@@ -62,7 +70,8 @@ nonisolated enum DailyBleedingValidation {
             if let today, observation.day > today { throw TrackingError.futureDate }
             if observation.flow != nil && observation.state != .bleeding { throw DailyBleedingError.invalidFlow }
             if let id = observation.periodID {
-                guard observation.state == .bleeding, let period = byID[id], period.contains(observation.day) else {
+                guard observation.state == .bleeding, let period = byID[id],
+                      canAssociate(observation.day, with: period, periods: periods) else {
                     throw DailyBleedingError.invalidAssociation
                 }
             }
@@ -92,6 +101,25 @@ nonisolated struct BleedingReconciliation: Equatable, Sendable {
         expectedObservations = DailyBleedingValidation.sorted(snapshot.dailyBleeding)
         periods = expectedPeriods
         observations = expectedObservations
+    }
+
+    /// Explicitly records just this day; never updates a period boundary or fills a gap.
+    mutating func recordBleeding(on day: LocalDay, periodID: UUID, flow: PeriodFlow?, today: LocalDay) throws {
+        guard let period = periods.first(where: { $0.id == periodID }),
+              DailyBleedingValidation.canAssociate(day, with: period, periods: periods) else {
+            throw DailyBleedingError.invalidAssociation
+        }
+        if let index = observations.firstIndex(where: { $0.day == day }) {
+            guard observations[index].state == .bleeding,
+                  observations[index].periodID == nil || observations[index].periodID == periodID else {
+                throw DailyBleedingError.duplicateDay
+            }
+            observations[index].periodID = periodID
+            observations[index].flow = flow
+        } else {
+            observations.append(DailyBleedingObservation(day: day, state: .bleeding, flow: flow, periodID: periodID))
+        }
+        try DailyBleedingValidation.validate(observations, periods: periods, asOf: today)
     }
 
     /// Default deletion proposal retains observations and their IDs; confirmation is still required.

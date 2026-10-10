@@ -6,10 +6,11 @@ struct CycleStatisticsView: View {
     var body: some View {
         if let cycles = statistics.cycles {
             TrackerCard {
-                Text("Recorded cycle lengths").font(.headline).accessibilityAddTraits(.isHeader)
+                InsightSectionHeader(title: "Recorded cycle lengths", symbol: "chart.bar.xaxis")
                 Text("Based on all \(cycles.count) completed intervals. The current open interval is excluded.")
                     .font(.footnote).foregroundStyle(.secondary)
-                Text("Average: \(decimal(cycles.mean)) days").accessibilityIdentifier("averageCycle")
+                Text("Average: \(decimal(cycles.mean)) days").font(.title3.weight(.semibold)).accessibilityIdentifier("averageCycle")
+                Divider()
                 Text("Median: \(decimal(cycles.median)) days")
                 Text("Recorded range: \(cycles.minimum)–\(cycles.maximum) days")
                 Text("Spread: \(cycles.spread) days")
@@ -30,9 +31,9 @@ struct CycleStatisticsView: View {
             }
         }
         TrackerCard {
-            Text("Recorded bleeding duration").font(.headline).accessibilityAddTraits(.isHeader)
+            InsightSectionHeader(title: "Recorded bleeding duration", symbol: "drop.fill")
             if let bleeding = statistics.bleeding {
-                Text("Average: \(decimal(bleeding.mean)) days").accessibilityIdentifier("averageDuration")
+                Text("Average: \(decimal(bleeding.mean)) days").font(.title3.weight(.semibold)).accessibilityIdentifier("averageDuration")
                 Text("Based on \(bleeding.count) periods with confirmed ends. Start and end days are included.")
                 if bleeding.count == 1 { Text("One recorded duration is not an established pattern.").font(.footnote) }
             } else {

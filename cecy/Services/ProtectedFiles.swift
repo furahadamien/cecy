@@ -60,6 +60,55 @@ nonisolated enum ProtectedFiles {
     func save(_ value: PrivacyPreferences) { self.value = value }
 }
 
+/// One generated result for one local civil day. Never exported, synced or backed up.
+nonisolated struct StoredDailyInsight: Codable, Equatable, Sendable {
+    /// v2 holds daily_insights_v2 sections. Older files fail validation and are discarded.
+    var version = 2
+    let dayKey: Int
+    let insights: DailyInsightsResult
+
+    func validate() throws {
+        guard version == 2 else { throw TrackingError.invalidData }
+        _ = try LocalDay(key: dayKey)
+        try insights.validate()
+    }
+}
+
+@MainActor protocol DailyInsightStoring {
+    func load() throws -> StoredDailyInsight?
+    func save(_ value: StoredDailyInsight) throws
+    func clear() throws
+}
+
+@MainActor final class FileDailyInsightStore: DailyInsightStoring {
+    let url: URL
+    init(url: URL) { self.url = url }
+    func load() throws -> StoredDailyInsight? {
+        let data: Data
+        do { data = try Data(contentsOf: url) }
+        catch let error as CocoaError where error.code == .fileReadNoSuchFile { return nil }
+        let value = try JSONDecoder().decode(StoredDailyInsight.self, from: data)
+        try value.validate()
+        return value
+    }
+    func save(_ value: StoredDailyInsight) throws {
+        try value.validate()
+        try ProtectedFiles.directory(url.deletingLastPathComponent(), excludeFromBackup: true)
+        try ProtectedFiles.write(JSONEncoder().encode(value), to: url)
+    }
+    func clear() throws {
+        do { try FileManager.default.removeItem(at: url) }
+        catch let error as CocoaError where error.code == .fileNoSuchFile { return }
+    }
+}
+
+@MainActor final class MemoryDailyInsightStore: DailyInsightStoring {
+    var value: StoredDailyInsight?
+    func load() -> StoredDailyInsight? { value }
+    func save(_ value: StoredDailyInsight) { self.value = value }
+    func clear() { value = nil }
+}
+
 @MainActor protocol ExportFileManaging {
     func prepare(_ data: Data) throws -> URL
     func prepareSummary(_ data: Data) throws -> URL

@@ -55,8 +55,9 @@ nonisolated struct DailyBleedingDomainTests {
     @Test func unknownEndDoesNotExtendEvidenceAndLinksMustMatch() throws {
         let period = Period(start: try day.adding(days: -1))
         try DailyBleedingValidation.validate([DailyBleedingObservation(day: day, state: .spotting)], periods: [period])
-        for answer in [DailyBleedingObservation(day: day, state: .bleeding, periodID: period.id),
-                       DailyBleedingObservation(day: period.start, state: .unsure, periodID: period.id),
+        try DailyBleedingValidation.validate([DailyBleedingObservation(day: day, state: .bleeding, periodID: period.id)], periods: [period])
+        #expect(!period.contains(day) && period.end == nil) // Explicit observation, not an inferred span.
+        for answer in [DailyBleedingObservation(day: period.start, state: .unsure, periodID: period.id),
                        DailyBleedingObservation(day: period.start, state: .bleeding, periodID: UUID())] {
             #expect(throws: DailyBleedingError.invalidAssociation) { try DailyBleedingValidation.validate([answer], periods: [period]) }
         }
@@ -105,6 +106,51 @@ nonisolated struct DailyBleedingDomainTests {
     private let today = try! LocalDay(key: 20261007)
     private var now: Date { today.formattingDate }
     private enum Failure: Error { case disk }
+
+    @Test func continuingDayPreservesStartUnknownEndGapsAndMetadata() throws {
+        let repository = try SwiftDataPeriodRepository.inMemory()
+        let period = Period(start: try today.adding(days: -4), flow: .heavy, notes: "Keep this note", createdAt: now)
+        let original = try repository.add([period], completingOnboarding: true, today: today, now: now)
+        var review = BleedingReconciliation(snapshot: original)
+        try review.recordBleeding(on: today, periodID: period.id, flow: .light, today: today)
+        let saved = try repository.reconcileBleeding(review, today: today, now: now.addingTimeInterval(60))
+        #expect(saved.periods == original.periods)
+        #expect(saved.periods[0].end == nil && saved.periods[0].duration == nil)
+        #expect(saved.dailyBleeding.count == 1 && saved.dailyBleeding[0].day == today)
+        #expect(saved.dailyBleeding[0].state == .bleeding && saved.dailyBleeding[0].periodID == period.id)
+        #expect(saved.dailyBleeding[0].flow == .light && saved.periods[0].flow == .heavy)
+        #expect(TodayCurrentPeriodStatus(periods: saved.periods, forecast: CycleForecast(), today: today,
+            dailyBleeding: saved.dailyBleeding) == .recorded)
+        #expect(try PeriodLogSelection.existing(on: today.adding(days: -1), periods: saved.periods,
+            dailyBleeding: saved.dailyBleeding) == nil)
+        #expect(try repository.load() == saved)
+        var metadata = saved.periods[0]; metadata.notes = "Updated note"
+        var edit = BleedingReconciliation(snapshot: saved); edit.replacePeriod(metadata)
+        #expect(edit.detachedAnswers.isEmpty)
+    }
+
+    @Test func continuingDayCannotCrossConfirmedEndOrNextStartOrReplaceNegativeAnswer() throws {
+        let start = try today.adding(days: -4)
+        let closed = Period(start: start, end: try today.adding(days: -1))
+        var review = BleedingReconciliation(snapshot: TrackerSnapshot(periods: [closed]))
+        #expect(throws: DailyBleedingError.invalidAssociation) {
+            try review.recordBleeding(on: today, periodID: closed.id, flow: nil, today: today)
+        }
+        let open = Period(start: start)
+        review = BleedingReconciliation(snapshot: TrackerSnapshot(periods: [open, Period(start: today)]))
+        #expect(throws: DailyBleedingError.invalidAssociation) {
+            try review.recordBleeding(on: today, periodID: open.id, flow: nil, today: today)
+        }
+        review = BleedingReconciliation(snapshot: TrackerSnapshot(periods: [open],
+            dailyBleeding: [DailyBleedingObservation(day: today, state: .noBleeding)]))
+        #expect(throws: DailyBleedingError.duplicateDay) {
+            try review.recordBleeding(on: today, periodID: open.id, flow: nil, today: today)
+        }
+        review = BleedingReconciliation(snapshot: TrackerSnapshot(periods: [open]))
+        #expect(throws: TrackingError.futureDate) {
+            try review.recordBleeding(on: today.adding(days: 1), periodID: open.id, flow: nil, today: today)
+        }
+    }
 
     @Test func dailyCRUDDoesNotCreateEpisodesOrChangeOtherRecords() throws {
         let repository = try SwiftDataPeriodRepository.inMemory()

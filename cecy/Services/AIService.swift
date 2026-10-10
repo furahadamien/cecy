@@ -6,6 +6,12 @@ nonisolated protocol AIService: Sendable {
     func getWellnessRecommendation(context: WellnessRecommendationContext) async throws -> WellnessRecommendation
     func generateCycleSummary(context: CycleSummaryContext) async throws -> CycleSummaryResult
     func answerCycleQuestion(context: CycleQuestionContext) async throws -> CycleQuestionResult
+    func getDailyInsights(context: DailyInsightsContext) async throws -> DailyInsightsResult
+}
+
+nonisolated extension AIService {
+    /// Services that predate daily_insights_v2 fail closed.
+    func getDailyInsights(context: DailyInsightsContext) async throws -> DailyInsightsResult { throw AIServiceError.unavailable }
 }
 
 /// No redirects: health payloads must never be forwarded to a different endpoint.
@@ -55,6 +61,12 @@ actor RemoteAIService: AIService {
             throw AIServiceError.invalidRequest
         }
         return try await send(.answerCycleQuestion, context: context)
+    }
+    /// One attempt only. 502 failures surface for explicit manual retry; there is no retry loop.
+    func getDailyInsights(context: DailyInsightsContext) async throws -> DailyInsightsResult {
+        let result: DailyInsightsResult = try await send(.dailyInsightsV2, context: context)
+        do { try result.validate(for: context) } catch { throw AIServiceError.invalidResponse }
+        return result
     }
 
     private func send<C: AIRequestContext, R: AIValidatedResponse>(_ task: AITask, context: C) async throws -> R {

@@ -6,10 +6,12 @@ nonisolated enum AITask: String, Codable, Sendable, CaseIterable {
     case dailyWellnessRecommendation = "daily_wellness_recommendation"
     case cycleSummary = "cycle_summary"
     case answerCycleQuestion = "answer_cycle_question"
+    case dailyInsightsV2 = "daily_insights_v2"
 }
 
 nonisolated struct AIConsentRecord: Codable, Equatable, Sendable {
-    static let currentVersion = 2
+    /// v3 discloses phase estimates and today's bleeding answer (daily_insights_v2).
+    static let currentVersion = 3
     let noticeVersion: Int
     let grantedAt: Date
     var isCurrent: Bool { noticeVersion == Self.currentVersion && grantedAt.timeIntervalSinceReferenceDate.isFinite }
@@ -272,6 +274,7 @@ nonisolated enum AIRequest: Equatable, Sendable {
     case wellness(WellnessRecommendationContext)
     case summary(CycleSummaryContext)
     case question(CycleQuestionContext)
+    case dailyInsights(DailyInsightsContext)
     var task: AITask {
         switch self {
         case .symptoms: .normalizeSymptoms
@@ -279,6 +282,7 @@ nonisolated enum AIRequest: Equatable, Sendable {
         case .wellness: .dailyWellnessRecommendation
         case .summary: .cycleSummary
         case .question: .answerCycleQuestion
+        case .dailyInsights: .dailyInsightsV2
         }
     }
 }
@@ -288,4 +292,5 @@ nonisolated enum AIOutput: Equatable, Sendable {
     case wellness(WellnessRecommendation)
     case summary(CycleSummaryResult)
     case question(CycleQuestionResult)
+    case dailyInsights(DailyInsightsResult)
 }

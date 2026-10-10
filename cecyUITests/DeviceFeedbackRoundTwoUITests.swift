@@ -48,29 +48,36 @@ final class DeviceFeedbackRoundTwoUITests: XCTestCase {
         button.tap()
     }
 
-    @MainActor func testWellnessAppearsInInsightsAndClearsOnBackground() {
+    @MainActor func testWellnessAppearsInInsightsAndSharesDailyResultUntilRelaunch() {
         let app = launch()
-        XCTAssertFalse(app.staticTexts["Synthetic gentle movement"].exists)
+        XCTAssertFalse(app.staticTexts["Synthetic self-care suggestion"].exists)
         tap("dailyWellnessAI", app: app)
         tap("reviewAIConsent", app: app)
         tap("enableAI", app: app)
         XCTAssertTrue(app.navigationBars["Optional insights"].waitForNonExistence(timeout: 5))
         tap("generateAI", app: app)
-        let suggestion = app.staticTexts["Synthetic gentle movement"]
+        let suggestion = app.staticTexts["Synthetic self-care suggestion"]
         XCTAssertTrue(suggestion.waitForExistence(timeout: 10))
         reveal(suggestion, app: app)
         app.navigationBars.buttons.firstMatch.tap()
-        XCTAssertTrue(app.navigationBars["For today"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Today’s insights"].waitForNonExistence(timeout: 5))
         reveal(suggestion, app: app)
         XCTAssertTrue(suggestion.exists)
-        tap("todayWellnessPreferences", app: app)
-        XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 5))
-        app.navigationBars.buttons.firstMatch.tap()
+        tap("dailyWellnessAI", app: app)
+        tap("wellnessPreferencesLink", app: app)
+        XCTAssertTrue(app.navigationBars["Wellness preferences"].waitForExistence(timeout: 5))
+        app.buttons["cancelWellness"].tap()
         XCUIDevice.shared.press(.home)
         app.activate()
+        XCTAssertTrue(suggestion.exists)
+        app.terminate(); app.launch()
         tap("dailyWellnessAI", app: app)
-        XCTAssertFalse(app.staticTexts["Synthetic gentle movement"].exists)
-        XCTAssertTrue(app.buttons["generateAI"].exists)
+        XCTAssertTrue(app.staticTexts["Synthetic self-care suggestion"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["generateAI"].exists)
+        let tomorrow = app.staticTexts["New insights tomorrow"].firstMatch
+        reveal(tomorrow, app: app)
+        XCTAssertTrue(tomorrow.exists)
+        XCTAssertFalse(app.buttons["generateAI"].exists)
     }
 
     @MainActor func testChartsAndScopeChipsAreAvailableWithoutConsent() {

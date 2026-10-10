@@ -26,10 +26,12 @@ nonisolated struct DayActivityMarker: Identifiable, Equatable, Sendable {
 
     static func recorded(on day: LocalDay, in snapshot: TrackerSnapshot) -> [Self] {
         var markers: [Self] = []
-        if let period = snapshot.periods.first(where: { $0.contains(day) }) {
+        let period = PeriodLogSelection.existing(on: day, periods: snapshot.periods, dailyBleeding: snapshot.dailyBleeding)
+        if let period {
             markers.append(Self(id: "period", symbol: "drop.fill", title: period.start == day ? "Period start" : "Confirmed bleeding"))
         }
-        if let answer = snapshot.dailyBleeding.first(where: { $0.day == day }) {
+        if let answer = snapshot.dailyBleeding.first(where: { $0.day == day }),
+           !isPeriodDay(answer, periods: snapshot.periods) {
             markers.append(daily(answer))
         }
         let kinds = Set(snapshot.symptoms.filter { $0.day == day }.map(\.kind))
@@ -44,6 +46,12 @@ nonisolated struct DayActivityMarker: Identifiable, Equatable, Sendable {
 
     static func daily(_ answer: DailyBleedingObservation) -> Self {
         Self(id: "dailyBleeding", symbol: answer.state.symbol, title: "Daily answer: \(answer.state.title)")
+    }
+
+    static func isPeriodDay(_ answer: DailyBleedingObservation, periods: [Period]) -> Bool {
+        guard answer.state == .bleeding, let id = answer.periodID,
+              let period = periods.first(where: { $0.id == id }) else { return false }
+        return DailyBleedingValidation.canAssociate(answer.day, with: period, periods: periods)
     }
 }
 
@@ -68,7 +76,10 @@ nonisolated struct DayActivityIndex: Equatable, Sendable {
             }
         }
         for answer in snapshot.dailyBleeding {
-            values[answer.day, default: []].insert(.daily(answer), at: 0)
+            let marker = DayActivityMarker.isPeriodDay(answer, periods: periods)
+                ? DayActivityMarker(id: "period", symbol: "drop.fill", title: "Confirmed bleeding")
+                : .daily(answer)
+            values[answer.day, default: []].insert(marker, at: 0)
         }
         observations = values
     }
@@ -106,6 +117,7 @@ nonisolated struct DayActivityIndex: Equatable, Sendable {
         var result = observations[day] ?? []
         if lower > 0, periods[lower - 1].contains(day) {
             let period = periods[lower - 1]
+            result.removeAll { $0.id == "period" }
             result.insert(DayActivityMarker(id: "period", symbol: "drop.fill",
                 title: period.start == day ? "Period start" : "Confirmed bleeding"), at: 0)
         }

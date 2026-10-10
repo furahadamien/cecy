@@ -2,8 +2,12 @@ import Foundation
 
 /// Suggestions for explicit user choice, never automatic merging or inferred bleeding.
 nonisolated enum PeriodLogSelection {
-    static func existing(on day: LocalDay, periods: [Period]) -> Period? {
-        periods.first { $0.contains(day) }
+    static func existing(on day: LocalDay, periods: [Period], dailyBleeding: [DailyBleedingObservation] = []) -> Period? {
+        if let period = periods.first(where: { $0.contains(day) }) { return period }
+        guard let answer = dailyBleeding.first(where: { $0.day == day && $0.state == .bleeding }),
+              let id = answer.periodID, let period = periods.first(where: { $0.id == id }),
+              DailyBleedingValidation.canAssociate(day, with: period, periods: periods) else { return nil }
+        return period
     }
 
     static func continuation(on day: LocalDay, periods: [Period]) -> Period? {

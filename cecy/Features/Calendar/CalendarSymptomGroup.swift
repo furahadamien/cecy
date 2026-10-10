@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CalendarSymptomGroup: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.calendarRecordStyle) private var calendarStyle
     let session: TrackerSession
     let day: LocalDay
     @State private var editing = false
@@ -14,34 +15,13 @@ struct CalendarSymptomGroup: View {
 
     var body: some View {
         if !entries.isEmpty {
-            let palette = TrackerPalette(scheme: colorScheme)
             VStack(alignment: .leading, spacing: 12) {
-                Text("Symptoms").font(.headline).accessibilityAddTraits(.isHeader)
-                SelectionFlowLayout {
-                    ForEach(entries) { entry in
-                        Label(entry.kind.title, systemImage: entry.kind.symbol)
-                            .font(.subheadline)
-                            .foregroundStyle(palette.accent)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, 12).padding(.vertical, 8)
-                            .background(palette.sage, in: RoundedRectangle(cornerRadius: 16))
-                            .accessibilityElement(children: .combine)
-                            .accessibilityValue(entry.ratingLabel ?? "Not rated")
-                            .accessibilityIdentifier("calendarSymptom_\(entry.kind.rawValue)")
-                    }
+                if calendarStyle {
+                    CalendarRecordRow(actions: { actions }) { details }
+                } else {
+                    details
+                    actions
                 }
-                SelectionFlowLayout {
-                    Button { editing = true } label: { Label("Edit", systemImage: "pencil") }
-                        .frame(minHeight: 44)
-                        .accessibilityLabel("Edit symptoms for \(DayText.full(day))")
-                        .accessibilityIdentifier("editDaySymptoms")
-                    Button(role: .destructive) { deleting = true } label: { Label("Delete", systemImage: "trash") }
-                        .frame(minHeight: 44)
-                        .accessibilityLabel("Delete all symptoms for \(DayText.full(day))")
-                        .accessibilityIdentifier("deleteDaySymptoms")
-                }
-                .buttonStyle(RecordActionButtonStyle())
-                .disabled(session.isSaving)
                 if let error { InlineError(message: error) }
             }
             .accessibilityElement(children: .contain)
@@ -59,6 +39,47 @@ struct CalendarSymptomGroup: View {
                 if let message { AccessibilityNotification.Announcement(message).post() }
             }
         }
+    }
+    private var details: some View {
+        let palette = TrackerPalette(scheme: colorScheme)
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Symptoms").font(.headline).accessibilityAddTraits(.isHeader)
+            SelectionFlowLayout {
+                ForEach(entries) { entry in
+                    Label(entry.kind.title, systemImage: entry.kind.symbol)
+                        .font(.subheadline).foregroundStyle(palette.accent)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(palette.sage, in: RoundedRectangle(cornerRadius: 16))
+                        .accessibilityElement(children: .combine)
+                        .accessibilityValue(entry.ratingLabel ?? "Not rated")
+                        .accessibilityIdentifier("calendarSymptom_\(entry.kind.rawValue)")
+                }
+            }
+        }
+    }
+
+    private var actions: some View {
+        Group {
+            if calendarStyle {
+                HStack(spacing: 6) { actionButtons }
+            } else {
+                SelectionFlowLayout { actionButtons }
+            }
+        }
+        .buttonStyle(RecordActionButtonStyle())
+        .disabled(session.isSaving)
+    }
+
+    @ViewBuilder private var actionButtons: some View {
+        Button { editing = true } label: { Label("Edit", systemImage: "pencil") }
+            .frame(minHeight: 44)
+            .accessibilityLabel("Edit symptoms for \(DayText.full(day))")
+            .accessibilityIdentifier("editDaySymptoms")
+        Button(role: .destructive) { deleting = true } label: { Label("Delete", systemImage: "trash") }
+            .frame(minHeight: 44)
+            .accessibilityLabel("Delete all symptoms for \(DayText.full(day))")
+            .accessibilityIdentifier("deleteDaySymptoms")
     }
 }
 

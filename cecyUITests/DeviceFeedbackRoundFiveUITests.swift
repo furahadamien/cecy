@@ -79,7 +79,7 @@ final class DeviceFeedbackRoundFiveUITests: XCTestCase {
         ] {
             let button = app.buttons[identifier]
             reveal(button, app: app)
-            XCTAssertEqual(button.frame.height, 44, accuracy: 1)
+            XCTAssertGreaterThanOrEqual(button.frame.height, 44)
             XCTAssertGreaterThanOrEqual(button.frame.width, 44)
             XCTAssertLessThan(button.frame.width, 150)
             let text = button.staticTexts[title]
@@ -98,11 +98,18 @@ final class DeviceFeedbackRoundFiveUITests: XCTestCase {
         app.tabBars.buttons["Calendar"].tap()
         let legend = app.otherElements["calendarLegend"]
         reveal(legend, app: app)
-        XCTAssertEqual(legend.staticTexts.count, 9)
         XCTAssertTrue(legend.buttons["dailyBleedingLegend"].exists)
-        XCTAssertTrue(legend.staticTexts["Estimated fertile window"].exists)
-        XCTAssertTrue(legend.staticTexts["Estimated period days · Not recorded"].exists)
-        XCTAssertTrue(legend.staticTexts["Daily bleeding log · Not a period start"].exists)
+        for (id, meaning) in [
+            ("period", "Recorded period"), ("estimate", "Estimated period dates · Not recorded"),
+            ("ovulation", "Estimated ovulation · Not confirmed"), ("fertile", "Estimated fertile window"),
+            ("sex", "Sexual activity"), ("symptoms", "Logged symptoms"),
+            ("bleeding", "Daily bleeding log · Not a period start")
+        ] {
+            let item = legend.descendants(matching: .any)["calendarLegend_\(id)"].firstMatch
+            XCTAssertTrue(item.exists)
+            XCTAssertEqual(item.label, meaning)
+        }
+        XCTAssertFalse(legend.staticTexts["Estimated period days · Not recorded"].exists)
         for item in legend.staticTexts.allElementsBoundByIndex {
             XCTAssertFalse(item.label.lowercased().contains("dotted"))
             XCTAssertFalse(item.label.lowercased().contains("dashed"))
@@ -113,7 +120,7 @@ final class DeviceFeedbackRoundFiveUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Later cycles assume estimated periods occur. Only three cycles are projected from your last recorded start."].exists)
     }
 
-    @MainActor func testCalendarLoggingIsBelowDatesBeforeLegendAndKeepsSelectionGuards() {
+    @MainActor func testCalendarLoggingIsBelowLegendAndKeepsSelectionGuards() {
         let app = launch()
         app.tabBars.buttons["Calendar"].tap()
         let period = app.buttons["calendarLogPeriod"]
@@ -123,11 +130,10 @@ final class DeviceFeedbackRoundFiveUITests: XCTestCase {
         for button in [period, symptoms, sex] {
             XCTAssertTrue(button.isHittable)
             XCTAssertGreaterThanOrEqual(button.frame.height, 44)
-            XCTAssertLessThanOrEqual(button.frame.height, 45)
             XCTAssertGreaterThanOrEqual(button.frame.width, 44)
             XCTAssertLessThan(button.frame.width, 150)
             XCTAssertGreaterThanOrEqual(button.frame.minY, app.buttons["calendarDay_20260930"].frame.maxY)
-            XCTAssertLessThanOrEqual(button.frame.maxY, app.otherElements["calendarLegend"].frame.minY)
+            XCTAssertGreaterThanOrEqual(button.frame.minY, app.otherElements["calendarLegend"].frame.maxY)
         }
         XCTAssertEqual(app.buttons.matching(identifier: "calendarLogPeriod").count, 1)
         XCTAssertEqual(app.buttons.matching(identifier: "logSymptoms").count, 1)

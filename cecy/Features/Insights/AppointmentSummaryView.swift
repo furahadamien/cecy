@@ -1,13 +1,14 @@
 import SwiftUI
 
 struct RecordingCoverageCard: View {
+    @Environment(\.colorScheme) private var colorScheme
     let session: TrackerSession
     let today: LocalDay
     @State private var days = 30
 
     var body: some View {
         TrackerCard {
-            Text("Daily recording").font(.headline).accessibilityAddTraits(.isHeader)
+            InsightSectionHeader(title: "Daily recording", symbol: "chart.bar.fill", subtitle: "Your logs over time")
             Picker("Date range", selection: $days) {
                 Text("30 days").tag(30)
                 Text("90 days").tag(90)
@@ -15,20 +16,25 @@ struct RecordingCoverageCard: View {
             if let start = try? today.adding(days: 1 - days),
                let coverage = try? RecordingCoverage(snapshot: session.snapshot, start: start, end: today) {
                 Text(DayText.range(start, today)).font(.caption).foregroundStyle(.secondary)
-                Text("Days logged: \(coverage.loggedDays) of \(coverage.totalDays)").font(.headline)
-                    .accessibilityIdentifier("recordingCoverage")
+                RecordingCoverageOverview(coverage: coverage)
+                Divider()
                 ForEach(DailyBleedingState.allCases, id: \.self) { state in
-                    LabeledContent(state.title, value: "\(coverage.count(state))")
+                    RecordingCoverageRow(title: state.title, symbol: state.symbol, count: coverage.count(state), total: coverage.totalDays,
+                                         tint: state == .bleeding || state == .spotting ? TrackerPalette(scheme: colorScheme).recorded : TrackerPalette(scheme: colorScheme).accent)
                 }
-                LabeledContent("Not logged", value: "\(coverage.unloggedDays)")
+                RecordingCoverageRow(title: "Not logged", symbol: "nosign", count: coverage.unloggedDays, total: coverage.totalDays, tint: .secondary)
                 Text("Not logged doesn’t mean no bleeding. Period ranges don’t fill in daily answers.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             NavigationLink {
                 AppointmentSummaryView(session: session, today: today)
             } label: {
-                Label("Appointment summary", systemImage: "doc.text").frame(minHeight: 44)
+                TrackerNavigationLabel(title: "Appointment summary", symbol: "doc.text",
+                                       detail: "Prepare for your next appointment.")
+                    .padding(12)
+                    .background(TrackerPalette(scheme: colorScheme).sage.opacity(0.45), in: RoundedRectangle(cornerRadius: 22))
             }
+            .buttonStyle(.plain)
             .accessibilityIdentifier("appointmentSummary")
         }
     }

@@ -9,7 +9,13 @@ struct DayActivityIcons: View {
     @Environment(\.colorScheme) private var colorScheme
     let markers: [DayActivityMarker]
     var minimumRows = 1
-    private var rows: Int { max(minimumRows, max(1, (markers.count + 2) / 3)) }
+    // Estimates remain in the model and accessible date descriptions. Their
+    // red date outline is sufficient; only the redundant droplet is hidden.
+    static func visibleMarkers(_ markers: [DayActivityMarker]) -> [DayActivityMarker] {
+        markers.filter { $0.id != "forecast.bleeding" }
+    }
+    private var visible: [DayActivityMarker] { Self.visibleMarkers(markers) }
+    private var rows: Int { max(minimumRows, max(1, (visible.count + 2) / 3)) }
 
     var body: some View {
         let palette = TrackerPalette(scheme: colorScheme)
@@ -19,8 +25,8 @@ struct DayActivityIcons: View {
                 GridRow {
                     ForEach(0..<3, id: \.self) { column in
                         let index = row * 3 + column
-                        if index < markers.count {
-                            let marker = markers[index]
+                        if index < visible.count {
+                            let marker = visible[index]
                             Image(systemName: marker.symbol).font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(marker.id == "period" || marker.id == "forecast.bleeding"
                                                  ? palette.recorded
@@ -46,6 +52,7 @@ struct ActivityCalendarStrip: View {
     let activityIndex: DayActivityIndex
     let forecast: CycleForecast
     @Binding var selection: LocalDay
+    var compact = false
     @State private var lower = -30
     @State private var upper = 30
     @State private var centeredDay: Int?
@@ -54,7 +61,7 @@ struct ActivityCalendarStrip: View {
     private var days: [LocalDay] { (lower...upper).compactMap { try? today.adding(days: $0) } }
     private var markerRows: Int {
         let maximum = days.map {
-            DayActivityMarker.calendar(recorded: activityIndex.markers(on: $0), forecast: forecast, day: $0).count
+            DayActivityIcons.visibleMarkers(DayActivityMarker.calendar(recorded: activityIndex.markers(on: $0), forecast: forecast, day: $0)).count
         }.max() ?? 0
         return max(1, (maximum + 2) / 3)
     }
@@ -62,11 +69,11 @@ struct ActivityCalendarStrip: View {
     var body: some View {
         let palette = TrackerPalette(scheme: colorScheme)
         let iconRows = markerRows
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: compact ? 4 : 12) {
             HStack {
                 Button { expanded.toggle() } label: {
                     HStack(spacing: 8) {
-                        Text(expanded ? "Calendar" : DayText.month(visibleDay)).font(.headline)
+                        Text(expanded ? "Calendar" : DayText.month(visibleDay)).font(compact ? .subheadline.weight(.medium) : .headline)
                             .accessibilityIdentifier("todayStripMonth")
                         Image(systemName: expanded ? "chevron.up" : "chevron.down").font(.caption.weight(.semibold))
                     }.frame(minHeight: 44)
@@ -75,13 +82,18 @@ struct ActivityCalendarStrip: View {
                 .accessibilityLabel(expanded ? "Collapse calendar" : "Expand calendar")
                 .accessibilityValue(expanded ? "Expanded" : "Collapsed")
                 .accessibilityIdentifier("expandTodayCalendar")
-                Spacer()
+                Spacer(minLength: 8)
                 Button("Today") {
                     expanded = false
                     selection = today
                     lower = min(lower, -30); upper = max(upper, 30)
                     centeredDay = today.key
-                }.frame(minHeight: 44).accessibilityIdentifier("stripReturnToToday")
+                }
+                .font(.subheadline.weight(.medium))
+                .padding(.horizontal, 12)
+                .frame(minHeight: 44)
+                .background(palette.sage.opacity(0.65), in: Capsule())
+                .accessibilityIdentifier("stripReturnToToday")
             }
             if expanded {
                 ExpandableMonthCalendar(today: today, activityIndex: activityIndex, forecast: forecast, selection: $selection)
@@ -138,7 +150,7 @@ struct ActivityCalendarStrip: View {
                 if offset > upper - 7 { upper += 30 }
             }
             }
-            Divider()
+            if !compact { Divider() }
         }
             .onChange(of: selection) { _, day in
                 let offset = today.days(until: day)
@@ -157,8 +169,13 @@ struct ActivityCalendarStrip: View {
 
 struct DailyBleedingLegend: View {
     @Environment(\.colorScheme) private var colorScheme
+    var includesCalendarNotes = false
     var body: some View {
         DisclosureGroup {
+            if includesCalendarNotes {
+                Text("Ovulation is not confirmed. Other bleeding does not start a cycle.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             SelectionFlowLayout {
                 ForEach(DailyBleedingState.allCases, id: \.self) { state in
                     Label("Logged: \(state.title)", systemImage: state.symbol)
@@ -166,7 +183,7 @@ struct DailyBleedingLegend: View {
                 }
             }.padding(.top, 4)
         } label: {
-            Text("Daily bleeding answers").frame(minHeight: 44)
+            Text(includesCalendarNotes ? "Symbol details" : "Daily bleeding answers").frame(minHeight: 44)
         }
         .font(.caption)
         .accessibilityIdentifier("dailyBleedingLegend")

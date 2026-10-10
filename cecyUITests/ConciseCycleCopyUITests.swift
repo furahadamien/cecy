@@ -29,9 +29,9 @@ final class ConciseCycleCopyUITests: XCTestCase {
             XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch.exists)
         }
         app.buttons["Done"].tap()
-        let estimates = app.otherElements["todayEstimates"]
-        UIViewport.reveal(estimates, in: app)
-        XCTAssertFalse(estimates.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "contraception guidance")).firstMatch.exists)
+        XCTAssertFalse(app.otherElements["todayEstimates"].exists)
+        UIViewport.reveal(app.buttons["dailyWellnessAI"], in: app)
+        XCTAssertTrue(app.otherElements["dailyInsightsCard"].exists)
         for tab in ["Today", "Calendar"] {
             app.tabBars.buttons[tab].tap()
             let forecast = app.otherElements["upcomingCycleForecast"]
