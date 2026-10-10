@@ -8,7 +8,7 @@ struct DailyInsightsPreference: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             AIConsentControl(session: session)
-            Toggle("Prepare daily insights", isOn: Binding(
+            Toggle("Prepare automatically on Today", isOn: Binding(
                 get: { session.privacy.dailyInsightsEnabled },
                 set: { enabled in
                     if enabled { confirmEnable = true }
@@ -17,19 +17,24 @@ struct DailyInsightsPreference: View {
                         error = session.privacy.setDailyInsightsEnabled(false)
                     }
                 }))
-                .disabled(!session.canUseAI)
+                .disabled(!session.canUseAI || (session.dailyInsightRequest == nil && !session.privacy.dailyInsightsEnabled))
                 .accessibilityIdentifier("dailyInsightsToggle")
-            Text("Once a day when you open Cecy, selected cycle and symptom summaries can be sent automatically. Off by default.")
-                .font(.caption).foregroundStyle(.secondary)
+            if session.snapshot.profile?.wellnessPreferences?.isReadyForInsights != true {
+                Text(session.privacy.dailyInsightsEnabled ? "Preparation paused · Finish setup" : "Finish setup to prepare daily insights.")
+                    .font(.caption).foregroundStyle(.secondary)
+                NavigationLink("Finish insight setup") { DailyInsightSetupView(session: session) }
+                    .accessibilityIdentifier("finishInsightSetup")
+            }
             if let error { InlineError(message: error) }
         }
         .alert("Prepare daily insights automatically?", isPresented: $confirmEnable) {
             Button("Not now", role: .cancel) {}
             Button("Enable daily insights") {
                 error = session.privacy.setDailyInsightsEnabled(true)
+                if error == nil { session.preloadDailyInsights() }
             }.accessibilityIdentifier("enableDailyInsights")
         } message: {
-            Text("On your first unlocked app visit each day, Cecy may send selected cycle and symptom summaries to Azure and OpenAI. No private notes, identity, sexual activity or full history are sent. Generated text stays in memory only. Turn this off here or in Privacy and export.")
+            Text("Once a day when you open Cecy, your cycle day, today’s selected symptoms, activity, exercise, diet, allergies and wellness goals may be sent to Azure and OpenAI. No private notes, identity, sexual-activity records or full history are sent. Results appear on Today and stay in memory only. Turn this off here or in Privacy and export.")
         }
     }
 }
@@ -39,14 +44,69 @@ struct DailyInsightsCard: View {
 
     var body: some View {
         TrackerCard {
-            Label("Today’s insights", systemImage: "sun.max").font(.headline)
-                .accessibilityAddTraits(.isHeader)
-            DailyInsightsContent(session: session)
-            DisclosureGroup("Daily preparation") { DailyInsightsPreference(session: session) }
-                .accessibilityIdentifier("dailyPreparationOptions")
+            InsightSectionHeader(title: "Today’s insights", symbol: "sparkles")
+            if let output = session.dailyInsightOutput, case .wellness(let value) = output {
+                VStack(alignment: .leading, spacing: 16) {
+                    suggestions("Food", symbol: "fork.knife", items: value.foodSuggestions)
+                    suggestions("Movement", symbol: "figure.walk", items: value.movementSuggestions)
+                    suggestions("Hydration", symbol: "drop", items: [value.hydrationSuggestion])
+                    suggestions("Recovery", symbol: "leaf", items: value.recoverySuggestions)
+                    WellnessSafetyNotice(symptoms: session.snapshot.symptoms, today: session.today)
+                    AISafetyNotice(message: value.safetyMessage)
+                    DisclosureGroup("Why these?") { Text(verbatim: value.explanation).font(.subheadline) }
+                    Text("AI-generated · Not medical advice. Check ingredients against your allergies.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }.accessibilityElement(children: .contain).accessibilityIdentifier("todayWellnessSuggestions")
+            } else if session.dailyAI.isLoading {
+                AIRequestStatus(coordinator: session.dailyAI, label: "Preparing today’s insights")
+            } else if session.snapshot.profile?.wellnessPreferences?.isReadyForInsights != true {
+                Text(session.privacy.dailyInsightsEnabled ? "Preparation paused · Finish setup" : "Personalize your daily insights")
+                    .font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("dailyInsightsNeedsSetup")
+                NavigationLink("Finish insight setup") { DailyInsightSetupView(session: session) }
+                    .frame(minHeight: 44).accessibilityIdentifier("finishInsightSetup")
+            } else if !session.canUseAI {
+                AIConsentControl(session: session)
+            } else {
+                AIRequestStatus(coordinator: session.dailyAI)
+                Text(session.dailyAI.message == nil ? "Today’s insights haven’t been prepared yet." : "Today’s insights couldn’t be prepared.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                Button(session.dailyAI.message == nil ? "Prepare today’s insights" : "Try again") {
+                    session.prepareTodayInsights()
+                }.buttonStyle(TrackerPrimaryButtonStyle()).accessibilityIdentifier("prepareDailyInsights")
+            }
+            NavigationLink { AIFeatureView(session: session, feature: .wellness) } label: {
+                Label("Insight settings", systemImage: "slider.horizontal.3")
+                    .font(.subheadline).frame(minHeight: 44)
+            }.buttonStyle(.plain).accessibilityIdentifier("dailyWellnessAI")
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("dailyInsightsCard")
+        .task(id: session.dailyInsightRequest) { session.preloadDailyInsights() }
+    }
+
+    private func suggestions(_ title: String, symbol: String, items: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(title, systemImage: symbol).font(.subheadline.weight(.semibold))
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                Text(verbatim: item).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+            }
+        }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+struct DailyInsightSetupView: View {
+    let session: TrackerSession
+    @State private var preferences: WellnessPreferences?
+
+    init(session: TrackerSession) {
+        self.session = session
+        _preferences = State(initialValue: session.snapshot.profile?.wellnessPreferences)
+    }
+
+    var body: some View {
+        WellnessPreferencesView(preferences: $preferences,
+            saveTitle: session.canUseAI ? "Save & prepare" : "Save",
+            onSave: session.saveDailyInsightPreferences)
     }
 }
 
@@ -95,10 +155,6 @@ struct DailyInsightsContent: View {
                 Text("Calculated on this device").font(.caption).foregroundStyle(.secondary)
             }
             AIRequestStatus(coordinator: session.dailyAI)
-            if session.privacy.dailyInsightsEnabled && !session.dailyAI.isLoading && session.dailyInsightOutput == nil {
-                Text("Your local facts are ready. You can generate an explanation manually if today’s automatic request is unavailable.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
         }
     }
 

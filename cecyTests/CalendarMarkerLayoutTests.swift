@@ -76,4 +76,47 @@ import Testing
         #expect(multiple.sizeThatFits(in: proposal).height == 82)
         #expect(reserved.sizeThatFits(in: proposal).height == 82)
     }
+
+    @Test func linkedBleedingUsesRecordedPeriodMarkerWithoutFillingGapsOrEndingPeriod() throws {
+        let (start, forecast) = try fixture()
+        let day = try start.adding(days: 3)
+        let period = Period(start: start)
+        let answer = DailyBleedingObservation(day: day, state: .bleeding, periodID: period.id)
+        let snapshot = TrackerSnapshot(periods: [period], dailyBleeding: [answer])
+        let index = DayActivityIndex(snapshot: snapshot)
+        let markers = index.markers(on: day)
+        #expect(markers == DayActivityMarker.recorded(on: day, in: snapshot))
+        #expect(markers.map(\.id) == ["period"])
+        #expect(markers.first?.symbol == "drop.fill") // Both calendar renderers color period markers recorded red.
+        #expect(markers.first?.title == "Confirmed bleeding")
+        #expect(DayActivityMarker.calendar(recorded: markers, forecast: forecast, day: day).map(\.id) == ["period"])
+        #expect(try index.markers(on: start.adding(days: 1)).isEmpty)
+        #expect(try index.markers(on: day.adding(days: 1)).isEmpty)
+        #expect(snapshot.periods[0].end == nil)
+        #expect(index.loggedDays() == [day, start])
+    }
+
+    @Test func linkedDailyAnswersDoNotDuplicateConfirmedRangeMarkers() throws {
+        let start = try LocalDay(key: 20261001)
+        let day = try start.adding(days: 1)
+        let period = Period(start: start, end: day)
+        for date in [start, day] {
+            let snapshot = TrackerSnapshot(periods: [period], dailyBleeding: [
+                DailyBleedingObservation(day: date, state: .bleeding, periodID: period.id)
+            ])
+            let markers = DayActivityIndex(snapshot: snapshot).markers(on: date)
+            #expect(markers.map(\.id) == ["period"])
+            #expect(markers == DayActivityMarker.recorded(on: date, in: snapshot))
+        }
+    }
+
+    @Test func unlinkedBleedingAndSpottingRemainOtherBleeding() throws {
+        let day = try LocalDay(key: 20261001)
+        for state in [DailyBleedingState.bleeding, .spotting] {
+            let snapshot = TrackerSnapshot(dailyBleeding: [DailyBleedingObservation(day: day, state: state)])
+            let markers = DayActivityIndex(snapshot: snapshot).markers(on: day)
+            #expect(markers.map(\.id) == ["dailyBleeding"])
+            #expect(markers == DayActivityMarker.recorded(on: day, in: snapshot))
+        }
+    }
 }

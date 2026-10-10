@@ -61,6 +61,12 @@ nonisolated struct WellnessPreferences: Codable, Equatable, Sendable {
             && foodAllergyStatus == .notAnswered && foodAllergies.isEmpty && goals == nil
     }
 
+    var isReadyForInsights: Bool {
+        guard activityLevel != nil, preferredExercises != nil, dietaryPreference != nil,
+              foodAllergyStatus != .notAnswered, goals != nil else { return false }
+        do { try validate(); return true } catch { return false }
+    }
+
     mutating func setAllergyStatus(_ status: FoodAllergyStatus) {
         foodAllergyStatus = status
         if status != .listed { foodAllergies = [] }

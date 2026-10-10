@@ -161,7 +161,9 @@ struct TrackerCalendarView: View {
         if let day = try? selection.adding(months: offset) { selection = day }
     }
 
-    private func record(on day: LocalDay) -> Period? { session.snapshot.periods.first { $0.contains(day) } }
+    private func record(on day: LocalDay) -> Period? {
+        PeriodLogSelection.existing(on: day, periods: session.snapshot.periods, dailyBleeding: session.snapshot.dailyBleeding)
+    }
 
     private func observationCount(on day: LocalDay) -> Int {
         session.snapshot.symptoms.filter { $0.day == day }.count
@@ -269,7 +271,7 @@ struct TrackerCalendarView: View {
             Label {
                 Text("Log period")
             } icon: {
-                Image(systemName: "drop.fill").foregroundStyle(.red)
+                Image(systemName: "drop.fill").foregroundStyle(palette.recorded)
             }
         }
         .buttonStyle(TrackerCompactLogButtonStyle(prominent: true))

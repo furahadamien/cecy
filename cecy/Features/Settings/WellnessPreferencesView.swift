@@ -5,6 +5,8 @@ struct WellnessPreferencesView: View {
     @Environment(\.dismiss) private var dismiss
     @Binding private var preferences: WellnessPreferences?
     private let initial: WellnessPreferences?
+    private let saveTitle: String
+    private let onSave: ((WellnessPreferences?) -> String?)?
     @State private var draft: WellnessPreferences
     @State private var allergyText = ""
     @State private var error: String?
@@ -12,9 +14,12 @@ struct WellnessPreferencesView: View {
     @State private var clear = false
     @FocusState private var allergyFocused: Bool
 
-    init(preferences: Binding<WellnessPreferences?>) {
+    init(preferences: Binding<WellnessPreferences?>, saveTitle: String = "Done",
+         onSave: ((WellnessPreferences?) -> String?)? = nil) {
         _preferences = preferences
         initial = preferences.wrappedValue
+        self.saveTitle = saveTitle
+        self.onSave = onSave
         _draft = State(initialValue: preferences.wrappedValue ?? WellnessPreferences())
     }
 
@@ -34,9 +39,13 @@ struct WellnessPreferencesView: View {
     var body: some View {
         SettingsForm(title: "Wellness preferences") {
             Section {
-                Text("Your preferences stay stored on this device. AI suggestions use selected details sent only when you request them.")
-                Text("Tap Done to return to Profile, then Save to keep your changes.")
-                    .font(.footnote).foregroundStyle(.secondary)
+                if onSave != nil {
+                    Text("Choose once to personalize your daily insights.")
+                } else {
+                    Text("Your preferences stay stored on this device. AI suggestions use selected details sent only when you request them.")
+                    Text("Tap Done to return to Profile, then Save to keep your changes.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
             }
             Section("Activity level") {
                 SelectionFlowLayout {
@@ -133,7 +142,7 @@ struct WellnessPreferencesView: View {
                 Button("No wellness goals") { draft.goals = [] }
                 Button("Leave wellness goals unanswered") { draft.goals = nil }
             } header: { Text("Wellness goals") } footer: {
-                Text("Saving preferences does not send them anywhere.")
+                if onSave == nil { Text("Saving preferences does not send them anywhere.") }
             }
             if let message = error ?? validation {
                 Section { InlineError(message: message) }
@@ -156,12 +165,16 @@ struct WellnessPreferencesView: View {
                     .accessibilityIdentifier("cancelWellness")
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Done") {
+                Button(saveTitle) {
                     guard validation == nil, allergyText.isEmpty else { return }
+                    if let onSave, let message = onSave(normalized) {
+                        error = message
+                        return
+                    }
                     preferences = normalized
                     dismiss()
                 }
-                .disabled(validation != nil || !allergyText.isEmpty)
+                .disabled(validation != nil || !allergyText.isEmpty || (onSave != nil && !draft.isReadyForInsights))
                 .accessibilityIdentifier("applyWellness")
             }
             ToolbarItemGroup(placement: .keyboard) {

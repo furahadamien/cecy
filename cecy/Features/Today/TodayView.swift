@@ -43,9 +43,7 @@ struct TodayView: View {
             ForEach(session.cycleForecast.cycles.filter { selection != today && $0.contains(selection) }) { cycle in
                 TrackerCard { ProjectedCycleDetails(cycle: cycle, todayStyle: true) }
             }
-            if !session.cycleForecast.cycles.isEmpty || session.snapshot.periods.contains(where: { $0.contains(today) }) {
-                TodayEstimatesCard(forecast: session.cycleForecast, today: today, periods: session.snapshot.periods)
-            }
+            DailyInsightsCard(session: session)
             if !session.cycleForecast.cycles.isEmpty {
                 TrackerCard { UpcomingCycleForecastView(forecast: session.cycleForecast, today: today, todayStyle: true) }
             }
@@ -88,10 +86,10 @@ struct TodayView: View {
                 }
             }
             if let status = TodayCurrentPeriodStatus(periods: session.snapshot.periods,
-                                                     forecast: session.cycleForecast, today: today) {
+                                                     forecast: session.cycleForecast, today: today, dailyBleeding: session.snapshot.dailyBleeding) {
                 Divider()
                 HStack(spacing: 12) {
-                    Image(systemName: "drop.fill").font(.title3).foregroundStyle(.red).accessibilityHidden(true)
+                    Image(systemName: "drop.fill").font(.title3).foregroundStyle(TrackerPalette(scheme: colorScheme).recorded).accessibilityHidden(true)
                     Text(status.title)
                         .font(.system(.headline, design: .rounded, weight: .semibold))
                         .multilineTextAlignment(.center)
@@ -143,7 +141,7 @@ struct TodayView: View {
 
     @ViewBuilder private var loggingButtons: some View {
         Button { onLog(selection) } label: {
-            Label { Text("Log period") } icon: { Image(systemName: "drop.fill").foregroundStyle(.red) }
+            Label { Text("Log period") } icon: { Image(systemName: "drop.fill").foregroundStyle(TrackerPalette(scheme: colorScheme).recorded) }
         }
         .buttonStyle(TrackerCompactLogButtonStyle(prominent: true))
         .accessibilityLabel("Log period")
@@ -185,8 +183,8 @@ private struct TodayHeroColumns: Layout {
 nonisolated enum TodayCurrentPeriodStatus: Equatable {
     case recorded, estimated
 
-    init?(periods: [Period], forecast: CycleForecast, today: LocalDay) {
-        if periods.contains(where: { $0.contains(today) }) {
+    init?(periods: [Period], forecast: CycleForecast, today: LocalDay, dailyBleeding: [DailyBleedingObservation] = []) {
+        if PeriodLogSelection.existing(on: today, periods: periods, dailyBleeding: dailyBleeding) != nil {
             self = .recorded
         } else if forecast.bleeding(on: today) != nil {
             self = .estimated

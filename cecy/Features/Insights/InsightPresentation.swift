@@ -56,7 +56,7 @@ struct RecordingCoverageOverview: View {
                     .font(.headline)
                 Text("Days logged: \(coverage.loggedDays) of \(coverage.totalDays)")
                     .font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("recordingCoverage")
-                Text("Your daily bleeding answers over time.").font(.caption).foregroundStyle(.secondary)
+                Text("Keep logging to build more accurate insights").font(.caption).foregroundStyle(.secondary)
             }.frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(14)

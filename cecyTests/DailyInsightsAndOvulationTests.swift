@@ -79,21 +79,25 @@ private actor DailyTestService: AIService {
     private(set) var calls = 0
     let delayed: Bool
     let fails: Bool
-    var continuation: CheckedContinuation<CycleQuestionResult, Never>?
+    var continuation: CheckedContinuation<WellnessRecommendation, Never>?
     init(delayed: Bool = false, fails: Bool = false) { self.delayed = delayed; self.fails = fails }
-    func answerCycleQuestion(context: CycleQuestionContext) async throws -> CycleQuestionResult {
+    func getWellnessRecommendation(context: WellnessRecommendationContext) async throws -> WellnessRecommendation {
         calls += 1
         if fails { throw AIServiceError.unavailable }
         if delayed { return await withCheckedContinuation { continuation = $0 } }
-        return CycleQuestionResult(answer: "Synthetic explanation", supportingFacts: ["One recorded start"], safetyMessage: nil)
+        return result
+    }
+    private var result: WellnessRecommendation {
+        WellnessRecommendation(movementSuggestions: ["Gentle walking"], foodSuggestions: ["A balanced meal"],
+            hydrationSuggestion: "Drink water", recoverySuggestions: ["Rest when needed"], explanation: "Synthetic guidance", safetyMessage: nil)
     }
     func complete() {
-        continuation?.resume(returning: CycleQuestionResult(answer: "Late synthetic answer", supportingFacts: [], safetyMessage: nil))
+        continuation?.resume(returning: result)
         continuation = nil
     }
     func normalizeSymptoms(text: String) async throws -> SymptomNormalizationResult { throw AIServiceError.unavailable }
     func explainInsight(context: InsightExplanationContext) async throws -> InsightExplanationResult { throw AIServiceError.unavailable }
-    func getWellnessRecommendation(context: WellnessRecommendationContext) async throws -> WellnessRecommendation { throw AIServiceError.unavailable }
+    func answerCycleQuestion(context: CycleQuestionContext) async throws -> CycleQuestionResult { throw AIServiceError.unavailable }
     func generateCycleSummary(context: CycleSummaryContext) async throws -> CycleSummaryResult { throw AIServiceError.unavailable }
 }
 
@@ -112,6 +116,12 @@ private actor DailyTestService: AIService {
         let repository = try SwiftDataPeriodRepository.inMemory()
         _ = try repository.add([Period(start: today.adding(days: -20))], completingOnboarding: true,
                                today: today, now: today.formattingDate)
+        var profile = LocalProfile()
+        profile.preferredName = "Synthetic"
+        profile.birthDayKey = 19950101
+        profile.wellnessPreferences = WellnessPreferences(activityLevel: .beginner, preferredExercises: [.walking],
+            dietaryPreference: .noPreference, foodAllergyStatus: .noneKnown, foodAllergies: [], goals: [.stayActive])
+        _ = try repository.saveProfile(profile, today: today)
         return repository
     }
 
@@ -238,6 +248,94 @@ private actor DailyTestService: AIService {
         await Task.yield()
         #expect(session.dailyInsightOutput == nil && !session.dailyAI.isLoading)
         #expect(session.snapshot == original)
+    }
+
+    @Test func oldAutomaticConsentRequiresRenewalAndPopupPersists() throws {
+        let storage = DailyTestPreferences()
+        storage.value.aiConsent = AIConsentRecord(noticeVersion: AIConsentRecord.currentVersion, grantedAt: today.formattingDate)
+        storage.value.dailyInsightsEnabled = true
+        storage.value.dailyInsightAttemptDay = today.key
+        let p = privacy(storage)
+        #expect(p.aiEnabled && !p.dailyInsightsEnabled)
+        #expect(p.reserveDailyInsightPresentation(on: today))
+        #expect(!privacy(storage).reserveDailyInsightPresentation(on: today))
+        #expect(try p.reserveDailyInsightPresentation(on: today.adding(days: 1)))
+        #expect(p.setDailyInsightsEnabled(true) == nil && p.dailyInsightsEnabled)
+        #expect(p.reserveDailyInsightAttempt(on: today)) // Legacy record-summary attempts do not block new consent.
+        #expect(p.setDailyInsightsEnabled(false) == nil)
+        #expect(p.setDailyInsightsEnabled(true) == nil)
+        #expect(!p.reserveDailyInsightAttempt(on: today)) // Toggling is not an automatic retry.
+        try p.prepareForReset()
+        #expect(p.preferences.dailyInsightPresentationDay == nil)
+    }
+
+    @Test func manualAndAutomaticUseOneInFlightWellnessRequest() async throws {
+        let service = DailyTestService(delayed: true), repo = try repository()
+        let session = TrackerSession(repository: { repo }, clock: { self.today.formattingDate }, timeZone: { .gmt }, aiService: service)
+        session.load()
+        #expect(session.setAIEnabled(true) == nil)
+        #expect(session.privacy.setDailyInsightsEnabled(true) == nil)
+        session.preloadDailyInsights()
+        session.prepareTodayInsights()
+        await waitFor { await service.calls == 1 }
+        #expect(await service.calls == 1)
+        await service.complete()
+        await waitFor { !session.dailyAI.isLoading }
+        #expect(session.dailyInsightOutput != nil && session.ai.output == nil)
+        session.preloadDailyInsights()
+        #expect(await service.calls == 1)
+    }
+
+    @Test func missingPreferencesNeverSpendAutomaticAttempt() throws {
+        let repo = try SwiftDataPeriodRepository.inMemory()
+        _ = try repo.add([Period(start: today)], completingOnboarding: true, today: today, now: today.formattingDate)
+        let session = TrackerSession(repository: { repo }, clock: { self.today.formattingDate }, timeZone: { .gmt })
+        session.load()
+        #expect(session.setAIEnabled(true) == nil)
+        #expect(session.privacy.setDailyInsightsEnabled(true) == nil)
+        session.preloadDailyInsights()
+        #expect(session.dailyInsightRequest == nil && session.privacy.preferences.dailyInsightAttemptDay == nil)
+    }
+
+    @Test func savingSetupRecoversEnabledPreparationWithoutChangingPeriodData() async throws {
+        let repo = try repository(), service = DailyTestService()
+        var profile = try #require(repo.load().profile)
+        let complete = try #require(profile.wellnessPreferences)
+        profile.wellnessPreferences = nil
+        _ = try repo.saveProfile(profile, today: today)
+        let session = TrackerSession(repository: { repo }, clock: { self.today.formattingDate }, timeZone: { .gmt }, aiService: service)
+        session.load()
+        let periods = session.snapshot.periods
+        #expect(session.setAIEnabled(true) == nil)
+        #expect(session.privacy.setDailyInsightsEnabled(true) == nil)
+        session.preloadDailyInsights()
+        #expect(await service.calls == 0)
+        #expect(session.saveDailyInsightPreferences(complete) == nil)
+        session.preloadDailyInsights()
+        await waitFor { !session.dailyAI.isLoading }
+        #expect(await service.calls == 1)
+        #expect(session.dailyInsightOutput != nil)
+        #expect(session.snapshot.periods == periods)
+        #expect(session.snapshot.profile?.preferredName == profile.preferredName)
+        #expect(try repo.load().profile?.wellnessPreferences == complete)
+    }
+
+    @Test func setupRejectsMissingAnswersAndNeverUploadsWithoutConsent() async throws {
+        let repo = try repository(), service = DailyTestService()
+        let session = TrackerSession(repository: { repo }, clock: { self.today.formattingDate }, timeZone: { .gmt }, aiService: service)
+        session.load()
+        let original = session.snapshot
+        var preferences = try #require(original.profile?.wellnessPreferences)
+        preferences.foodAllergyStatus = .notAnswered
+        #expect(!preferences.isReadyForInsights)
+        #expect(session.saveDailyInsightPreferences(preferences) != nil)
+        #expect(session.snapshot == original)
+        preferences.foodAllergyStatus = .noneKnown
+        #expect(preferences.isReadyForInsights)
+        #expect(session.saveDailyInsightPreferences(preferences) == nil)
+        await Task.yield()
+        #expect(await service.calls == 0)
+        #expect(session.dailyInsightOutput == nil)
     }
 }
 

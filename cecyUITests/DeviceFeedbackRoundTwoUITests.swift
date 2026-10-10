@@ -48,7 +48,7 @@ final class DeviceFeedbackRoundTwoUITests: XCTestCase {
         button.tap()
     }
 
-    @MainActor func testWellnessAppearsInInsightsAndClearsOnBackground() {
+    @MainActor func testWellnessAppearsInInsightsAndSharesDailyResultUntilRelaunch() {
         let app = launch()
         XCTAssertFalse(app.staticTexts["Synthetic gentle movement"].exists)
         tap("dailyWellnessAI", app: app)
@@ -60,14 +60,17 @@ final class DeviceFeedbackRoundTwoUITests: XCTestCase {
         XCTAssertTrue(suggestion.waitForExistence(timeout: 10))
         reveal(suggestion, app: app)
         app.navigationBars.buttons.firstMatch.tap()
-        XCTAssertTrue(app.navigationBars["For today"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Today’s insights"].waitForNonExistence(timeout: 5))
         reveal(suggestion, app: app)
         XCTAssertTrue(suggestion.exists)
-        tap("todayWellnessPreferences", app: app)
-        XCTAssertTrue(app.navigationBars["Profile"].waitForExistence(timeout: 5))
-        app.navigationBars.buttons.firstMatch.tap()
+        tap("dailyWellnessAI", app: app)
+        tap("wellnessPreferencesLink", app: app)
+        XCTAssertTrue(app.navigationBars["Wellness preferences"].waitForExistence(timeout: 5))
+        app.buttons["cancelWellness"].tap()
         XCUIDevice.shared.press(.home)
         app.activate()
+        XCTAssertTrue(suggestion.exists)
+        app.terminate(); app.launch()
         tap("dailyWellnessAI", app: app)
         XCTAssertFalse(app.staticTexts["Synthetic gentle movement"].exists)
         XCTAssertTrue(app.buttons["generateAI"].exists)

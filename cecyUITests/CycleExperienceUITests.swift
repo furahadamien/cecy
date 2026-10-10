@@ -35,9 +35,10 @@ final class CycleExperienceUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["phaseDayRange"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["phaseDayRange"].label, "Estimated days 15–15")
         app.buttons["Done"].tap()
-        let estimates = app.otherElements["todayEstimates"]
-        UIViewport.reveal(estimates, in: app)
-        XCTAssertLessThan(estimates.frame.minY, app.otherElements["upcomingCycleForecast"].frame.minY)
+        let insights = app.otherElements["dailyInsightsCard"]
+        UIViewport.reveal(insights, in: app)
+        XCTAssertFalse(app.otherElements["todayEstimates"].exists)
+        XCTAssertLessThan(insights.frame.minY, app.otherElements["upcomingCycleForecast"].frame.minY)
     }
 
     @MainActor func testRingSegmentStillOpensExistingPhaseDetails() {

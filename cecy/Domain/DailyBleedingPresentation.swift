@@ -25,8 +25,12 @@ extension BleedingReconciliation {
     nonisolated mutating func replacePeriod(_ period: Period) {
         if let index = periods.firstIndex(where: { $0.id == period.id }) { periods[index] = period }
         else { periods.append(period) }
-        for index in observations.indices where observations[index].periodID == period.id {
-            if !period.contains(observations[index].day) { observations[index].periodID = nil }
+        for index in observations.indices {
+            guard let id = observations[index].periodID,
+                  let linked = periods.first(where: { $0.id == id }) else { continue }
+            if !DailyBleedingValidation.canAssociate(observations[index].day, with: linked, periods: periods) {
+                observations[index].periodID = nil
+            }
         }
     }
 

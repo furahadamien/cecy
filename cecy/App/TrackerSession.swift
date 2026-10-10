@@ -117,17 +117,35 @@ final class TrackerSession {
     }
 
     func performAI(_ request: AIRequest) {
-        if dailyAI.isLoading { dailyAI.cancel() }
+        if case .wellness = request {
+            prepareTodayInsights()
+            return
+        }
         ai.begin(request) { [weak self] in self?.canUseAI == true }
     }
 
     func preloadDailyInsights() {
         guard canUseAI, privacy.dailyInsightsEnabled, !ai.isLoading, !dailyAI.isLoading,
+              dailyInsightOutput == nil,
               let today, let request = dailyInsightRequest,
               privacy.reserveDailyInsightAttempt(on: today) else { return }
         dailyAI.begin(request) { [weak self] in
             guard let self else { return false }
             return canUseAI && privacy.dailyInsightsEnabled && self.today == today && dailyInsightRequest == request
+        }
+    }
+
+    /// Explicit generation/retry shares the automatic request and result across both tabs.
+    func prepareTodayInsights() {
+        guard canUseAI, !dailyAI.isLoading, let today, let request = dailyInsightRequest else { return }
+        if privacy.dailyInsightsEnabled {
+            // Manual retries are allowed, but must never be followed by another automatic attempt.
+            if privacy.preferences.dailyInsightAttemptDay != today.key,
+               !privacy.reserveDailyInsightAttempt(on: today) { return }
+        }
+        dailyAI.begin(request) { [weak self] in
+            guard let self else { return false }
+            return canUseAI && self.today == today && dailyInsightRequest == request
         }
     }
 
@@ -212,6 +230,18 @@ final class TrackerSession {
         mutate(confirmation: "Profile updated.", failure: "Your profile hasn’t been saved. Try again.") { repository, today, _ in
             try repository.saveProfile(profile, today: today)
         }
+    }
+
+    func saveDailyInsightPreferences(_ preferences: WellnessPreferences?) -> String? {
+        guard let preferences, preferences.isReadyForInsights else {
+            return "Choose your activity, exercise, diet, allergies and goals first."
+        }
+        guard var profile = snapshot.profile else { return ProfileError.notReady.localizedDescription }
+        profile.wellnessPreferences = preferences
+        if let error = saveProfile(profile) { return error }
+        // Save & prepare is an explicit request. No consent means local save only.
+        prepareTodayInsights()
+        return nil
     }
 
     /// Keychain, SwiftData and notification services cannot share one transaction.
@@ -307,7 +337,7 @@ final class TrackerSession {
     private func publish(_ snapshot: TrackerSnapshot, today: LocalDay) {
         ai.invalidate()
         if self.snapshot != snapshot || self.today != today { dailyAI.invalidate() }
-        dailyInsightRequest = try? AIContextBuilder.recordInsights(snapshot: snapshot, today: today)
+        dailyInsightRequest = try? AIContextBuilder.wellness(snapshot: snapshot, today: today)
         self.snapshot = snapshot
         activityIndex = DayActivityIndex(snapshot: snapshot)
         self.today = today

@@ -31,24 +31,25 @@ final class InsightsRefreshUITests: XCTestCase {
         XCTAssertTrue(app.switches["summaryPeriods"].waitForExistence(timeout: 5))
     }
 
-    @MainActor func testLocalFactsAndSuggestionsKeepConsentGate() {
+    @MainActor func testSuggestionsKeepConsentGate() {
         let app = launch(fixture: "ai")
-        let facts = app.descendants(matching: .any)["localPeriodFacts"].firstMatch
-        UIViewport.reveal(facts, in: app)
-        XCTAssertTrue(facts.label.contains("recorded period start"))
-        XCTAssertTrue(app.staticTexts["Calculated on this device"].exists)
         XCTAssertFalse(app.otherElements["aiOutput"].exists)
         let suggestions = app.buttons["dailyWellnessAI"]
         UIViewport.reveal(suggestions, in: app); suggestions.tap()
-        XCTAssertTrue(app.buttons["reviewAIConsent"].waitForExistence(timeout: 5))
+        UIViewport.reveal(app.buttons["reviewAIConsent"], in: app)
+        XCTAssertTrue(app.buttons["reviewAIConsent"].isHittable)
+        UIViewport.reveal(app.buttons["generateAI"], in: app)
         XCTAssertFalse(app.buttons["generateAI"].isEnabled)
     }
 
     @MainActor func testSuggestionsStillRequireLocalWellnessPreferences() {
         let app = launch()
-        let suggestions = app.buttons["dailyWellnessAI"]
-        UIViewport.reveal(suggestions, in: app); suggestions.tap()
-        XCTAssertTrue(app.buttons["Edit local wellness preferences"].waitForExistence(timeout: 5))
+        let setup = app.buttons["finishInsightSetup"].firstMatch
+        UIViewport.reveal(setup, in: app)
+        XCTAssertTrue(app.staticTexts["dailyInsightsNeedsSetup"].exists)
+        setup.tap()
+        XCTAssertTrue(app.navigationBars["Wellness preferences"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["applyWellness"].isEnabled)
         XCTAssertFalse(app.buttons["generateAI"].exists)
     }
 }

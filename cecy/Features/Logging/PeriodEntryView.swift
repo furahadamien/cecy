@@ -75,36 +75,56 @@ struct PeriodEntryView: View {
         self.onSave = onSave
     }
 
-    private var validationMessage: String? { draft.validationMessage(existing: existing, today: today) }
+    private var validationMessage: String? {
+        if addingBleeding {
+            do { _ = try bleedingReview(); return nil }
+            catch { return error.localizedDescription }
+        }
+        return draft.validationMessage(existing: existing, today: today)
+    }
+
+    private func bleedingReview() throws -> BleedingReconciliation {
+        guard let continuation, var review = initialReview, session != nil else { throw DailyBleedingError.unavailable }
+        try review.recordBleeding(on: newPeriod.start, periodID: continuation.id, flow: draft.flow, today: today)
+        return review
+    }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section {
+                if !addingBleeding { Section {
                     Text("A period start is cycle day 1. Add an end date when known. For spotting or uncertain bleeding, use Other bleeding.")
                         .font(.footnote).foregroundStyle(.secondary)
-                }
+                } }
                 if let continuation {
                     Section {
-                        Text("Is this a new period or more bleeding days?").font(.headline)
+                        Text("What are you recording?").font(.headline)
                         SelectionFlowLayout {
                             SelectionChip(title: "New period", symbol: "calendar.badge.plus", selected: entryKindChosen && !addingBleeding) {
                                 addingBleeding = false
                                 entryKindChosen = true
                                 draft = PeriodDraft(period: newPeriod)
                             }.accessibilityIdentifier("newPeriodEntry")
-                            SelectionChip(title: "Add bleeding days", symbol: "drop.fill", selected: addingBleeding) {
+                            SelectionChip(title: "Add bleeding day", symbol: "drop.fill", selected: addingBleeding) {
                                 addingBleeding = true
                                 entryKindChosen = true
                                 draft = PeriodDraft(period: continuation)
-                                draft.end = newPeriod.start
-                                draft.includesEnd = true
+                                draft.flow = initialReview?.observations.first(where: { $0.day == newPeriod.start })?.flow
+                                saveError = nil
                             }.accessibilityIdentifier("continuePeriodEntry")
                         }
                         Text("Existing period started \(DayText.short(continuation.start)).")
                             .font(.footnote)
                     }
                 }
+                if addingBleeding {
+                    Section {
+                        LabeledContent("Bleeding day", value: DayText.full(newPeriod.start))
+                            .accessibilityIdentifier("continuingBleedingDay")
+                        Label("Confirmed bleeding", systemImage: "checkmark.circle")
+                            .accessibilityIdentifier("confirmedDailyBleeding")
+                    }
+                } else {
                 Section {
                     DatePicker("Start date", selection: dayBinding(\.start), in: ...today.formattingDate, displayedComponents: .date)
                         .accessibilityIdentifier("periodStartDate")
@@ -119,8 +139,9 @@ struct PeriodEntryView: View {
                 } footer: {
                     Text("Include only days you actually bled, from the start through the last bleeding day. Turn this off if you only know the start. Future days cannot be logged.")
                 }
+                }
                 Section {
-                    Text("Overall flow · Optional").font(.headline)
+                    Text(addingBleeding ? "Flow for this day · Optional" : "Overall flow · Optional").font(.headline)
                     SelectionFlowLayout {
                         SelectionChip(title: "Not recorded", symbol: "minus.circle", selected: draft.flow == nil) { draft.flow = nil }
                             .accessibilityIdentifier("periodFlow_none")
@@ -132,13 +153,15 @@ struct PeriodEntryView: View {
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("periodFlow")
                 } footer: {
-                    Text("Your summary for this period, not a daily measurement or medical assessment.")
+                    if !addingBleeding { Text("Your summary for this period, not a daily measurement or medical assessment.") }
                 }
+                if !addingBleeding {
                 Section("Private note (optional)") {
                     TextField("Add a note", text: $draft.notes, axis: .vertical)
                         .lineLimit(3...8).accessibilityIdentifier("periodNotes")
                     Text("\(draft.notes.count) / \(PeriodValidation.maximumNoteLength) characters")
                         .font(.footnote).foregroundStyle(.secondary)
+                }
                 }
                 if let message = saveError ?? validationMessage {
                     Section {
@@ -158,12 +181,17 @@ struct PeriodEntryView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
-                        if draft.hasChanges { confirmDiscard = true } else { dismiss() }
+                        if draft.hasChanges || addingBleeding { confirmDiscard = true } else { dismiss() }
                     }.disabled(isSaving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isEditing ? "Save changes" : (isDraft ? "Add to list" : addingBleeding ? "Save bleeding" : "Save period")) {
                         guard !isSaving else { return }
+                        if addingBleeding {
+                            do { save(review: try bleedingReview()) }
+                            catch { saveError = error.localizedDescription; errorFocused = true }
+                            return
+                        }
                         let period = draft.period
                         if var review = initialReview {
                             review.replacePeriod(period)
@@ -177,7 +205,7 @@ struct PeriodEntryView: View {
                     .accessibilityIdentifier("savePeriod")
                 }
             }
-            .interactiveDismissDisabled(draft.hasChanges || isSaving)
+            .interactiveDismissDisabled(draft.hasChanges || addingBleeding || isSaving)
             .confirmationDialog("Discard these unsaved changes?", isPresented: $confirmDiscard, titleVisibility: .visible) {
                 Button("Discard changes", role: .destructive) { dismiss() }
                 Button("Keep editing", role: .cancel) { }

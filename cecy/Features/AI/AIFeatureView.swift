@@ -4,7 +4,7 @@ nonisolated enum AIFeature {
     case wellness, insight(CycleInsight), summary(LocalDay), question, records
     var title: String {
         switch self {
-        case .wellness: "For today"
+        case .wellness: "Today’s insights"
         case .insight: "Explain this observation"
         case .summary: "Your cycle summary"
         case .question: "Ask about your records"
@@ -40,10 +40,9 @@ struct AIFeatureView: View {
     }
     private var isQuestion: Bool { if case .question = feature { true } else { false } }
     private var isWellness: Bool { if case .wellness = feature { true } else { false } }
+    private var coordinator: AIRequestCoordinator { isWellness ? session.dailyAI : session.ai }
     private var wellnessOutput: AIOutput? {
-        guard isWellness, session.canUseAI, case .success(let request) = preparation,
-              let value = session.ai.wellness(for: request) else { return nil }
-        return .wellness(value)
+        isWellness ? session.dailyInsightOutput : nil
     }
 
     var body: some View {
@@ -63,17 +62,18 @@ struct AIFeatureView: View {
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
             }
+            if isWellness {
+                Section { DailyInsightsPreference(session: session) }
+            }
             Section {
                 if !isWellness {
                     Text("A little clarity, based on your records.").font(.title3.weight(.medium))
                     Text("Even one record can be described. Small samples do not establish patterns; missing lengths and end dates stay unknown.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
-                if isWellness {
-                    NavigationLink("Edit wellness preferences") { ProfileSettingsView(session: session) }
+                if isWellness, session.snapshot.profile?.wellnessPreferences?.isReadyForInsights == true {
+                    NavigationLink("Edit wellness preferences") { DailyInsightSetupView(session: session) }
                         .accessibilityIdentifier("wellnessPreferencesLink")
-                    Text("Based on today’s symptoms and preferences. Always check ingredients against your allergies.")
-                        .font(.footnote).foregroundStyle(.secondary)
                 }
             }
             if isQuestion {
@@ -139,17 +139,21 @@ struct AIFeatureView: View {
             switch preparation {
             case .success(let request):
                 Section {
-                    AIConsentControl(session: session)
-                    Button(session.ai.output == nil && wellnessOutput == nil ? "Generate" : "Generate again") {
+                    if !isWellness { AIConsentControl(session: session) }
+                    Button(coordinator.output == nil ? (isWellness ? "Generate today’s insights" : "Generate") : "Generate again") {
                         typing = false
                         session.performAI(request)
                     }
-                    .disabled(!session.canUseAI || session.ai.isLoading)
+                    .disabled(!session.canUseAI || coordinator.isLoading)
                     .buttonStyle(TrackerPrimaryButtonStyle())
                     .accessibilityIdentifier("generateAI")
-                    AIRequestStatus(coordinator: session.ai)
+                    AIRequestStatus(coordinator: coordinator)
                 } footer: {
-                    Text("Your question and selected details are sent when you generate. Daily summaries require separate automatic-preparation consent. Ready answers stay on-device. Generated results are not saved.")
+                    if isWellness {
+                        Text("Check ingredients against your allergies. Not medical advice. Results are not saved.")
+                    } else {
+                        Text("Your question and selected details are sent when you generate. Ready answers stay on-device. Generated results are not saved.")
+                    }
                 }
                 if !isWellness, let output = session.ai.output, session.ai.request == request {
                     Section { AIOutputView(output: output) }
@@ -161,10 +165,9 @@ struct AIFeatureView: View {
                         .listRowBackground(Color.clear)
                 }
             case .failure(let error):
-                Section {
-                    InlineError(message: error.localizedDescription)
-                    if isWellness {
-                        NavigationLink("Edit local wellness preferences") { ProfileSettingsView(session: session) }
+                if !isWellness || session.snapshot.profile?.wellnessPreferences?.isReadyForInsights == true {
+                    Section {
+                        InlineError(message: error.localizedDescription)
                     }
                 }
             }
@@ -181,8 +184,15 @@ struct AIFeatureView: View {
             }
             session.ai.cancel()
         }
-        .onChange(of: session.ai.revision) { _, _ in question = ""; dismiss() }
-        .onAppear { session.ai.cancel() }
-        .onDisappear { session.ai.cancel() }
+        .onChange(of: session.ai.revision) { _, _ in
+            if !isWellness { question = ""; dismiss() }
+        }
+        .onAppear {
+            if isWellness, let today = session.today {
+                // A manual visit counts as today's presentation, avoiding a duplicate popup.
+                _ = session.privacy.reserveDailyInsightPresentation(on: today)
+            } else { session.ai.cancel() }
+        }
+        .onDisappear { if !isWellness { session.ai.cancel() } }
     }
 }

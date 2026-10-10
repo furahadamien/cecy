@@ -105,7 +105,9 @@ struct DailyBleedingEntryView: View {
                         }
                         .accessibilityElement(children: .contain)
                         .accessibilityIdentifier("dailyFlow")
-                        if let period = review.periods.first(where: { $0.contains(day) }) {
+                        if let period = review.periods.first(where: {
+                            DailyBleedingValidation.canAssociate(day, with: $0, periods: review.periods)
+                        }) {
                             Toggle("Link to period starting \(DayText.short(period.start))", isOn: Binding(
                                 get: { periodID == period.id }, set: { periodID = $0 ? period.id : nil }))
                                 .accessibilityIdentifier("dailyPeriodLink")
@@ -163,7 +165,9 @@ struct DailyBleedingEntryView: View {
                 if let today = session.today {
                     PeriodEntryView(period: period, today: today, existing: review.periods, isEditing: true) { corrected in
                         review.replacePeriod(corrected)
-                        if periodID == corrected.id && !corrected.contains(day) { periodID = nil }
+                        if periodID == corrected.id && !DailyBleedingValidation.canAssociate(day, with: corrected, periods: review.periods) {
+                            periodID = nil
+                        }
                         error = nil
                         return nil
                     }
@@ -189,6 +193,7 @@ struct DailyBleedingEntryView: View {
 }
 
 struct DailyBleedingRecordView: View {
+    @Environment(\.colorScheme) private var colorScheme
     let session: TrackerSession
     let observation: DailyBleedingObservation
     @State private var editing = false
@@ -196,11 +201,18 @@ struct DailyBleedingRecordView: View {
     @State private var error: String?
 
     var body: some View {
+        let periodDay = DayActivityMarker.isPeriodDay(observation, periods: session.snapshot.periods)
         VStack(alignment: .leading, spacing: 8) {
-            Label(observation.state.title, systemImage: observation.state.symbol).font(.headline)
+            Label {
+                Text(periodDay ? "Period bleeding" : observation.state.title)
+            } icon: {
+                Image(systemName: periodDay ? "drop.fill" : observation.state.symbol)
+                    .foregroundStyle(periodDay ? TrackerPalette(scheme: colorScheme).recorded : TrackerPalette(scheme: colorScheme).accent)
+            }
+            .font(.headline)
                 .accessibilityIdentifier("dailyAnswer_\(observation.day.key)")
             if let flow = observation.flow { Text("\(flow.title) flow").font(.subheadline) }
-            if observation.periodID != nil { Text("Linked to recorded period").font(.caption).foregroundStyle(.secondary) }
+            if periodDay { Text("Linked to recorded period").font(.caption).foregroundStyle(.secondary) }
             SelectionFlowLayout {
                 Button("Edit daily answer") { editing = true }.accessibilityIdentifier("editDailyBleeding")
                 Button("Delete daily answer", role: .destructive) { deleting = true }.accessibilityIdentifier("deleteDailyBleeding")
