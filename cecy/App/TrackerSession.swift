@@ -165,7 +165,10 @@ final class TrackerSession {
 
     func setAIEnabled(_ enabled: Bool) -> String? {
         if !enabled { ai.invalidate(); dailyAI.invalidate(); storedDailyInsight = nil }
-        return privacy.setAIEnabled(enabled, now: clock())
+        let message = privacy.setAIEnabled(enabled, now: clock())
+        // Enabling AI also turns on daily insights so Today prepares them automatically.
+        if enabled, message == nil { _ = privacy.setDailyInsightsEnabled(true) }
+        return message
     }
 
     func load() {

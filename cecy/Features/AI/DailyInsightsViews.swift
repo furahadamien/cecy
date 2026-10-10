@@ -34,7 +34,7 @@ struct DailyInsightsPreference: View {
                 if error == nil { session.preloadDailyInsights() }
             }.accessibilityIdentifier("enableDailyInsights")
         } message: {
-            Text("Once a day when you open Cecy, your cycle day, an estimated cycle phase and its uncertainty, today’s bleeding or spotting answer, today’s selected symptoms, activity, exercise, diet, allergies and wellness goals may be sent to Azure and OpenAI. No dates, private notes, identity, sexual-activity records or full history are sent. Results cover self-care, food, movement, hydration, recovery and skincare, appear on Today and stay on this device until the day ends. Turn this off here or in Privacy and export.")
+            Text("Cecy uses AI to suggest things each day based on your current cycle phase, symptoms and preferences.")
         }
     }
 }

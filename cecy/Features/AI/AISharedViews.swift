@@ -8,13 +8,10 @@ struct AIConsentView: View {
         NavigationStack {
             SettingsForm(title: "Optional insights") {
                 Section("Your choice") {
-                    Text("Cecy uses AI through its Azure service and OpenAI. When you make a request, selected text, cycle facts or wellness preferences—including allergies—are sent for processing, not your full history.")
-                    Text("Selected health observations can include mood, sleep, digestion, skin, vaginal or urinary changes, and sex-drive ratings. These are sensitive health details. Stored private notes and sexual-activity records are not included automatically.")
+                    Text("Cecy uses AI to suggest things based on your current cycle phase, symptoms and preferences.")
                         .accessibilityIdentifier("aiExpandedCatalogDisclosure")
-                    Text("Today’s insights also send your cycle day, an estimated cycle phase with its uncertainty, and today’s bleeding or spotting answer. Phases are estimates; ovulation is never confirmed. No dates or period history are sent.")
+                    Text("Suggestions can be wrong and are not medical advice.")
                         .accessibilityIdentifier("aiPhaseBleedingDisclosure")
-                    Text("Records stay stored on this device. External processing follows provider data policies. Avoid identifying details in your text; a sent request cannot be recalled.")
-                    Text("Suggestions can be wrong and are not medical advice. Manual tracking always works without this optional online service.")
                 }
                 Section {
                     if let error { InlineError(message: error) }
@@ -25,7 +22,7 @@ struct AIConsentView: View {
                     .accessibilityIdentifier("enableAI")
                     Button("Not now") { dismiss() }.accessibilityIdentifier("declineAI")
                 } footer: {
-                    Text("Enabling sends nothing. Requests are manual unless you separately enable daily preparation. Turn off in Settings → Privacy and export.")
+                    Text("Turn off anytime in Settings → Privacy and export.")
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
