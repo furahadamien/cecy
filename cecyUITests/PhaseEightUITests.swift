@@ -37,7 +37,10 @@ final class PhaseEightUITests: XCTestCase {
         XCTAssertTrue(visible(element, app: app), app.debugDescription)
     }
     @MainActor private func tap(_ id: String, app: XCUIApplication) {
-        let element = app.buttons[id]
+        // Today's insights card can expose the same control behind a presented sheet; prefer the other copy.
+        let matches = app.buttons.matching(identifier: id).allElementsBoundByIndex
+        let behind = app.otherElements["dailyInsightsCard"].buttons.matching(identifier: id).allElementsBoundByIndex.map(\.frame)
+        let element = matches.count > 1 ? (matches.first { !behind.contains($0.frame) } ?? app.buttons[id]) : app.buttons[id]
         reveal(element, app: app); element.tap()
     }
     @MainActor private func consent(_ app: XCUIApplication) {
@@ -132,7 +135,7 @@ final class PhaseEightUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["localSevereSymptomNotice"].exists || app.otherElements["localSevereSymptomNotice"].exists)
         consent(app)
         tap("generateAI", app: app)
-        output("Synthetic gentle movement", app: app)
+        output("Synthetic self-care suggestion", app: app)
         back(app)
         app.tabBars.buttons["Insights"].tap()
         tap("askCecy", app: app)

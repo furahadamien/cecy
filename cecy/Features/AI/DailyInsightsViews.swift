@@ -34,7 +34,7 @@ struct DailyInsightsPreference: View {
                 if error == nil { session.preloadDailyInsights() }
             }.accessibilityIdentifier("enableDailyInsights")
         } message: {
-            Text("Once a day when you open Cecy, your cycle day, today’s selected symptoms, activity, exercise, diet, allergies and wellness goals may be sent to Azure and OpenAI. No private notes, identity, sexual-activity records or full history are sent. Results appear on Today and stay on this device until the day ends. Turn this off here or in Privacy and export.")
+            Text("Once a day when you open Cecy, your cycle day, an estimated cycle phase and its uncertainty, today’s bleeding or spotting answer, today’s selected symptoms, activity, exercise, diet, allergies and wellness goals may be sent to Azure and OpenAI. No dates, private notes, identity, sexual-activity records or full history are sent. Results cover self-care, food, movement, hydration, recovery and skincare, appear on Today and stay on this device until the day ends. Turn this off here or in Privacy and export.")
         }
     }
 }
@@ -45,14 +45,13 @@ struct DailyInsightsCard: View {
     var body: some View {
         TrackerCard {
             InsightSectionHeader(title: "Today’s insights", symbol: "sparkles")
-            if let output = session.dailyInsightOutput, case .wellness(let value) = output {
+            if let output = session.dailyInsightOutput, case .dailyInsights(let value) = output {
                 VStack(alignment: .leading, spacing: 16) {
-                    suggestions("Food", symbol: "fork.knife", items: value.foodSuggestions)
-                    suggestions("Movement", symbol: "figure.walk", items: value.movementSuggestions)
-                    suggestions("Hydration", symbol: "drop", items: [value.hydrationSuggestion])
-                    suggestions("Recovery", symbol: "leaf", items: value.recoverySuggestions)
                     WellnessSafetyNotice(symptoms: session.snapshot.symptoms, today: session.today)
                     AISafetyNotice(message: value.safetyMessage)
+                    ForEach(value.sections, id: \.kind) { section in
+                        DailyInsightSectionView(section: section, compact: true)
+                    }
                     DisclosureGroup("Why these?") { Text(verbatim: value.explanation).font(.subheadline) }
                     Text("AI-generated · Not medical advice. Check ingredients against your allergies. New insights tomorrow.")
                         .font(.caption).foregroundStyle(.secondary)
@@ -82,15 +81,6 @@ struct DailyInsightsCard: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("dailyInsightsCard")
         .task(id: session.dailyInsightRequest) { session.preloadDailyInsights() }
-    }
-
-    private func suggestions(_ title: String, symbol: String, items: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label(title, systemImage: symbol).font(.subheadline.weight(.semibold))
-            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                Text(verbatim: item).font(.subheadline).fixedSize(horizontal: false, vertical: true)
-            }
-        }.frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

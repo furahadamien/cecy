@@ -60,6 +60,9 @@ import Observation
                 case .question(let context):
                     let value = try await service.answerCycleQuestion(context: context)
                     try value.validate(); result = .question(value)
+                case .dailyInsights(let context):
+                    let value = try await service.getDailyInsights(context: context)
+                    try value.validate(for: context); result = .dailyInsights(value)
                 }
                 guard let self, token == generation, !Task.isCancelled else { return }
                 guard canAccess() else { invalidate(); return }

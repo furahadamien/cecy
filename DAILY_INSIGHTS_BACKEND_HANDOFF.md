@@ -1,7 +1,7 @@
 # Daily insights — backend handoff
 
 Date: October 10, 2026
-Status: proposed contract; **not implemented or called by iOS**. Backend agent should return its deployed contract and test evidence before iOS integration.
+Status: **implemented by backend and integrated by iOS** (see "iOS integration" at the end). The proposal below is kept for history; the backend's `DAILY_INSIGHTS_BACKEND_IMPLEMENTATION_HANDOFF.md` is the authoritative contract.
 
 ## Request and current boundary
 
@@ -60,3 +60,15 @@ Please provide full JSON examples for success, sparse/unknown phase, missing pre
 ## Return to iOS agent
 
 Provide deployed URL/task/version, exact request and response JSON schemas (required vs nullable vs omitted), compatible symptom catalog/version headers, error and retry contract, timeout/size bounds, authentication/rate limits, idempotency decisions, provider/data retention policy, representative synthetic fixtures and automated test evidence. iOS will then add the validated models, request builder using the existing phase policy, updated consent, safe rendering, and integration tests. Do not claim phase-aware/skincare functionality is available in the current app before that integration.
+
+## iOS integration (October 10, 2026)
+
+- **Task:** Today and Insights now share one `daily_insights_v2` request (`AIContextBuilder.dailyInsights`), requesting all six sections: self-care, food, movement, hydration, recovery, skincare. The old `daily_wellness_recommendation` task remains in the client but is no longer used for daily insights.
+- **Request:** every nullable field is encoded as explicit `null`. The phase comes from the existing phase timeline: `recorded_bleeding` only when today has confirmed period bleeding; otherwise `estimated` with limitations (always including `phase_boundary_uncertain`), or `unknown` with `null`. Estimated non-menstrual phase plus bleeding today adds `conflicting_evidence`. No dates, IDs, notes, sexual activity, identity or history are sent. The client validates all backend invariants before sending.
+- **Response:** decoded and validated for exact section order, available/unavailable discriminants, bounds, required nullable `safetyMessage`, and severe-symptom rules (safety message required; movement must be `safety_limit`). Unavailable sections render as short plain-text notes, not errors. All generated text uses `Text(verbatim:)` (no Markdown or links).
+- **Errors/retry:** one attempt per request; 400/500/502 surface as failures with explicit manual retry only. No automatic loop.
+- **Consent:** AI notice is now v3 and daily-preparation consent is v3. Both disclose cycle day, estimated phase with uncertainty, and today's bleeding answer. Earlier consents must be renewed before any request is sent.
+- **Storage:** the on-device daily result file is now version 2 (v2 sections). Version 1 files are discarded on read. Results still expire at the end of the local day and are never exported or backed up.
+- **Tests:** request encoding matches the backend fixtures byte-for-byte as JSON; all fixture responses and error cases decode as expected; contract violations are rejected.
+
+**Open launch gate (inherited, backend-owned):** the endpoint is anonymous with no rate limiting, and provider/Azure retention is unverified. This applies to all existing AI tasks too. Approve authentication, quotas and retention before public release.

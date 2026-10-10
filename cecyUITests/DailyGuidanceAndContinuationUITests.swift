@@ -29,21 +29,21 @@ final class DailyGuidanceAndContinuationUITests: XCTestCase {
         toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
         XCTAssertTrue(app.alerts.firstMatch.waitForExistence(timeout: 5))
         app.alerts.buttons["enableDailyInsights"].firstMatch.tap()
-        let guidance = app.collectionViews.staticTexts["Synthetic gentle movement"].firstMatch
+        let guidance = app.collectionViews.staticTexts["Synthetic self-care suggestion"].firstMatch
         UIViewport.reveal(guidance, in: app, searchEarlierFirst: true)
         XCTAssertTrue(guidance.isHittable)
         app.buttons["closeDailyInsights"].tap()
         let today = app.otherElements["dailyInsightsCard"]
-        let inline = today.staticTexts["Synthetic gentle movement"]
+        let inline = today.staticTexts["Synthetic self-care suggestion"]
         UIViewport.reveal(inline, in: app)
         XCTAssertTrue(inline.exists)
         XCTAssertFalse(app.staticTexts["Get today’s insights"].exists)
         app.tabBars.buttons["Insights"].tap()
-        XCTAssertTrue(app.otherElements["forTodayCard"].staticTexts["Synthetic gentle movement"].exists)
+        XCTAssertTrue(app.otherElements["forTodayCard"].staticTexts["Synthetic self-care suggestion"].exists)
         app.terminate(); app.launch()
         XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
         XCTAssertFalse(app.buttons["closeDailyInsights"].waitForExistence(timeout: 2))
-        let restored = app.otherElements["dailyInsightsCard"].staticTexts["Synthetic gentle movement"]
+        let restored = app.otherElements["dailyInsightsCard"].staticTexts["Synthetic self-care suggestion"]
         UIViewport.reveal(restored, in: app)
         XCTAssertTrue(restored.exists)
         XCTAssertFalse(app.buttons["prepareDailyInsights"].exists)

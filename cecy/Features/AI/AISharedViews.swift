@@ -11,6 +11,8 @@ struct AIConsentView: View {
                     Text("Cecy uses AI through its Azure service and OpenAI. When you make a request, selected text, cycle facts or wellness preferences—including allergies—are sent for processing, not your full history.")
                     Text("Selected health observations can include mood, sleep, digestion, skin, vaginal or urinary changes, and sex-drive ratings. These are sensitive health details. Stored private notes and sexual-activity records are not included automatically.")
                         .accessibilityIdentifier("aiExpandedCatalogDisclosure")
+                    Text("Today’s insights also send your cycle day, an estimated cycle phase with its uncertainty, and today’s bleeding or spotting answer. Phases are estimates; ovulation is never confirmed. No dates or period history are sent.")
+                        .accessibilityIdentifier("aiPhaseBleedingDisclosure")
                     Text("Records stay stored on this device. External processing follows provider data policies. Avoid identifying details in your text; a sent request cannot be recalled.")
                     Text("Suggestions can be wrong and are not medical advice. Manual tracking always works without this optional online service.")
                 }
@@ -105,6 +107,47 @@ struct AIPrivacySection: View {
     }
 }
 
+/// One daily_insights_v2 section. Unavailable sections are successful results, not errors.
+/// Generated strings use Text(verbatim:) so they are never parsed as Markdown or linkified.
+struct DailyInsightSectionView: View {
+    let section: DailyInsightSection
+    var compact = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(section.kind.title, systemImage: section.kind.symbol)
+                .font(compact ? .subheadline.weight(.semibold) : .headline)
+                .accessibilityAddTraits(.isHeader)
+            if section.status == .available {
+                ForEach(Array(section.suggestions.enumerated()), id: \.offset) { _, item in
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        if !compact { Image(systemName: "circle.fill").font(.system(size: 5)).accessibilityHidden(true) }
+                        Text(verbatim: item).font(compact ? .subheadline : .body)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            } else {
+                Text(Self.message(for: section.unavailableReason))
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("dailyInsightUnavailable_\(section.kind.rawValue)")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("dailyInsightSection_\(section.kind.rawValue)")
+    }
+
+    static func message(for reason: DailyInsightSection.Reason?) -> String {
+        switch reason {
+        case .missingPreferences?: "Add your preferences in Insight settings to personalize this."
+        case .safetyLimit?: "Paused today because of a severe symptom you logged. Rest and consider medical advice."
+        case .insufficientContext?, nil: "Not enough information for this today."
+        }
+    }
+}
+
 /// All generated strings render as plain text, not Markdown, links, or executable instructions.
 struct AIOutputView: View {
     let output: AIOutput
@@ -138,6 +181,12 @@ struct AIOutputView: View {
                 TrackerCard(highlighted: true) { Text(verbatim: value.answer) }
                 list("Supporting observations", value.supportingFacts, symbol: "chart.bar")
                 AISafetyNotice(message: value.safetyMessage)
+            case .dailyInsights(let value):
+                AISafetyNotice(message: value.safetyMessage)
+                ForEach(value.sections, id: \.kind) { section in
+                    TrackerCard { DailyInsightSectionView(section: section) }
+                }
+                TrackerCard { DisclosureGroup("Why these?") { Text(verbatim: value.explanation).padding(.top, 8) } }
             }
             Text("Check against your records. Not medical advice.")
                 .font(.footnote).foregroundStyle(.secondary)

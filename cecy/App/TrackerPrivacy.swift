@@ -20,9 +20,11 @@ struct PreparedExport: Identifiable {
     private(set) var aiBlocked = false
     var aiEnabled: Bool { !aiBlocked && preferences.aiConsent?.isCurrent == true }
     private var dailyInsightsBlocked = false
+    /// v3 adds phase estimates, today's bleeding answer and skincare guidance to automatic requests.
+    static let dailyConsentVersion = 3
     var dailyInsightsEnabled: Bool {
         aiEnabled && !dailyInsightsBlocked && preferences.dailyInsightsEnabled == true
-            && preferences.dailyInsightConsentVersion == 2
+            && preferences.dailyInsightConsentVersion == Self.dailyConsentVersion
     }
 
     @ObservationIgnored private let storage: any PrivacyPreferenceStoring
@@ -146,8 +148,8 @@ struct PreparedExport: Identifiable {
         var candidate = preferences
         candidate.dailyInsightsEnabled = enabled
         if enabled {
-            if candidate.dailyInsightConsentVersion != 2 { candidate.dailyInsightAttemptDay = nil }
-            candidate.dailyInsightConsentVersion = 2
+            if candidate.dailyInsightConsentVersion != Self.dailyConsentVersion { candidate.dailyInsightAttemptDay = nil }
+            candidate.dailyInsightConsentVersion = Self.dailyConsentVersion
         }
         do {
             try storage.save(candidate)
@@ -188,7 +190,7 @@ struct PreparedExport: Identifiable {
     }
 
     /// Returns only the result generated for `day`. Older results have expired and are deleted.
-    func dailyInsight(for day: LocalDay) -> WellnessRecommendation? {
+    func dailyInsight(for day: LocalDay) -> DailyInsightsResult? {
         guard canAccess, aiEnabled else { return nil }
         guard let stored = try? dailyInsightStore.load() else {
             try? dailyInsightStore.clear() // Unreadable or invalid: discard rather than show.
@@ -198,14 +200,14 @@ struct PreparedExport: Identifiable {
             try? dailyInsightStore.clear()
             return nil
         }
-        return stored.wellness
+        return stored.insights
     }
 
     @discardableResult
-    func saveDailyInsight(_ wellness: WellnessRecommendation, for day: LocalDay) -> Bool {
+    func saveDailyInsight(_ insights: DailyInsightsResult, for day: LocalDay) -> Bool {
         guard canAccess, aiEnabled else { return false }
         do {
-            try dailyInsightStore.save(StoredDailyInsight(dayKey: day.key, wellness: wellness))
+            try dailyInsightStore.save(StoredDailyInsight(dayKey: day.key, insights: insights))
             return true
         } catch { return false }
     }

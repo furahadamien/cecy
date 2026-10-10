@@ -36,5 +36,21 @@ nonisolated struct FixtureAIService: AIService {
         try await prepare()
         return CycleQuestionResult(answer: "Synthetic answer from selected facts", supportingFacts: ["Missing logs are not absence"], safetyMessage: nil)
     }
+    func getDailyInsights(context: DailyInsightsContext) async throws -> DailyInsightsResult {
+        try await prepare()
+        let food = context.preferences.dietaryPreference == nil || context.preferences.foodAllergies == nil
+        let movement = context.preferences.activityLevel == nil || context.preferences.preferredExercises == nil
+        let sections = context.requestedSections.map { kind -> DailyInsightSection in
+            switch kind {
+            case .food where food: DailyInsightSection(kind: kind, unavailable: .missingPreferences)
+            case .movement where context.hasSevereSymptom: DailyInsightSection(kind: kind, unavailable: .safetyLimit)
+            case .movement where movement: DailyInsightSection(kind: kind, unavailable: .missingPreferences)
+            case .movement: DailyInsightSection(kind: kind, suggestions: ["Synthetic gentle movement"])
+            default: DailyInsightSection(kind: kind, suggestions: ["Synthetic \(kind.title.lowercased()) suggestion"])
+            }
+        }
+        return DailyInsightsResult(sections: sections, explanation: "Synthetic wellness explanation based on supplied symptoms.",
+                                   safetyMessage: context.hasSevereSymptom ? "Synthetic safety message" : nil)
+    }
 }
 #endif

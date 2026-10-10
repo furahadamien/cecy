@@ -50,13 +50,13 @@ final class DeviceFeedbackRoundTwoUITests: XCTestCase {
 
     @MainActor func testWellnessAppearsInInsightsAndSharesDailyResultUntilRelaunch() {
         let app = launch()
-        XCTAssertFalse(app.staticTexts["Synthetic gentle movement"].exists)
+        XCTAssertFalse(app.staticTexts["Synthetic self-care suggestion"].exists)
         tap("dailyWellnessAI", app: app)
         tap("reviewAIConsent", app: app)
         tap("enableAI", app: app)
         XCTAssertTrue(app.navigationBars["Optional insights"].waitForNonExistence(timeout: 5))
         tap("generateAI", app: app)
-        let suggestion = app.staticTexts["Synthetic gentle movement"]
+        let suggestion = app.staticTexts["Synthetic self-care suggestion"]
         XCTAssertTrue(suggestion.waitForExistence(timeout: 10))
         reveal(suggestion, app: app)
         app.navigationBars.buttons.firstMatch.tap()
@@ -72,7 +72,7 @@ final class DeviceFeedbackRoundTwoUITests: XCTestCase {
         XCTAssertTrue(suggestion.exists)
         app.terminate(); app.launch()
         tap("dailyWellnessAI", app: app)
-        XCTAssertTrue(app.staticTexts["Synthetic gentle movement"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Synthetic self-care suggestion"].firstMatch.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["generateAI"].exists)
         let tomorrow = app.staticTexts["New insights tomorrow"].firstMatch
         reveal(tomorrow, app: app)

@@ -28,10 +28,10 @@ final class TrackerSession {
     let dailyAI: AIRequestCoordinator
     private(set) var dailyInsightRequest: AIRequest?
     /// Today's generated result, restored from the device until the local day ends.
-    private(set) var storedDailyInsight: WellnessRecommendation?
+    private(set) var storedDailyInsight: DailyInsightsResult?
     var dailyInsightOutput: AIOutput? {
         guard canUseAI else { return nil }
-        if let storedDailyInsight { return .wellness(storedDailyInsight) }
+        if let storedDailyInsight { return .dailyInsights(storedDailyInsight) }
         guard dailyAI.request == dailyInsightRequest else { return nil }
         return dailyAI.output
     }
@@ -72,7 +72,7 @@ final class TrackerSession {
         ai = AIRequestCoordinator(service: aiService)
         dailyAI = AIRequestCoordinator(service: aiService)
         dailyAI.onOutput = { [weak self] _, output in
-            guard let self, let today = self.today, case .wellness(let value) = output else { return }
+            guard let self, let today = self.today, case .dailyInsights(let value) = output else { return }
             // Shown for the rest of today even if saving fails; persisted copies survive relaunch.
             self.storedDailyInsight = value
             self.privacy.saveDailyInsight(value, for: today)
@@ -129,9 +129,11 @@ final class TrackerSession {
     }
 
     func performAI(_ request: AIRequest) {
-        if case .wellness = request {
+        switch request {
+        case .wellness, .dailyInsights:
             prepareTodayInsights()
             return
+        default: break
         }
         ai.begin(request) { [weak self] in self?.canUseAI == true }
     }
@@ -350,7 +352,6 @@ final class TrackerSession {
     private func publish(_ snapshot: TrackerSnapshot, today: LocalDay) {
         ai.invalidate()
         if self.snapshot != snapshot || self.today != today { dailyAI.invalidate() }
-        dailyInsightRequest = try? AIContextBuilder.wellness(snapshot: snapshot, today: today)
         // Expired (previous-day) results are deleted on read.
         storedDailyInsight = privacy.dailyInsight(for: today)
         self.snapshot = snapshot
@@ -359,6 +360,11 @@ final class TrackerSession {
         overview = ForecastAvailabilityPolicy.applying(to: CycleCalculator.overview(
             periods: snapshot.periods, today: today, engine: EvidencePredictionEngine(), profile: snapshot.profile))
         cycleForecast = overview.map { CycleForecast.calculate(overview: $0, profile: snapshot.profile, periods: snapshot.periods, asOf: today, dailyBleeding: snapshot.dailyBleeding) } ?? CycleForecast()
+        // Built after the forecast so the phase estimate carries its uncertainty. Setup stays the
+        // gate for preparation; v2 nulls still yield successful "unavailable" sections if needed.
+        dailyInsightRequest = snapshot.profile?.wellnessPreferences?.isReadyForInsights == true
+            ? try? AIContextBuilder.dailyInsights(snapshot: snapshot, today: today, overview: overview, forecast: cycleForecast)
+            : nil
         predictionReplay = try? PredictionBacktester.evaluate(periods: snapshot.periods, today: today)
         statistics = try? CycleStatistics.calculate(periods: snapshot.periods, today: today)
         privacy.trackingChanged(prediction: overview?.estimate, now: clock(), timeZone: zone())

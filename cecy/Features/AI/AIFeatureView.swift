@@ -28,7 +28,10 @@ struct AIFeatureView: View {
         Result {
             guard let today = session.today else { throw AIContextError.insufficientRecords }
             switch feature {
-            case .wellness: return try AIContextBuilder.wellness(snapshot: session.snapshot, today: today)
+            case .wellness:
+                // One shared, session-owned daily_insights_v2 request for Today and Insights.
+                guard let request = session.dailyInsightRequest else { throw AIContextError.preferences }
+                return request
             case .insight(let insight):
                 guard session.insights.contains(insight) else { throw AIContextError.insufficientRecords }
                 return try AIContextBuilder.insight(insight)

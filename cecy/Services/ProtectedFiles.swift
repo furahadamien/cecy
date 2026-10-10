@@ -62,14 +62,15 @@ nonisolated enum ProtectedFiles {
 
 /// One generated result for one local civil day. Never exported, synced or backed up.
 nonisolated struct StoredDailyInsight: Codable, Equatable, Sendable {
-    var version = 1
+    /// v2 holds daily_insights_v2 sections. Older files fail validation and are discarded.
+    var version = 2
     let dayKey: Int
-    let wellness: WellnessRecommendation
+    let insights: DailyInsightsResult
 
     func validate() throws {
-        guard version == 1 else { throw TrackingError.invalidData }
+        guard version == 2 else { throw TrackingError.invalidData }
         _ = try LocalDay(key: dayKey)
-        try wellness.validate()
+        try insights.validate()
     }
 }
 

@@ -203,19 +203,19 @@ final class TodayQuickActionsUITests: XCTestCase {
     @MainActor func testDailyInsightAppearsInInsightsAutomaticallyAndSurvivesTabChanges() {
         let app = launch(fixture: "ai")
         enableDailyPreparation(in: app)
-        let generated = app.staticTexts["Synthetic gentle movement"]
+        let generated = app.staticTexts["Synthetic self-care suggestion"]
         UIViewport.reveal(generated, in: app, searchEarlierFirst: true)
         XCTAssertTrue(generated.isHittable)
         app.navigationBars.buttons.firstMatch.tap()
         let card = app.otherElements["forTodayCard"]
-        let answer = card.staticTexts["Synthetic gentle movement"]
+        let answer = card.staticTexts["Synthetic self-care suggestion"]
         UIViewport.reveal(answer, in: app, searchEarlierFirst: true)
         XCTAssertTrue(answer.isHittable)
         app.tabBars.buttons["Today"].tap()
-        XCTAssertTrue(app.otherElements["dailyInsightsCard"].staticTexts["Synthetic gentle movement"].exists)
+        XCTAssertTrue(app.otherElements["dailyInsightsCard"].staticTexts["Synthetic self-care suggestion"].exists)
         app.tabBars.buttons["Insights"].tap()
         XCTAssertTrue(answer.exists)
-        // Generated text remains ephemeral, and relaunch does not spend another daily request.
+        // Today's result is restored from the device after relaunch without another request.
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["logPeriod"].waitForExistence(timeout: 10))
         for _ in 0..<2 {
@@ -223,7 +223,9 @@ final class TodayQuickActionsUITests: XCTestCase {
             if card.waitForExistence(timeout: 5) { break }
         }
         XCTAssertTrue(card.exists)
-        XCTAssertFalse(app.staticTexts["Synthetic gentle movement"].exists)
+        let restored = card.staticTexts["Synthetic self-care suggestion"]
+        UIViewport.reveal(restored, in: app, searchEarlierFirst: true)
+        XCTAssertTrue(restored.exists)
         XCTAssertTrue(app.buttons["dailyWellnessAI"].exists)
     }
 

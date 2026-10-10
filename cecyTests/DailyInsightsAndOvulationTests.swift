@@ -79,18 +79,20 @@ private actor DailyTestService: AIService {
     private(set) var calls = 0
     let delayed: Bool
     let fails: Bool
-    var continuation: CheckedContinuation<WellnessRecommendation, Never>?
+    var continuation: CheckedContinuation<DailyInsightsResult, Never>?
+    private(set) var lastContext: DailyInsightsContext?
     init(delayed: Bool = false, fails: Bool = false) { self.delayed = delayed; self.fails = fails }
-    func getWellnessRecommendation(context: WellnessRecommendationContext) async throws -> WellnessRecommendation {
+    func getDailyInsights(context: DailyInsightsContext) async throws -> DailyInsightsResult {
         calls += 1
+        lastContext = context
         if fails { throw AIServiceError.unavailable }
         if delayed { return await withCheckedContinuation { continuation = $0 } }
         return result
     }
-    private var result: WellnessRecommendation {
-        WellnessRecommendation(movementSuggestions: ["Gentle walking"], foodSuggestions: ["A balanced meal"],
-            hydrationSuggestion: "Drink water", recoverySuggestions: ["Rest when needed"], explanation: "Synthetic guidance", safetyMessage: nil)
+    func getWellnessRecommendation(context: WellnessRecommendationContext) async throws -> WellnessRecommendation {
+        throw AIServiceError.unsupportedTask // Daily insights must use daily_insights_v2.
     }
+    private var result: DailyInsightsResult { .synthetic }
     func complete() {
         continuation?.resume(returning: result)
         continuation = nil
@@ -177,6 +179,8 @@ private actor DailyTestService: AIService {
         await waitFor { !session.dailyAI.isLoading }
         #expect(await service.calls == 1)
         #expect(session.dailyInsightOutput != nil)
+        #expect(await service.lastContext?.requestedSections == DailyInsightSectionKind.allCases)
+        #expect(await service.lastContext?.preferences.activityLevel == "beginner")
         session.refresh(); session.preloadDailyInsights()
         #expect(await service.calls == 1 && session.dailyInsightOutput != nil)
         let reopened = TrackerSession(repository: { repo }, clock: { self.today.formattingDate }, timeZone: { .gmt },
@@ -225,8 +229,7 @@ private actor DailyTestService: AIService {
         #expect(session.setAIEnabled(true) == nil)
         session.refresh()
         #expect(session.dailyInsightOutput == nil)
-        insights.value = StoredDailyInsight(dayKey: today.key, wellness: WellnessRecommendation(movementSuggestions: ["Walk"],
-            foodSuggestions: ["Meal"], hydrationSuggestion: "Water", recoverySuggestions: ["Rest"], explanation: "Synthetic", safetyMessage: nil))
+        insights.value = StoredDailyInsight(dayKey: today.key, insights: .synthetic)
         try p.prepareForReset()
         #expect(insights.value == nil)
     }
@@ -235,8 +238,7 @@ private actor DailyTestService: AIService {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("daily-insight.json")
         let store = FileDailyInsightStore(url: url)
         #expect(try store.load() == nil)
-        let value = StoredDailyInsight(dayKey: today.key, wellness: WellnessRecommendation(movementSuggestions: ["Walk"],
-            foodSuggestions: ["Meal"], hydrationSuggestion: "Water", recoverySuggestions: ["Rest"], explanation: "Synthetic", safetyMessage: nil))
+        let value = StoredDailyInsight(dayKey: today.key, insights: .synthetic)
         try store.save(value)
         #expect(try store.load() == value)
         #expect(try url.deletingLastPathComponent().resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
