@@ -34,44 +34,52 @@ struct DailyInsightsPreference: View {
                 if error == nil { session.preloadDailyInsights() }
             }.accessibilityIdentifier("enableDailyInsights")
         } message: {
-            Text("Cecy uses AI to suggest things each day based on your current cycle phase, symptoms and preferences.")
+            Text("Once a day when you open Cecy, your cycle day, an estimated cycle phase and its uncertainty, today’s bleeding or spotting answer, today’s selected symptoms, activity, exercise, diet, allergies and wellness goals may be sent to Azure and OpenAI. No dates, private notes, identity, sexual-activity records or full history are sent. Results cover self-care, food, movement, hydration, recovery and skincare, appear on Today and stay on this device until the day ends. Turn this off here or in Privacy and export.")
         }
     }
 }
 
 struct DailyInsightsCard: View {
     let session: TrackerSession
+    @State private var expanded = true
 
     var body: some View {
         TrackerCard {
-            InsightSectionHeader(title: "Today’s insights", symbol: "sparkles")
             if let output = session.dailyInsightOutput, case .dailyInsights(let value) = output {
-                VStack(alignment: .leading, spacing: 16) {
-                    WellnessSafetyNotice(symptoms: session.snapshot.symptoms, today: session.today)
-                    AISafetyNotice(message: value.safetyMessage)
-                    ForEach(value.sections, id: \.kind) { section in
-                        DailyInsightSectionView(section: section, compact: true)
-                    }
-                    DisclosureGroup("Why these?") { Text(verbatim: value.explanation).font(.subheadline) }
-                    Text("AI-generated · Not medical advice. Check ingredients against your allergies. New insights tomorrow.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }.accessibilityElement(children: .contain).accessibilityIdentifier("todayWellnessSuggestions")
-            } else if session.dailyAI.isLoading {
-                AIRequestStatus(coordinator: session.dailyAI, label: "Preparing today’s insights")
-            } else if session.snapshot.profile?.wellnessPreferences?.isReadyForInsights != true {
-                Text(session.privacy.dailyInsightsEnabled ? "Preparation paused · Finish setup" : "Personalize your daily insights")
-                    .font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("dailyInsightsNeedsSetup")
-                NavigationLink("Finish insight setup") { DailyInsightSetupView(session: session) }
-                    .frame(minHeight: 44).accessibilityIdentifier("finishInsightSetup")
-            } else if !session.canUseAI {
-                AIConsentControl(session: session)
+                DisclosureGroup(isExpanded: $expanded) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        WellnessSafetyNotice(symptoms: session.snapshot.symptoms, today: session.today)
+                        AISafetyNotice(message: value.safetyMessage)
+                        ForEach(value.sections, id: \.kind) { section in
+                            DailyInsightSectionView(section: section, compact: true)
+                        }
+                        DisclosureGroup("Why these?") { Text(verbatim: value.explanation).font(.subheadline) }
+                        Text("AI-generated · Not medical advice. Check ingredients against your allergies. New insights tomorrow.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }.padding(.top, 8)
+                } label: {
+                    InsightSectionHeader(title: "Today’s insights", symbol: "sparkles")
+                }
+                .accessibilityElement(children: .contain).accessibilityIdentifier("todayWellnessSuggestions")
             } else {
-                AIRequestStatus(coordinator: session.dailyAI)
-                Text(session.dailyAI.message == nil ? "Today’s insights haven’t been prepared yet." : "Today’s insights couldn’t be prepared.")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                Button(session.dailyAI.message == nil ? "Prepare today’s insights" : "Try again") {
-                    session.prepareTodayInsights()
-                }.buttonStyle(TrackerPrimaryButtonStyle()).accessibilityIdentifier("prepareDailyInsights")
+                InsightSectionHeader(title: "Today’s insights", symbol: "sparkles")
+                if session.dailyAI.isLoading {
+                    AIRequestStatus(coordinator: session.dailyAI, label: "Preparing today’s insights")
+                } else if session.snapshot.profile?.wellnessPreferences?.isReadyForInsights != true {
+                    Text(session.privacy.dailyInsightsEnabled ? "Preparation paused · Finish setup" : "Personalize your daily insights")
+                        .font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("dailyInsightsNeedsSetup")
+                    NavigationLink("Finish insight setup") { DailyInsightSetupView(session: session) }
+                        .frame(minHeight: 44).accessibilityIdentifier("finishInsightSetup")
+                } else if !session.canUseAI {
+                    AIConsentControl(session: session)
+                } else {
+                    AIRequestStatus(coordinator: session.dailyAI)
+                    Text(session.dailyAI.message == nil ? "Today’s insights haven’t been prepared yet." : "Today’s insights couldn’t be prepared.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Button(session.dailyAI.message == nil ? "Prepare today’s insights" : "Try again") {
+                        session.prepareTodayInsights()
+                    }.buttonStyle(TrackerPrimaryButtonStyle()).accessibilityIdentifier("prepareDailyInsights")
+                }
             }
             NavigationLink { AIFeatureView(session: session, feature: .wellness) } label: {
                 Label("Insight settings", systemImage: "slider.horizontal.3")
