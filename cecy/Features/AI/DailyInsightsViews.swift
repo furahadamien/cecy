@@ -41,7 +41,7 @@ struct DailyInsightsPreference: View {
 
 struct DailyInsightsCard: View {
     let session: TrackerSession
-    @State private var expanded = true
+    @State private var expanded = false
 
     var body: some View {
         TrackerCard {
