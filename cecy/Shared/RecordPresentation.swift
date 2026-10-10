@@ -1,6 +1,7 @@
 import SwiftUI
 private struct RecordsShareSurfaceKey: EnvironmentKey { static let defaultValue = false }
 extension EnvironmentValues {
+    @Entry var calendarRecordStyle = false
     var recordsShareSurface: Bool {
         get { self[RecordsShareSurfaceKey.self] }
         set { self[RecordsShareSurfaceKey.self] = newValue }
@@ -38,15 +39,47 @@ struct RecordedEntryCard<Content: View>: View {
 struct RecordActionButtonStyle: ButtonStyle {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.calendarRecordStyle) private var calendarStyle
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .labelStyle(CalendarRecordActionLabelStyle(iconsOnly: calendarStyle))
             .font(.subheadline.weight(.medium))
-            .foregroundStyle(configuration.role == .destructive ? Color.secondary : TrackerPalette(scheme: colorScheme).accent)
+            .foregroundStyle(configuration.role == .destructive ? (calendarStyle ? Color.red : Color.secondary) : TrackerPalette(scheme: colorScheme).accent)
             .padding(.horizontal, 8)
             .frame(minWidth: 44, minHeight: 44)
+            .background(calendarStyle ? (configuration.role == .destructive ? Color.red.opacity(0.06) : Color.secondary.opacity(0.07)) : .clear, in: Capsule())
             .contentShape(Capsule())
             .opacity(isEnabled ? (configuration.isPressed ? 0.6 : 1) : 0.45)
+    }
+}
+
+private struct CalendarRecordActionLabelStyle: LabelStyle {
+    let iconsOnly: Bool
+    @ViewBuilder func makeBody(configuration: Configuration) -> some View {
+        if iconsOnly { configuration.icon }
+        else { HStack { configuration.icon; configuration.title } }
+    }
+}
+
+/// Calendar actions stay on the right without constraining large text.
+struct CalendarRecordRow<Actions: View, Content: View>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ViewBuilder var actions: Actions
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 12) {
+                content
+                actions.frame(maxWidth: .infinity, alignment: .trailing)
+            }
+        } else {
+            HStack(alignment: .top, spacing: 12) {
+                content.frame(maxWidth: .infinity, alignment: .leading)
+                actions.fixedSize(horizontal: true, vertical: false)
+            }
+        }
     }
 }
 

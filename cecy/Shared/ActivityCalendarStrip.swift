@@ -169,8 +169,13 @@ struct ActivityCalendarStrip: View {
 
 struct DailyBleedingLegend: View {
     @Environment(\.colorScheme) private var colorScheme
+    var includesCalendarNotes = false
     var body: some View {
         DisclosureGroup {
+            if includesCalendarNotes {
+                Text("Ovulation is not confirmed. Other bleeding does not start a cycle.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             SelectionFlowLayout {
                 ForEach(DailyBleedingState.allCases, id: \.self) { state in
                     Label("Logged: \(state.title)", systemImage: state.symbol)
@@ -178,7 +183,7 @@ struct DailyBleedingLegend: View {
                 }
             }.padding(.top, 4)
         } label: {
-            Text("Daily bleeding answers").frame(minHeight: 44)
+            Text(includesCalendarNotes ? "Symbol details" : "Daily bleeding answers").frame(minHeight: 44)
         }
         .font(.caption)
         .accessibilityIdentifier("dailyBleedingLegend")

@@ -41,8 +41,8 @@ struct TrackerCalendarView: View {
             let listLayout = contentWidth - 16 < 320 || dynamicTypeSize.isAccessibilitySize
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        TrackerPageHeading(title: "Calendar", subtitle: "Your records and estimates, clearly apart.")
+                    VStack(alignment: .leading, spacing: 12) {
+                        calendarToolbar
                         if let confirmation = session.confirmation {
                             TrackerCard {
                                 Label(confirmation, systemImage: "checkmark.circle")
@@ -50,23 +50,21 @@ struct TrackerCalendarView: View {
                             }
                             .onAppear { AccessibilityNotification.Announcement(confirmation).post() }
                         }
-                        TrackerCard(padding: 8) {
+                        TrackerCard(padding: 8, spacing: 6) {
                             monthControls
                             if listLayout {
                                 ForEach(days) { day in
                                     VStack(alignment: .leading, spacing: 12) {
                                         dayButton(day, asList: true)
                                         if day == selection {
-                                            // Keep actions and records together at large text sizes.
+                                            // Keep logging next to the selected date at large text sizes.
                                             loggingActions
-                                            RecordedDayCard(session: session, day: selection, today: today)
-                                                .accessibilityIdentifier("calendarRecordedDayCard")
                                         }
                                     }
                                     .id(day.key)
                                 }
                             } else {
-                                LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 44), spacing: 2, alignment: .top), count: 7), spacing: 8) {
+                                LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 44), spacing: 2, alignment: .top), count: 7), spacing: 2) {
                                     // Sibling ForEach ranges share the grid's identity space.
                                     ForEach(0..<7, id: \.self) { index in
                                         Text(weekdays[index]).font(.caption).accessibilityHidden(true)
@@ -79,33 +77,18 @@ struct TrackerCalendarView: View {
                                     ForEach(days) { day in dayButton(day, asList: false) }
                                 }
                             }
-                            if !listLayout { loggingActions }
-                            VStack(alignment: .leading, spacing: 8) {
-                                Label("Recorded period", systemImage: "drop.fill")
-                                    .foregroundStyle(palette.recorded)
-                                Label("Estimated period dates · Not recorded", systemImage: "circle.dashed")
-                                    .foregroundStyle(palette.recorded)
-                                Label("Estimated ovulation · Not confirmed", systemImage: "circle.dotted")
-                                    .foregroundStyle(palette.accent)
-                                Label("Estimated fertile window", systemImage: "leaf")
-                                    .foregroundStyle(palette.accent)
-                                Label { Text("Sexual activity") } icon: {
-                                    Image(systemName: "heart.fill").foregroundStyle(palette.sexualActivity)
-                                }
-                                Label("Logged symptoms", systemImage: "waveform.path.ecg")
-                                Label("Daily bleeding log · Not a period start", systemImage: "drop.circle.fill")
-                                    .foregroundStyle(palette.accent)
-                                DailyBleedingLegend()
-                            }
-                            .font(.footnote).foregroundStyle(.secondary).padding(8)
-                            .accessibilityElement(children: .contain)
-                            .accessibilityIdentifier("calendarLegend")
+                            Divider().padding(.horizontal, 8)
+                            CalendarSymbolLegend().padding(.horizontal, 8)
                         }
-                        TrackerCard { UpcomingCycleForecastView(forecast: session.cycleForecast, today: today) }
                         if !listLayout {
-                            RecordedDayCard(session: session, day: selection, today: today)
-                                .accessibilityIdentifier("calendarRecordedDayCard")
+                            loggingActions
                         }
+                        TrackerCard(padding: 16) {
+                            UpcomingCycleForecastView(forecast: session.cycleForecast, today: today, calendarStyle: true)
+                        }
+                        RecordedDayCard(session: session, day: selection, today: today)
+                            .environment(\.calendarRecordStyle, true)
+                            .accessibilityIdentifier("calendarRecordedDayCard")
                         TrackerCard {
                             NavigationLink { SexualActivityHistoryView(session: session) } label: {
                                 TrackerNavigationLabel(title: "Sexual activity history", symbol: "heart")
@@ -117,14 +100,15 @@ struct TrackerCalendarView: View {
                         }.buttonStyle(.plain)
                     }
                     .frame(width: max(0, contentWidth), alignment: .leading)
-                    .padding(.vertical, TrackerLayout.pageInset)
+                    .padding(.top, 6)
+                    .padding(.bottom, TrackerLayout.pageInset)
                     .frame(maxWidth: .infinity)
                 }
                 .onChange(of: selection) { _, value in
                     if listLayout { proxy.scrollTo(value.key, anchor: .top) }
                 }
             }
-            .background(palette.background.ignoresSafeArea())
+            .background((colorScheme == .dark ? palette.background : Color(red: 0.965, green: 0.980, blue: 0.963)).ignoresSafeArea())
         }
         .predictionUpdateProgress()
         .sheet(isPresented: $showDatePicker) {
@@ -135,25 +119,42 @@ struct TrackerCalendarView: View {
         }
     }
 
-    private var monthControls: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(DayText.month(selection)).font(TrackerTypography.sectionTitle)
-                .accessibilityAddTraits(.isHeader).accessibilityIdentifier("calendarMonth")
+    private var calendarToolbar: some View {
+        VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Button { moveMonth(-1) } label: { Image(systemName: "chevron.backward").frame(width: 44, height: 44) }
-                    .accessibilityLabel("Previous month").accessibilityIdentifier("previousMonth")
-                    .disabled((try? selection.adding(months: -1)) == nil)
-                Spacer()
-                Button("Today") { selection = today }.frame(minWidth: 44, minHeight: 44)
-                Spacer()
-                Button { moveMonth(1) } label: { Image(systemName: "chevron.forward").frame(width: 44, height: 44) }
-                    .accessibilityLabel("Next month").accessibilityIdentifier("nextMonth")
-                    .disabled((try? selection.adding(months: 1)) == nil)
+                Button { showDatePicker = true } label: {
+                    Label("Go to date", systemImage: "calendar.badge.clock")
+                        .frame(minHeight: 44).contentShape(Rectangle())
+                }.accessibilityIdentifier("goToDate")
+                Spacer(minLength: 8)
+                Button { selection = today } label: {
+                    Label("Today", systemImage: "calendar")
+                        .padding(.horizontal, 14).frame(minHeight: 44)
+                        .background(palette.surface, in: Capsule()).contentShape(Capsule())
+                }.accessibilityIdentifier("calendarReturnToToday")
             }
-            Button("Go to date") { showDatePicker = true }
-                .frame(minHeight: 44).accessibilityIdentifier("goToDate")
+            .buttonStyle(.plain).font(.subheadline.weight(.semibold)).foregroundStyle(palette.accent)
+            Text("Your records and estimates, clearly apart.").font(.caption).foregroundStyle(.secondary)
         }
-        .padding(8)
+    }
+
+    private var monthControls: some View {
+        HStack(spacing: 4) {
+            Button { moveMonth(-1) } label: {
+                Image(systemName: "chevron.backward").frame(width: 44, height: 44).contentShape(Rectangle())
+            }
+            .accessibilityLabel("Previous month").accessibilityIdentifier("previousMonth")
+            .disabled((try? selection.adding(months: -1)) == nil)
+            Text(DayText.month(selection)).font(.system(.title2, design: .serif, weight: .semibold))
+                .multilineTextAlignment(.center).frame(maxWidth: .infinity)
+                .accessibilityAddTraits(.isHeader).accessibilityIdentifier("calendarMonth")
+            Button { moveMonth(1) } label: {
+                Image(systemName: "chevron.forward").frame(width: 44, height: 44).contentShape(Rectangle())
+            }
+            .accessibilityLabel("Next month").accessibilityIdentifier("nextMonth")
+            .disabled((try? selection.adding(months: 1)) == nil)
+        }
+        .buttonStyle(.plain).foregroundStyle(palette.accent)
     }
 
     private func moveMonth(_ offset: Int) {
@@ -194,19 +195,19 @@ struct TrackerCalendarView: View {
         let ovulation = session.cycleForecast.ovulation(on: day) != nil
         let shape = RoundedRectangle(cornerRadius: asList ? 12 : 22, style: .continuous)
         return Button { selection = day } label: {
-            VStack(alignment: asList ? .leading : .center, spacing: 4) {
+            VStack(alignment: asList ? .leading : .center, spacing: asList ? 4 : 2) {
                 VStack(alignment: asList ? .leading : .center, spacing: 4) {
                     HStack(spacing: 2) {
                         Text(asList ? DayText.full(day) : day.day.formatted())
                             .fontWeight(selection == day ? .bold : .regular)
-                            .underline(selection == day)
+                            .underline(asList && selection == day)
                         if day == today { Image(systemName: "circle.fill").font(.system(size: 4)).accessibilityHidden(true) }
                     }
                     if asList {
                         Text(status(day)).font(.footnote)
                     }
                 }
-                .frame(maxWidth: asList ? .infinity : 44, minHeight: 44, alignment: asList ? .leading : .center)
+                .frame(maxWidth: asList ? .infinity : 36, minHeight: asList ? 44 : 36, alignment: asList ? .leading : .center)
                 .padding(.horizontal, asList ? 8 : 0)
                 .background(recorded ? palette.recordedSurface : (selection == day ? palette.sage : .clear), in: shape)
                 .overlay {
@@ -243,15 +244,15 @@ struct TrackerCalendarView: View {
 
     private var loggingActions: some View {
         VStack(alignment: .leading, spacing: 8) {
-            VStack(spacing: 8) {
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(alignment: .top, spacing: 8))
+            layout {
                 periodLogButton
-                TrackerCompactLogActions {
-                    SymptomLogButton(session: session, day: selection, title: "Symptoms", compact: true)
-                    SexualActivityLogButton(session: session, day: selection, compact: true)
-                    DailyBleedingLogButton(session: session, day: selection)
-                }
+                SymptomLogButton(session: session, day: selection, title: "Symptoms", compact: true)
+                SexualActivityLogButton(session: session, day: selection, compact: true)
+                DailyBleedingLogButton(session: session, day: selection)
             }
-            .environment(\.compactLogLabels, true)
+            .environment(\.todayLogCards, true)
             .disabled(selection > today)
             Text("Log for \(DayText.full(selection))")
                 .font(.caption).foregroundStyle(.secondary)

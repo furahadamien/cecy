@@ -50,6 +50,9 @@ final class TodayQuickActionsUITests: XCTestCase {
         let hero = app.otherElements["nextPeriodCard"]
         XCTAssertGreaterThan(status.frame.minY, hero.frame.minY)
         XCTAssertLessThanOrEqual(status.frame.maxY, hero.frame.maxY)
+        let estimates = app.otherElements["todayEstimates"]
+        XCTAssertTrue(estimates.staticTexts[estimated ? "You may be on your period" : "You’re on your period"].exists)
+        XCTAssertFalse(estimates.staticTexts["No estimate for today"].exists)
     }
 
     @MainActor func testRecordedCurrentPeriodStatusAppearsAboveCountdownAndSurvivesRelaunch() {
@@ -75,7 +78,7 @@ final class TodayQuickActionsUITests: XCTestCase {
         // Yesterday is recorded; today's remaining period day is only estimated.
         assertCurrentPeriodStatus(in: app, estimated: true)
         let today = app.buttons["stripReturnToToday"]
-        UIViewport.reveal(today, in: app)
+        if !today.isHittable { UIViewport.reveal(today, in: app) }
         today.tap()
         assertCurrentPeriodStatus(in: app, estimated: true)
     }
@@ -208,7 +211,11 @@ final class TodayQuickActionsUITests: XCTestCase {
         // Generated text remains ephemeral, and relaunch does not spend another daily request.
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["logPeriod"].waitForExistence(timeout: 10))
-        app.tabBars.buttons["Insights"].tap()
+        for _ in 0..<2 {
+            app.tabBars.buttons["Insights"].tap()
+            if card.waitForExistence(timeout: 5) { break }
+        }
+        XCTAssertTrue(card.exists)
         let local = app.staticTexts["Calculated on this device"]
         UIViewport.reveal(local, in: app)
         XCTAssertTrue(local.isHittable)

@@ -43,8 +43,10 @@ struct TodayView: View {
             ForEach(session.cycleForecast.cycles.filter { selection != today && $0.contains(selection) }) { cycle in
                 TrackerCard { ProjectedCycleDetails(cycle: cycle, todayStyle: true) }
             }
+            if !session.cycleForecast.cycles.isEmpty || session.snapshot.periods.contains(where: { $0.contains(today) }) {
+                TodayEstimatesCard(forecast: session.cycleForecast, today: today, periods: session.snapshot.periods)
+            }
             if !session.cycleForecast.cycles.isEmpty {
-                TodayEstimatesCard(forecast: session.cycleForecast, today: today)
                 TrackerCard { UpcomingCycleForecastView(forecast: session.cycleForecast, today: today, todayStyle: true) }
             }
             DailyLogCard(session: session, selectedDay: selection, today: today)

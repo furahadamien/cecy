@@ -4,6 +4,7 @@ struct TodayEstimatesCard: View {
     @Environment(\.colorScheme) private var colorScheme
     let forecast: CycleForecast
     let today: LocalDay
+    var periods: [Period] = []
     var body: some View {
         TrackerCard {
             Text("Today’s estimates").font(TrackerTypography.sectionTitle).accessibilityAddTraits(.isHeader)
@@ -11,11 +12,16 @@ struct TodayEstimatesCard: View {
             let fertile = forecast.fertile(on: today)
             let ovulation = forecast.ovulation(on: today)
             let period = forecast.period(on: today)
-            if bleeding != nil { Label("Estimated period day · Not recorded", systemImage: "circle.dashed") }
+            let status = TodayCurrentPeriodStatus(periods: periods, forecast: forecast, today: today)
+            if let status {
+                Label { Text(status.title).font(.headline) } icon: {
+                    Image(systemName: "drop.fill").foregroundStyle(.red)
+                }.accessibilityIdentifier("todayEstimatePeriodStatus")
+            }
             if period != nil { Label("Within a possible period-start window", systemImage: "circle.dashed") }
             if fertile != nil { Label("Within an estimated fertile window", systemImage: "leaf") }
             if ovulation != nil { Label("Possible ovulation today · Not confirmed", systemImage: "circle.dotted") }
-            if bleeding == nil && fertile == nil && ovulation == nil && period == nil {
+            if status == nil && fertile == nil && ovulation == nil && period == nil {
                 HStack(spacing: 16) {
                     Image(systemName: "calendar.badge.plus")
                         .font(.title2).foregroundStyle(TrackerPalette(scheme: colorScheme).accent)
@@ -43,6 +49,7 @@ struct ProjectedCycleDetails: View {
     let cycle: ProjectedCycle
     var notBefore: LocalDay? = nil
     var todayStyle = false
+    var calendarStyle = false
 
     var body: some View {
         let palette = TrackerPalette(scheme: colorScheme)
@@ -66,7 +73,8 @@ struct ProjectedCycleDetails: View {
                 }
                 .font(.caption).foregroundStyle(.secondary)
             }
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: calendarStyle ? 12 : 20) {
+            VStack(alignment: .leading, spacing: calendarStyle ? 8 : 12) {
                 Label(cycle.isLaterProjection ? "Following period start · Projection" : "Possible period start · Estimate",
                       systemImage: "circle.dashed")
                     .font(.subheadline.weight(.semibold)).foregroundStyle(palette.recorded)
@@ -75,7 +83,7 @@ struct ProjectedCycleDetails: View {
                     Text(notBefore == nil ? "Start window" : "Remaining start window")
                         .font(.caption).foregroundStyle(.secondary)
                     Text(DayText.range(max(notBefore ?? cycle.period.earliest, cycle.period.earliest), cycle.period.latest))
-                        .font(TrackerTypography.sectionTitle)
+                        .font(calendarStyle ? .headline : TrackerTypography.sectionTitle)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("forecastPeriodWindow_\(cycle.index)")
                     Text("Around \(DayText.short(cycle.period.center))")
@@ -83,7 +91,7 @@ struct ProjectedCycleDetails: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
+            .padding(calendarStyle ? 12 : 16)
             .background(palette.recordedSurface, in: RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous))
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("forecastPeriodSection_\(cycle.index)")
@@ -103,13 +111,14 @@ struct ProjectedCycleDetails: View {
                                 value: "Around \(DayText.short(ovulation.center))", symbol: "circle.dotted",
                                 accent: palette.accent, identifier: "forecastOvulation_\(cycle.index)")
                 if let fertile = cycle.fertileWindow {
-                    if todayStyle { Divider() }
+                    if todayStyle || calendarStyle { Divider() }
                     ForecastDateRow(title: "Estimated fertile window", value: DayText.range(fertile.start, fertile.end),
                                     symbol: "leaf", accent: palette.accent, identifier: "forecastFertileWindow_\(cycle.index)")
                 }
             } else {
                 Text("Ovulation and fertile dates unavailable")
                     .font(.footnote).foregroundStyle(.secondary)
+            }
             }
         }
         .accessibilityElement(children: .contain)
@@ -152,16 +161,19 @@ struct UpcomingCycleForecastView: View {
     let forecast: CycleForecast
     let today: LocalDay
     var todayStyle = false
+    var calendarStyle = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("Upcoming cycle forecast").font(todayStyle ? TrackerTypography.sectionTitle : .headline).accessibilityAddTraits(.isHeader)
+            Text("Upcoming cycle forecast")
+                .font(calendarStyle ? .system(.title3, design: .serif, weight: .semibold) : todayStyle ? TrackerTypography.sectionTitle : .headline)
+                .accessibilityAddTraits(.isHeader)
             if let cycle = forecast.nextPeriod(onOrAfter: today) {
-                ProjectedCycleDetails(cycle: cycle, notBefore: today, todayStyle: todayStyle)
+                ProjectedCycleDetails(cycle: cycle, notBefore: today, todayStyle: todayStyle, calendarStyle: calendarStyle)
                 if let next = forecast.nextOvulation(onOrAfter: today), next.index != cycle.index {
                     Divider()
                     DisclosureGroup {
-                        ProjectedCycleDetails(cycle: next, notBefore: today, todayStyle: todayStyle).padding(.top, 16)
+                        ProjectedCycleDetails(cycle: next, notBefore: today, todayStyle: todayStyle, calendarStyle: calendarStyle).padding(.top, 16)
                     } label: {
                         Text("Next projected ovulation")
                             .font(.subheadline.weight(.semibold)).frame(minHeight: 44)

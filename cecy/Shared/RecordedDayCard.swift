@@ -2,6 +2,8 @@ import SwiftUI
 
 /// The same recorded-day surface and editing controls on Today and Calendar.
 struct RecordedDayCard: View {
+    @Environment(\.calendarRecordStyle) private var calendarStyle
+    @Environment(\.colorScheme) private var colorScheme
     let session: TrackerSession
     let day: LocalDay
     let today: LocalDay
@@ -9,8 +11,21 @@ struct RecordedDayCard: View {
     var body: some View {
         TrackerCard {
             VStack(alignment: .leading, spacing: 12) {
-                Text(DayText.full(day)).font(.headline).accessibilityAddTraits(.isHeader)
-                if day == today { Text("Today").font(.subheadline) }
+                if calendarStyle {
+                    ViewThatFits(in: .horizontal) {
+                        HStack {
+                            dateHeading
+                            Spacer(minLength: 8)
+                            todayBadge
+                        }
+                        VStack(alignment: .leading, spacing: 6) { dateHeading; todayBadge }
+                    }
+                    .padding(12)
+                    .background(TrackerPalette(scheme: colorScheme).recordedSurface.opacity(0.45), in: RoundedRectangle(cornerRadius: 16))
+                } else {
+                    Text(DayText.full(day)).font(.headline).accessibilityAddTraits(.isHeader)
+                    if day == today { Text("Today").font(.subheadline) }
+                }
                 if let answer = session.snapshot.dailyBleeding.first(where: { $0.day == day }) {
                     DailyBleedingRecordView(session: session, observation: answer)
                     Divider()
@@ -35,5 +50,14 @@ struct RecordedDayCard: View {
             .accessibilityIdentifier("selectedCalendarDetails")
         }
         .environment(\.recordsShareSurface, true)
+    }
+
+    private var dateHeading: some View {
+        Text(DayText.full(day)).font(.system(.title3, design: .serif, weight: .semibold))
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    @ViewBuilder private var todayBadge: some View {
+        if day == today { Text("Today").font(.caption).foregroundStyle(.secondary) }
     }
 }

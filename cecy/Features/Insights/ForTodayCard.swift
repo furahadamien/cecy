@@ -2,6 +2,8 @@ import SwiftUI
 
 /// Presentation only; daily requests remain owned by TrackerSession.
 struct ForTodayCard: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var showPreparation = false
     let session: TrackerSession
     let today: LocalDay
     private var wellness: WellnessRecommendation? {
@@ -12,8 +14,8 @@ struct ForTodayCard: View {
 
     var body: some View {
         TrackerCard {
-            Text("For today").font(.headline).accessibilityAddTraits(.isHeader)
-            DailyInsightsContent(session: session)
+            InsightSectionHeader(title: "For today", symbol: "leaf")
+            DailyInsightsContent(session: session, styled: true)
             if let wellness {
                 WellnessSafetyNotice(symptoms: session.snapshot.symptoms, today: today)
                 VStack(alignment: .leading, spacing: 12) {
@@ -23,18 +25,35 @@ struct ForTodayCard: View {
                     if let recovery = wellness.recoverySuggestions.first { row("Recovery", text: recovery, symbol: "leaf") }
                     AISafetyNotice(message: wellness.safetyMessage)
                 }.accessibilityIdentifier("todayWellnessSuggestions")
-            } else {
-                Text("Food, movement and recovery ideas based on today’s logs. Generate when you’re ready.")
-                    .font(.subheadline).foregroundStyle(.secondary)
             }
             NavigationLink { AIFeatureView(session: session, feature: .wellness) } label: {
-                Label(wellness == nil ? "Get today’s suggestions" : "View all suggestions", systemImage: "sparkles")
-                    .frame(minHeight: 44)
-            }.accessibilityIdentifier("dailyWellnessAI")
-            NavigationLink("Edit wellness preferences") { ProfileSettingsView(session: session) }
-                .frame(minHeight: 44).font(.subheadline).accessibilityIdentifier("todayWellnessPreferences")
-            DisclosureGroup("Daily preparation") { DailyInsightsPreference(session: session) }
+                HStack(spacing: 12) {
+                    Image(systemName: "sparkles").font(.title).accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(wellness == nil ? "Get today’s suggestions" : "View all suggestions").font(.headline)
+                        Text("Food, movement and recovery ideas based on your logs.").font(.subheadline)
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: "chevron.right").accessibilityHidden(true)
+                }
+                .foregroundStyle(.white).padding(18).frame(minHeight: 44)
+                .background(TrackerPalette(scheme: colorScheme).action, in: RoundedRectangle(cornerRadius: 22))
+            }.buttonStyle(.plain).accessibilityIdentifier("dailyWellnessAI")
+            Divider()
+            NavigationLink { ProfileSettingsView(session: session) } label: {
+                TrackerNavigationLabel(title: "Edit wellness preferences", symbol: "gearshape", detail: "Personalize your suggestions.")
+            }.buttonStyle(.plain).accessibilityIdentifier("todayWellnessPreferences")
+            Divider()
+            Button { showPreparation.toggle() } label: {
+                HStack {
+                    TrackerNavigationLabel(title: "Daily preparation", symbol: "list.clipboard", detail: "Optional daily insights.", showsChevron: false)
+                    Image(systemName: showPreparation ? "chevron.down" : "chevron.right").accessibilityHidden(true)
+                }.contentShape(Rectangle())
+            }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Daily preparation")
+                .accessibilityValue(showPreparation ? "Expanded" : "Collapsed")
                 .accessibilityIdentifier("dailyPreparationOptions")
+            if showPreparation { DailyInsightsPreference(session: session) }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("forTodayCard")
