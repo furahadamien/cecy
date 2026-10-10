@@ -138,6 +138,13 @@ struct AIFeatureView: View {
             }
             switch preparation {
             case .success(let request):
+                if isWellness, session.hasTodayInsight {
+                    Section {
+                        Label("New insights tomorrow", systemImage: "moon.stars")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("nextInsightsTomorrow")
+                    }
+                } else {
                 Section {
                     if !isWellness { AIConsentControl(session: session) }
                     Button(coordinator.output == nil ? (isWellness ? "Generate today’s insights" : "Generate") : "Generate again") {
@@ -150,10 +157,11 @@ struct AIFeatureView: View {
                     AIRequestStatus(coordinator: coordinator)
                 } footer: {
                     if isWellness {
-                        Text("Check ingredients against your allergies. Not medical advice. Results are not saved.")
+                        Text("Check ingredients against your allergies. Not medical advice. Kept on this device until the day ends.")
                     } else {
                         Text("Your question and selected details are sent when you generate. Ready answers stay on-device. Generated results are not saved.")
                     }
+                }
                 }
                 if !isWellness, let output = session.ai.output, session.ai.request == request {
                     Section { AIOutputView(output: output) }

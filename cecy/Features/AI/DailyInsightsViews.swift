@@ -34,7 +34,7 @@ struct DailyInsightsPreference: View {
                 if error == nil { session.preloadDailyInsights() }
             }.accessibilityIdentifier("enableDailyInsights")
         } message: {
-            Text("Once a day when you open Cecy, your cycle day, today’s selected symptoms, activity, exercise, diet, allergies and wellness goals may be sent to Azure and OpenAI. No private notes, identity, sexual-activity records or full history are sent. Results appear on Today and stay in memory only. Turn this off here or in Privacy and export.")
+            Text("Once a day when you open Cecy, your cycle day, today’s selected symptoms, activity, exercise, diet, allergies and wellness goals may be sent to Azure and OpenAI. No private notes, identity, sexual-activity records or full history are sent. Results appear on Today and stay on this device until the day ends. Turn this off here or in Privacy and export.")
         }
     }
 }
@@ -54,7 +54,7 @@ struct DailyInsightsCard: View {
                     WellnessSafetyNotice(symptoms: session.snapshot.symptoms, today: session.today)
                     AISafetyNotice(message: value.safetyMessage)
                     DisclosureGroup("Why these?") { Text(verbatim: value.explanation).font(.subheadline) }
-                    Text("AI-generated · Not medical advice. Check ingredients against your allergies.")
+                    Text("AI-generated · Not medical advice. Check ingredients against your allergies. New insights tomorrow.")
                         .font(.caption).foregroundStyle(.secondary)
                 }.accessibilityElement(children: .contain).accessibilityIdentifier("todayWellnessSuggestions")
             } else if session.dailyAI.isLoading {

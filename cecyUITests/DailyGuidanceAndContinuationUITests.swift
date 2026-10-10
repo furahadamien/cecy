@@ -43,7 +43,10 @@ final class DailyGuidanceAndContinuationUITests: XCTestCase {
         app.terminate(); app.launch()
         XCTAssertTrue(app.tabBars.buttons["Today"].waitForExistence(timeout: 15))
         XCTAssertFalse(app.buttons["closeDailyInsights"].waitForExistence(timeout: 2))
-        XCTAssertFalse(app.staticTexts["Synthetic gentle movement"].exists)
+        let restored = app.otherElements["dailyInsightsCard"].staticTexts["Synthetic gentle movement"]
+        UIViewport.reveal(restored, in: app)
+        XCTAssertTrue(restored.exists)
+        XCTAssertFalse(app.buttons["prepareDailyInsights"].exists)
     }
 
     @MainActor func testContinuingBleedingRecordsOnlySelectedDayWithoutEndDate() {

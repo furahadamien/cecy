@@ -27,10 +27,16 @@ final class TrackerSession {
     let ai: AIRequestCoordinator
     let dailyAI: AIRequestCoordinator
     private(set) var dailyInsightRequest: AIRequest?
+    /// Today's generated result, restored from the device until the local day ends.
+    private(set) var storedDailyInsight: WellnessRecommendation?
     var dailyInsightOutput: AIOutput? {
-        guard canUseAI, dailyAI.request == dailyInsightRequest else { return nil }
+        guard canUseAI else { return nil }
+        if let storedDailyInsight { return .wellness(storedDailyInsight) }
+        guard dailyAI.request == dailyInsightRequest else { return nil }
         return dailyAI.output
     }
+    /// A result already exists for today; another request waits until tomorrow.
+    var hasTodayInsight: Bool { storedDailyInsight != nil }
     var canUseAI: Bool {
         privacy.canAccess && privacy.aiEnabled && !account.requiresSignIn && phase == .loaded
             && snapshot.onboardingCompletedAt != nil && !isSaving && !isUpdatingPredictions
@@ -65,6 +71,12 @@ final class TrackerSession {
         healthImport = HealthImportReview(reader: healthReader ?? UnavailableHealthReader())
         ai = AIRequestCoordinator(service: aiService)
         dailyAI = AIRequestCoordinator(service: aiService)
+        dailyAI.onOutput = { [weak self] _, output in
+            guard let self, let today = self.today, case .wellness(let value) = output else { return }
+            // Shown for the rest of today even if saving fails; persisted copies survive relaunch.
+            self.storedDailyInsight = value
+            self.privacy.saveDailyInsight(value, for: today)
+        }
         self.account.onSuccessfulLink = { [weak self] in
             guard let self else { return }
             registryAuthorization = self.account.identity
@@ -126,7 +138,7 @@ final class TrackerSession {
 
     func preloadDailyInsights() {
         guard canUseAI, privacy.dailyInsightsEnabled, !ai.isLoading, !dailyAI.isLoading,
-              dailyInsightOutput == nil,
+              dailyInsightOutput == nil, !hasTodayInsight,
               let today, let request = dailyInsightRequest,
               privacy.reserveDailyInsightAttempt(on: today) else { return }
         dailyAI.begin(request) { [weak self] in
@@ -137,7 +149,7 @@ final class TrackerSession {
 
     /// Explicit generation/retry shares the automatic request and result across both tabs.
     func prepareTodayInsights() {
-        guard canUseAI, !dailyAI.isLoading, let today, let request = dailyInsightRequest else { return }
+        guard canUseAI, !dailyAI.isLoading, !hasTodayInsight, let today, let request = dailyInsightRequest else { return }
         if privacy.dailyInsightsEnabled {
             // Manual retries are allowed, but must never be followed by another automatic attempt.
             if privacy.preferences.dailyInsightAttemptDay != today.key,
@@ -150,7 +162,7 @@ final class TrackerSession {
     }
 
     func setAIEnabled(_ enabled: Bool) -> String? {
-        if !enabled { ai.invalidate(); dailyAI.invalidate() }
+        if !enabled { ai.invalidate(); dailyAI.invalidate(); storedDailyInsight = nil }
         return privacy.setAIEnabled(enabled, now: clock())
     }
 
@@ -193,6 +205,7 @@ final class TrackerSession {
         ai.invalidate()
         dailyAI.invalidate()
         dailyInsightRequest = nil
+        storedDailyInsight = nil
         privacy.cleanupExport()
         snapshot = TrackerSnapshot()
         activityIndex = DayActivityIndex()
@@ -338,6 +351,8 @@ final class TrackerSession {
         ai.invalidate()
         if self.snapshot != snapshot || self.today != today { dailyAI.invalidate() }
         dailyInsightRequest = try? AIContextBuilder.wellness(snapshot: snapshot, today: today)
+        // Expired (previous-day) results are deleted on read.
+        storedDailyInsight = privacy.dailyInsight(for: today)
         self.snapshot = snapshot
         activityIndex = DayActivityIndex(snapshot: snapshot)
         self.today = today

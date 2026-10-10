@@ -72,8 +72,12 @@ final class DeviceFeedbackRoundTwoUITests: XCTestCase {
         XCTAssertTrue(suggestion.exists)
         app.terminate(); app.launch()
         tap("dailyWellnessAI", app: app)
-        XCTAssertFalse(app.staticTexts["Synthetic gentle movement"].exists)
-        XCTAssertTrue(app.buttons["generateAI"].exists)
+        XCTAssertTrue(app.staticTexts["Synthetic gentle movement"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["generateAI"].exists)
+        let tomorrow = app.staticTexts["New insights tomorrow"].firstMatch
+        reveal(tomorrow, app: app)
+        XCTAssertTrue(tomorrow.exists)
+        XCTAssertFalse(app.buttons["generateAI"].exists)
     }
 
     @MainActor func testChartsAndScopeChipsAreAvailableWithoutConsent() {

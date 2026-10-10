@@ -63,3 +63,14 @@ The stored schema is unchanged. Period duration and completed-cycle calculations
 **Add bleeding day displayed as other bleeding.** Root cause: `DayActivityMarker`/`DayActivityIndex` ignored the daily answer’s period link and always emitted the green `dailyBleeding` marker. A validated linked `.bleeding` answer now renders as the red `period` marker (“Confirmed bleeding”) in Today and Calendar, and selected-day details show “Period bleeding” in red. Only that explicit day changes: gaps stay unknown, the period end is unchanged, and unlinked bleeding/spotting remain green other bleeding.
 
 Validation: 403 unit tests passed (one device-only skip). Affected UI checks passed: linked period day after relaunch, inline insights/popup/no repeat after relaunch, shared Today/Insights result, direct setup route, consent gate, and recording ranges. The popup check initially found a duplicate consent button behind the sheet; its query was scoped to the popup and passed on rerun. Unsigned Release build passed. Evidence: `fix.xcresult`, `popup2.xcresult`, and `fix-release.log` in `/Users/furahadamien/Dev/cecy-validation/daily-guidance-oct10/`. Not committed or pushed.
+
+## Daily insights persist for the day
+
+Supersedes the earlier memory-only behavior.
+
+- A validated result is saved on this device as `CecyPrivacy/daily-insight.json`, using complete file protection and excluded from backups. It is never exported, synced or sent anywhere.
+- One result per local civil day: Today, Insights and the popup show it after relaunch; no automatic or manual regeneration is offered that day ("New insights tomorrow").
+- Recording symptoms or periods later that day does not replace it.
+- It expires when the local day changes. The old file is deleted on the next read, and preparation is available again (automatically if enabled, otherwise manually).
+- Turning off optional insights or deleting all data removes it. While Cecy is locked or signed out, it is hidden. Unreadable content is discarded, not shown.
+- Failed or interrupted requests store nothing, so a manual retry remains available that day.

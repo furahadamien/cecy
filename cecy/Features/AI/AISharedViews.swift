@@ -99,7 +99,7 @@ struct AIPrivacySection: View {
             }
             DailyInsightsPreference(session: session)
             if let error { InlineError(message: error) }
-            Text("Requests are manual unless daily preparation is enabled separately. Turning off clears pending results, not confirmed records. Generated text is not saved or exported.")
+            Text("Requests are manual unless daily preparation is enabled separately. Today’s insights stay on this device until the day ends and are never exported. Turning off deletes them, not your records.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
     }
@@ -139,7 +139,7 @@ struct AIOutputView: View {
                 list("Supporting observations", value.supportingFacts, symbol: "chart.bar")
                 AISafetyNotice(message: value.safetyMessage)
             }
-            Text("Check against your records. Not medical advice. Results are not saved.")
+            Text("Check against your records. Not medical advice.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
         .font(.body).lineSpacing(4)
