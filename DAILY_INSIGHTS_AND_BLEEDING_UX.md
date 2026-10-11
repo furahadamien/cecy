@@ -69,7 +69,7 @@ Validation: 403 unit tests passed (one device-only skip). Affected UI checks pas
 Supersedes the earlier memory-only behavior.
 
 - A validated result is saved on this device as `CecyPrivacy/daily-insight.json`, using complete file protection and excluded from backups. It is never exported, synced or sent anywhere.
-- One result per local civil day: Today, Insights and the popup show it after relaunch; no automatic or manual regeneration is offered that day ("New insights tomorrow").
+- One result per local civil day: Today, Insights and the popup show it after relaunch. Automatic preparation runs once per day; Today also offers an explicit **Regenerate insights** action that discards today's saved result and requests a fresh one without triggering another automatic attempt.
 - Recording symptoms or periods later that day does not replace it.
 - It expires when the local day changes. The old file is deleted on the next read, and preparation is available again (automatically if enabled, otherwise manually).
 - Turning off optional insights or deleting all data removes it. While Cecy is locked or signed out, it is hidden. Unreadable content is discarded, not shown.

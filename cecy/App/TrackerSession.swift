@@ -163,6 +163,15 @@ final class TrackerSession {
         }
     }
 
+    /// Explicit user action on Today: discard today's saved result and request a fresh one,
+    /// bypassing the once-a-day automatic limit without triggering another automatic attempt.
+    func regenerateTodayInsights() {
+        guard canUseAI, !dailyAI.isLoading, dailyInsightRequest != nil else { return }
+        storedDailyInsight = nil
+        privacy.clearDailyInsight()
+        prepareTodayInsights()
+    }
+
     func setAIEnabled(_ enabled: Bool) -> String? {
         if !enabled { ai.invalidate(); dailyAI.invalidate(); storedDailyInsight = nil }
         let message = privacy.setAIEnabled(enabled, now: clock())

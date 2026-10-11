@@ -40,6 +40,7 @@ struct DailyInsightsPreference: View {
 }
 
 struct DailyInsightsCard: View {
+    @Environment(\.colorScheme) private var colorScheme
     let session: TrackerSession
     @State private var expanded = false
 
@@ -54,8 +55,15 @@ struct DailyInsightsCard: View {
                             DailyInsightSectionView(section: section, compact: true)
                         }
                         DisclosureGroup("Why these?") { Text(verbatim: value.explanation).font(.subheadline) }
-                        Text("AI-generated · Not medical advice. Check ingredients against your allergies. New insights tomorrow.")
+                        Text("AI-generated · Not medical advice. Check ingredients against your allergies.")
                             .font(.caption).foregroundStyle(.secondary)
+                        Button { session.regenerateTodayInsights() } label: {
+                            Label("Regenerate insights", systemImage: "arrow.clockwise").font(.subheadline)
+                                .foregroundStyle(TrackerPalette(scheme: colorScheme).accent)
+                        }
+                        .buttonStyle(.plain).frame(minHeight: 44)
+                        .disabled(session.dailyAI.isLoading)
+                        .accessibilityIdentifier("regenerateDailyInsights")
                     }.padding(.top, 8)
                 } label: {
                     InsightSectionHeader(title: "Today’s insights", symbol: "sparkles")

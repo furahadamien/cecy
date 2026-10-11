@@ -50,6 +50,47 @@ nonisolated struct FirstCycleForecastTests {
         }
     }
 
+    @Test func potentialEndResolvesToLatestRecordedBleedingDayAndSurfacesInSummary() throws {
+        let period = Period(start: start)
+        let d8 = try start.adding(days: 1)
+        let d10 = try start.adding(days: 3)
+        let answers = [DailyBleedingObservation(day: d8, state: .bleeding, periodID: period.id),
+                       DailyBleedingObservation(day: d10, state: .bleeding, periodID: period.id)]
+        let snapshot = TrackerSnapshot(periods: [period], dailyBleeding: answers)
+        #expect(snapshot.potentialEnd(for: period) == d10)
+        #expect(snapshot.hasTentativeEnd(period))
+        #expect(snapshot.resolvedPeriods[0].end == d10)
+        #expect(snapshot.periods[0].end == nil) // Stored record stays open.
+        // A confirmed end wins and is not tentative.
+        var closed = period; closed.end = d8
+        let closedSnapshot = TrackerSnapshot(periods: [closed], dailyBleeding: answers)
+        #expect(closedSnapshot.potentialEnd(for: closed) == d8 && !closedSnapshot.hasTentativeEnd(closed))
+        // Appointment summary surfaces the latest recorded day without claiming confirmed days.
+        let text = try AppointmentSummary.text(snapshot: snapshot, start: start, end: d10, options: .init())
+        #expect(text.contains("latest recorded bleeding day") && !text.contains("confirmed days"))
+    }
+
+    @Test func latestRecordedBleedingDayCapsEstimatedPeriodDays() throws {
+        var profile = LocalProfile(); profile.typicalPeriodDays = 5
+        let period = Period(start: start)
+        let oct8 = try start.adding(days: 1)
+        let overview = CycleCalculator.overview(periods: [period], today: oct8, profile: profile)
+        // Only the start recorded: the full labelled default still estimates Oct 8–11.
+        let base = CycleForecast.calculate(overview: overview, profile: profile, periods: [period])
+        #expect(base.currentBleeding?.end == (try start.adding(days: 4)))
+        #expect(try base.bleeding(on: LocalDay(key: 20261011)) != nil)
+        // Recording Oct 8 as a linked bleeding day makes it the potential last day: nothing estimated past it.
+        let first = DailyBleedingObservation(day: oct8, state: .bleeding, periodID: period.id)
+        let capped = CycleForecast.calculate(overview: overview, profile: profile, periods: [period], dailyBleeding: [first])
+        #expect(capped.currentBleeding?.end == oct8)
+        for key in 20261009...20261011 { #expect(try capped.bleeding(on: LocalDay(key: key)) == nil) }
+        // Recording the next day moves the potential-last-day boundary forward.
+        let second = DailyBleedingObservation(day: try start.adding(days: 2), state: .bleeding, periodID: period.id)
+        let extended = CycleForecast.calculate(overview: overview, profile: profile, periods: [period], dailyBleeding: [first, second])
+        #expect(extended.currentBleeding?.end == (try start.adding(days: 2)))
+        #expect(try extended.bleeding(on: LocalDay(key: 20261010)) == nil)
+    }
+
     @Test func dailyAnswersOverrideEstimatedMarkersWithoutStartingCycles() throws {
         let period = Period(start: start)
         let day = try start.adding(days: 1)

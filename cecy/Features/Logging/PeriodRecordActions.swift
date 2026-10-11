@@ -48,7 +48,7 @@ struct PeriodRecordActions: View {
             }
             Button("Keep period", role: .cancel) { }
         } message: {
-            Text("Remove the entire period \(DayText.range(period.start, period.end ?? period.start))—not just the selected day—including its flow and note. Daily answers stay saved without a period link. Cycle calculations may change. This cannot be undone.")
+            Text("Remove the entire period \(DayText.range(period.start, session.snapshot.potentialEnd(for: period) ?? period.start))—not just the selected day—including its flow and note. Daily answers stay saved without a period link. Cycle calculations may change. This cannot be undone.")
         }
     }
 }
@@ -80,14 +80,23 @@ struct PeriodRecordSummary: View {
 
     @ViewBuilder private var details: some View {
             let accent = TrackerPalette(scheme: colorScheme).recorded
-            RecordHeader(title: title, date: period.end.map { DayText.range(period.start, $0) } ?? DayText.full(period.start),
+            let tentativeEnd = period.end == nil ? session.snapshot.potentialEnd(for: period) : nil
+            let shownEnd = period.end ?? tentativeEnd
+            let days = shownEnd.map { period.start.days(until: $0) + 1 }
+            RecordHeader(title: title, date: shownEnd.map { DayText.range(period.start, $0) } ?? DayText.full(period.start),
                          symbol: "drop.fill", accent: accent)
             SelectionFlowLayout {
-                RecordBadge(title: period.duration.map { "\($0) days · confirmed" } ?? "End not recorded",
-                            symbol: period.end == nil ? "calendar.badge.questionmark" : "checkmark.circle", accent: accent)
+                RecordBadge(title: badgeTitle(days: days, tentative: tentativeEnd != nil),
+                            symbol: period.end != nil ? "checkmark.circle" : (tentativeEnd != nil ? "calendar.badge.clock" : "calendar.badge.questionmark"),
+                            accent: accent)
                 if let flow = period.flow { RecordBadge(title: flow.title + " flow", symbol: flow.symbol, accent: accent) }
             }
             if let note = period.notes { DisclosureGroup("Private note") { Text(note) }.font(.subheadline) }
+    }
+
+    private func badgeTitle(days: Int?, tentative: Bool) -> String {
+        guard let days else { return "End not recorded" }
+        return tentative ? "\(days) days so far" : "\(days) days · confirmed"
     }
 }
 

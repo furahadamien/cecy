@@ -86,6 +86,9 @@ nonisolated enum AppointmentSummary {
             for period in included {
                 var line = "\(date(period.start)) – " + (period.end.map(date) ?? "end not recorded")
                 if let duration = period.duration { line += " · \(duration) confirmed days" }
+                else if let latest = snapshot.potentialEnd(for: period), latest > period.start {
+                    line += " · latest recorded bleeding day \(date(latest))"
+                }
                 if let flow = period.flow { line += " · overall \(flow.title.lowercased()) flow" }
                 lines.append(line)
                 if options.notes, let note = period.notes { lines.append("Note: \(note)") }

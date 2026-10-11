@@ -147,8 +147,15 @@ nonisolated struct CycleForecast: Equatable, Sendable {
         if let latestPeriod = periods.first(where: { $0.start == start }), latestPeriod.end == nil,
            let duration, duration.days < length, duration.days > 1,
            let first = try? start.adding(days: 1),
-           let last = try? start.adding(days: duration.days - 1) {
-            result.currentBleeding = ForecastInterval(start: first, end: last)
+           let defaultLast = try? start.adding(days: duration.days - 1) {
+            // The latest recorded bleeding day is the period's potential last day: never estimate
+            // past it. Each newly recorded day moves this boundary forward. Confirmed ends and the
+            // untouched default (when only the start is recorded) are unaffected.
+            let latestRecorded = dailyBleeding
+                .filter { $0.periodID == latestPeriod.id && $0.state == .bleeding && $0.day > start }
+                .map(\.day).max()
+            let last = latestRecorded.map { min(defaultLast, $0) } ?? defaultLast
+            if first <= last { result.currentBleeding = ForecastInterval(start: first, end: last) }
         }
         // Retain the original three for calendar history, plus the cycle preceding
         // today's next center and three upcoming centers. Bounded work even after years.

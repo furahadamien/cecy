@@ -193,6 +193,32 @@ nonisolated struct TrackerSnapshot: Equatable, Sendable {
     var sexualActivities: [SexualActivityEntry] = []
     var healthImports: [HealthImportReceipt] = []
     var dailyBleeding: [DailyBleedingObservation] = []
+
+    /// The period's potential last day: a confirmed end when set, otherwise the latest recorded
+    /// linked bleeding day. The derived value is tentative (evidence-based, not user-confirmed) and
+    /// moves forward as more days are logged; stored records keep their open end.
+    func potentialEnd(for period: Period) -> LocalDay? {
+        if let end = period.end { return end }
+        return dailyBleeding
+            .filter { $0.periodID == period.id && $0.state == .bleeding && $0.day > period.start }
+            .map(\.day).max()
+    }
+
+    /// True when `potentialEnd(for:)` comes from recorded bleeding rather than a user-confirmed end.
+    func hasTentativeEnd(_ period: Period) -> Bool {
+        period.end == nil && potentialEnd(for: period) != nil
+    }
+
+    /// Periods whose open ends are extended to their potential last day, for display/extent only.
+    /// Stored records and confirmed-end semantics are unchanged.
+    var resolvedPeriods: [Period] {
+        periods.map { period in
+            guard period.end == nil, let end = potentialEnd(for: period) else { return period }
+            var copy = period
+            copy.end = end
+            return copy
+        }
+    }
 }
 
 @MainActor

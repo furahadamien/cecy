@@ -85,7 +85,7 @@ struct TodayView: View {
                         .accessibilityIdentifier("starterPrediction")
                 }
             }
-            if let status = TodayCurrentPeriodStatus(periods: session.snapshot.periods,
+            if let status = TodayCurrentPeriodStatus(periods: session.snapshot.resolvedPeriods,
                                                      forecast: session.cycleForecast, today: today, dailyBleeding: session.snapshot.dailyBleeding) {
                 Divider()
                 HStack(spacing: 12) {

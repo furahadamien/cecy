@@ -30,7 +30,7 @@ struct RecordedDayCard: View {
                     DailyBleedingRecordView(session: session, observation: answer)
                     Divider()
                 }
-                if let period = session.snapshot.periods.first(where: { $0.contains(day) }) {
+                if let period = PeriodLogSelection.existing(on: day, periods: session.snapshot.periods, dailyBleeding: session.snapshot.dailyBleeding) {
                     PeriodRecordSummary(session: session, period: period,
                                         title: period.start == day ? "Recorded period start" : "Confirmed bleeding day")
                 } else {
