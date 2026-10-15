@@ -436,6 +436,13 @@ final class TrackerSession {
         }
     }
 
+    func saveDailyCheckIn(_ update: DailyCheckInUpdate) -> String? {
+        mutate(confirmation: "Daily check-in saved.",
+               failure: "Your check-in hasn’t been saved. Your draft is still here; try again.") {
+            try $0.saveDailyCheckIn(update, today: $1, now: $2)
+        }
+    }
+
     func deleteSymptoms(on day: LocalDay) -> String? {
         mutate(confirmation: "Symptoms deleted for \(DayText.full(day)).",
                failure: "These symptoms weren’t deleted. Try again.") { repository, _, _ in
@@ -555,6 +562,8 @@ final class TrackerSession {
         } catch let error as HealthImportError {
             return error.localizedDescription
         } catch let error as DailyBleedingError {
+            return error.localizedDescription
+        } catch let error as DailyCheckInError {
             return error.localizedDescription
         } catch let error as TrackingError {
             return error.localizedDescription

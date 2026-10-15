@@ -242,6 +242,7 @@ protocol PeriodRepository {
     func saveDailyBleeding(_ observation: DailyBleedingObservation, editing: Bool, today: LocalDay, now: Date) throws -> TrackerSnapshot
     func deleteDailyBleeding(id: UUID) throws -> TrackerSnapshot
     func reconcileBleeding(_ review: BleedingReconciliation, today: LocalDay, now: Date) throws -> TrackerSnapshot
+    func saveDailyCheckIn(_ update: DailyCheckInUpdate, today: LocalDay, now: Date) throws -> TrackerSnapshot
 }
 
 extension PeriodRepository {
@@ -252,6 +253,9 @@ extension PeriodRepository {
     func deleteDailyBleeding(id: UUID) throws -> TrackerSnapshot { throw DailyBleedingError.unavailable }
     func reconcileBleeding(_ review: BleedingReconciliation, today: LocalDay, now: Date) throws -> TrackerSnapshot {
         throw DailyBleedingError.unavailable
+    }
+    func saveDailyCheckIn(_ update: DailyCheckInUpdate, today: LocalDay, now: Date) throws -> TrackerSnapshot {
+        throw DailyCheckInError.unavailable
     }
 
     // Older test repositories do not gain an implicit, non-atomic import implementation.

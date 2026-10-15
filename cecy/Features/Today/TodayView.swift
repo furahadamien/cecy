@@ -27,6 +27,8 @@ struct TodayView: View {
             ActivityCalendarStrip(today: today, activityIndex: session.activityIndex,
                                   forecast: session.cycleForecast, selection: $selection, compact: true)
             hero
+            DailyCheckInButton(session: session, day: selection)
+                .disabled(selection > today)
             Group {
                 if dynamicTypeSize.isAccessibilitySize {
                     VStack(spacing: 10) { loggingButtons }

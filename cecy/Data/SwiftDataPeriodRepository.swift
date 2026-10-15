@@ -462,6 +462,74 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         } catch { context.rollback(); throw error }
     }
 
+    /// Replaces only one day's check-in records in one save. Unrelated records remain outside
+    /// the stale comparison and replacement scope.
+    func saveDailyCheckIn(_ update: DailyCheckInUpdate, today: LocalDay, now: Date) throws -> TrackerSnapshot {
+        var candidate = try load()
+        let currentBleeding = candidate.dailyBleeding.first { $0.day == update.day }
+        let currentSymptoms = SymptomValidation.sorted(candidate.symptoms.filter { $0.day == update.day })
+        guard currentBleeding == update.expectedBleeding, currentSymptoms == update.expectedSymptoms else {
+            throw DailyCheckInError.stale
+        }
+        guard update.hasAnswer else { throw DailyCheckInError.empty }
+        guard update.day <= today, now.timeIntervalSinceReferenceDate.isFinite,
+              update.bleeding?.day == update.day || update.bleeding == nil,
+              update.symptoms.allSatisfy({ $0.day == update.day }) else { throw TrackingError.invalidData }
+
+        let bleeding = update.bleeding.map { proposed in
+            DailyBleedingObservation(id: currentBleeding?.id ?? proposed.id, day: update.day, state: proposed.state,
+                flow: proposed.state == .bleeding ? proposed.flow : nil,
+                periodID: proposed.state == .bleeding ? proposed.periodID : nil,
+                createdAt: currentBleeding?.createdAt ?? now,
+                updatedAt: currentBleeding == proposed ? (currentBleeding?.updatedAt ?? now) : now)
+        }
+        let oldSymptoms = Dictionary(uniqueKeysWithValues: currentSymptoms.map { ($0.kind, $0) })
+        let symptoms = update.symptoms.map { proposed in
+            let original = oldSymptoms[proposed.kind]
+            return SymptomEntry(id: original?.id ?? proposed.id, day: update.day, kind: proposed.kind,
+                value: proposed.value, notes: proposed.notes,
+                createdAt: original?.createdAt ?? now,
+                updatedAt: original == proposed ? (original?.updatedAt ?? now) : now)
+        }
+
+        candidate.dailyBleeding.removeAll { $0.day == update.day }
+        if let bleeding { candidate.dailyBleeding.append(bleeding) }
+        candidate.dailyBleeding = DailyBleedingValidation.sorted(candidate.dailyBleeding)
+        candidate.symptoms.removeAll { $0.day == update.day }
+        candidate.symptoms = SymptomValidation.sorted(candidate.symptoms + symptoms)
+        try DailyBleedingValidation.validate(candidate.dailyBleeding, periods: candidate.periods, asOf: today)
+        try SymptomValidation.validate(candidate.symptoms, asOf: today)
+
+        let dailyRecords = try context.fetch(FetchDescriptor<TrackerSchemaV7.DailyBleedingRecord>())
+        let symptomRecords = try context.fetch(FetchDescriptor<TrackerSchemaV3.SymptomRecord>())
+        do {
+            if let record = dailyRecords.first(where: { $0.dayKey == update.day.key }) {
+                if let bleeding { record.update(bleeding) } else { context.delete(record) }
+            } else if let bleeding {
+                context.insert(TrackerSchemaV7.DailyBleedingRecord(bleeding))
+            }
+
+            let symptomIDs = Set(symptoms.map(\.id))
+            for record in symptomRecords where record.dayKey == update.day.key && !symptomIDs.contains(record.id) {
+                context.delete(record)
+            }
+            let recordsByID = Dictionary(uniqueKeysWithValues: symptomRecords.map { ($0.id, $0) })
+            for value in symptoms {
+                if let record = recordsByID[value.id] {
+                    record.dayKey = value.day.key
+                    record.kindRaw = value.kind.rawValue
+                    record.rating = value.value
+                    record.notes = value.notes
+                    record.updatedAt = value.updatedAt
+                } else {
+                    context.insert(TrackerSchemaV3.SymptomRecord(value))
+                }
+            }
+            try saveContext(context)
+            return candidate
+        } catch { context.rollback(); throw error }
+    }
+
     func deleteAll() throws -> TrackerSnapshot {
         do {
             // Fetch before deleting anything. Reset also works for malformed domain records.
