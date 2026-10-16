@@ -8,8 +8,13 @@ struct CycleFactorsView: View {
     var body: some View {
         List {
             Section {
-                Text("Dated factors explain why an interval may differ. They do not change or delete your raw period records.")
-                    .font(.footnote).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("What are cycle factors?").font(.headline)
+                    Text("Cycle factors are things that might affect the length or regularity of your cycle, such as illness, stress, travel, pregnancy, or starting or stopping contraception.")
+                    Text("Adding one explains why a cycle looked different and can keep it out of forecast averages. Your period records are never changed or deleted.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
             }
             Section("Timeline") {
                 if session.snapshot.cycleFactors.isEmpty { Text("No dated factors").foregroundStyle(.secondary) }
@@ -92,15 +97,15 @@ private struct CycleFactorEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Factor") {
-                    Picker("Type", selection: $value.kind) {
-                        ForEach(CycleFactorKind.allCases, id: \.self) { Text($0.title).tag($0) }
-                    }
+                Section {
+                    ChipPicker(title: "What might affect your cycle?", options: CycleFactorKind.allCases,
+                               selection: $value.kind, label: \.title)
                     DatePicker("Started", selection: dayBinding($value.start), in: ...Date(), displayedComponents: .date)
                     Toggle("Has an end date", isOn: $hasEnd)
                     if hasEnd { DatePicker("Ended", selection: endBinding, in: value.start.formattingDate...Date(), displayedComponents: .date) }
                     TextField("Private note (optional)", text: $notes, axis: .vertical).lineLimit(2...5)
-                }
+                } header: { Text("Cycle factor") }
+                footer: { Text("Something that might affect the length or regularity of your cycle during these dates.") }
                 Section {
                     Toggle("Exclude affected intervals from forecasts", isOn: $value.excludesFromForecast)
                     Text("Your period records stay unchanged. Cecy will show affected intervals and this reason. Turn this off to include them again.")

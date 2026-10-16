@@ -45,13 +45,6 @@ nonisolated enum LifeStageKind: String, Codable, CaseIterable, Sendable {
         }
     }
 
-    var educationIDs: [String] {
-        switch self {
-        case .cycleChange: ["cycle-change", "heavy-bleeding", "irregular", "appointment"]
-        case .postpartum: ["postpartum", "breastfeeding", "heavy-bleeding", "appointment"]
-        case .breastfeeding: ["breastfeeding", "postpartum", "contraception-bleeding"]
-        }
-    }
 }
 
 nonisolated enum FeedingContext: String, Codable, CaseIterable, Sendable {
@@ -505,7 +498,7 @@ nonisolated struct LifeStageSummary: Equatable, Sendable {
             if let first = firstPeriodAfterStart {
                 lines.append(String(localized: "First period start recorded after \(format(start)): \(format(first))."))
             } else {
-                lines.append(String(localized: "No period start recorded since \(format(start)). Return timing varies, and Cecy does not predict it."))
+                lines.append(String(localized: "No period start recorded since \(format(start)). Cecy does not predict when periods return."))
             }
             if kind == .postpartum {
                 lines.append(String(localized: "Postpartum bleeding recorded on \(postpartumBleedingDays) days, kept separate from periods."))
@@ -524,104 +517,6 @@ nonisolated enum LifeStageCheckIn {
         var seen = Set<SymptomKind>()
         return data.activeLifeStages(on: day).flatMap(\.kind.relevantSymptoms).filter { seen.insert($0).inserted }
     }
-}
-
-// MARK: - Education (P2.5)
-
-nonisolated struct EducationArticle: Identifiable, Equatable, Sendable {
-    let id: String
-    let title: String
-    let summary: String
-    let body: [String]
-    let author: String
-    let reviewer: String
-    /// False until a named, qualified clinician signs off. Drafts are labeled in the UI.
-    let isClinicallyReviewed: Bool
-    let references: [String]
-    let reviewedOn: LocalDay
-    let jurisdiction: String
-    let emergencyBoundary: String
-    let relatedStages: Set<LifeStageKind>
-
-    func matches(_ query: String) -> Bool {
-        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return true }
-        return ([title, summary] + body).contains { $0.localizedCaseInsensitiveContains(text) }
-    }
-}
-
-nonisolated enum EducationCatalog {
-    static let catalogVersion = 2
-
-    private static func article(_ id: String, _ title: String, _ summary: String, _ body: [String],
-                                _ references: [String], _ stages: Set<LifeStageKind> = [],
-                                emergency: String? = nil) -> EducationArticle {
-        EducationArticle(id: id, title: title, summary: summary, body: body,
-            author: String(localized: "Cecy product team"),
-            reviewer: String(localized: "Awaiting qualified clinical review"),
-            isClinicallyReviewed: false, references: references,
-            reviewedOn: (try? LocalDay(key: 20261015))!,
-            jurisdiction: String(localized: "General educational information for adults; not specific to any country’s clinical guidelines."),
-            emergencyBoundary: emergency ?? String(localized: "Seek urgent care for soaking through a pad or tampon every hour for several hours, fainting, severe pain, fever, chest pain, or trouble breathing."),
-            relatedStages: stages)
-    }
-
-    static let articles: [EducationArticle] = [
-        article("estimates", String(localized: "What cycle estimates mean"),
-            String(localized: "Estimates describe patterns in recorded dates. They are not guarantees and are not contraception."),
-            [String(localized: "Cecy compares the start dates you record. Missing starts can make intervals look longer than they were."),
-             String(localized: "A calendar estimate cannot confirm ovulation, fertility, or hormone levels."),
-             String(localized: "Ranges widen when recorded intervals vary—this is honest uncertainty, not an error.")],
-            ["ACOG FAQ: Fertility Awareness-Based Methods of Family Planning"]),
-        article("irregular", String(localized: "Irregular cycles and missing records"),
-            String(localized: "Cycle length naturally varies. Gaps in logging are not the same as changes in your body."),
-            [String(localized: "If you missed logging a start, add it from History so intervals stay accurate."),
-             String(localized: "Dated factors such as illness, travel, or contraception changes help explain unusual intervals."),
-             String(localized: "Consider talking with a clinician if cycles are regularly shorter than 21 days, longer than 35 days, or suddenly change.")],
-            ["ACOG FAQ: Abnormal Uterine Bleeding", "Office on Women’s Health: Your menstrual cycle"]),
-        article("heavy-bleeding", String(localized: "Heavy bleeding and pain: when to seek care"),
-            String(localized: "Some bleeding and pain patterns deserve prompt attention."),
-            [String(localized: "Bleeding that lasts longer than seven days, needs changing every one to two hours, or passes large clots is worth discussing with a clinician."),
-             String(localized: "Pain that stops usual activities or is not helped by usual measures is also worth discussing."),
-             String(localized: "Cecy’s appointment report can summarize recorded bleeding and pain days.")],
-            ["ACOG FAQ: Heavy Menstrual Bleeding", "CDC: Heavy Menstrual Bleeding"], [.cycleChange, .postpartum]),
-        article("contraception-bleeding", String(localized: "Contraception and bleeding changes"),
-            String(localized: "Many contraceptive methods change bleeding patterns. Recorded changes can help a clinician review options."),
-            [String(localized: "Hormonal methods can cause spotting, lighter bleeding, or no bleeding. Starting or stopping a method can change intervals for a time."),
-             String(localized: "Cecy records methods you use but never calculates protection, effectiveness, or pregnancy risk."),
-             String(localized: "Contraception periods can be excluded from forecast averages from Cycle factors.")],
-            ["ACOG FAQ: Birth Control", "WHO: Family planning/contraception methods"], [.breastfeeding]),
-        article("cycle-change", String(localized: "Cycle changes and perimenopause"),
-            String(localized: "Cycle and symptom changes vary widely. Saved records can support a healthcare conversation but cannot diagnose a life stage."),
-            [String(localized: "Record changes that matter to you and review coverage when looking at trends."),
-             String(localized: "A calendar day does not reveal a measured hormonal state."),
-             String(localized: "Hot flashes, sleep changes, and bleeding changes are common reasons to talk with a clinician.")],
-            ["ACOG FAQ: The Menopause Years", "The Menopause Society: Menopause FAQs"], [.cycleChange],
-            emergency: String(localized: "Seek prompt care for very heavy bleeding, bleeding after 12 months without periods, fainting, severe pain, chest pain, or trouble breathing.")),
-        article("postpartum", String(localized: "Postpartum bleeding and cycle return"),
-            String(localized: "Postpartum discharge is recorded separately from menstrual periods, and cycle return varies."),
-            [String(localized: "Lochia is not a menstrual period. Cecy keeps it out of cycle statistics."),
-             String(localized: "There is no single expected date for periods to return. Feeding, recovery, and individual factors vary."),
-             String(localized: "Recovery after pregnancy, including after loss, can bring difficult feelings. Support is available, and you can record only what helps you.")],
-            ["ACOG Committee Opinion: Optimizing Postpartum Care", "WHO: Postnatal care recommendations"], [.postpartum, .breastfeeding],
-            emergency: String(localized: "Seek urgent care for soaking a pad in an hour or less, large clots with heavy bleeding, fainting, fever, severe headache, chest pain, breathing difficulty, or thoughts of harming yourself or your baby.")),
-        article("breastfeeding", String(localized: "Breastfeeding and the return of cycles"),
-            String(localized: "Feeding can delay the return of periods, but timing is unpredictable."),
-            [String(localized: "Ovulation can happen before the first period returns."),
-             String(localized: "Cecy does not use feeding context to predict a return date or to estimate pregnancy risk."),
-             String(localized: "Discuss contraception options with a clinician if avoiding pregnancy matters to you.")],
-            ["ACOG FAQ: Breastfeeding Your Baby", "WHO: Infant and young child feeding"], [.breastfeeding, .postpartum]),
-        article("appointment", String(localized: "Preparing for an appointment"),
-            String(localized: "A short, specific summary helps make the most of limited appointment time."),
-            [String(localized: "Choose a date range that covers the change you want to discuss."),
-             String(localized: "Write down your main concern and one or two questions."),
-             String(localized: "Preview exactly what will be shared before exporting. Cecy never sends reports anywhere on its own.")],
-            ["AHRQ: Questions to Ask Your Doctor"], [.cycleChange, .postpartum, .breastfeeding])
-    ]
-
-    static func article(id: String) -> EducationArticle? { articles.first { $0.id == id } }
-    static func articles(for stage: LifeStageKind) -> [EducationArticle] { stage.educationIDs.compactMap(article(id:)) }
-    static func search(_ query: String) -> [EducationArticle] { articles.filter { $0.matches(query) } }
 }
 
 // MARK: - Apple ecosystem (P2.4)

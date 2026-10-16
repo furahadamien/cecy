@@ -176,22 +176,7 @@ nonisolated struct P2RoadmapDomainTests {
         #expect(trend.summary(system: .metric).contains("2 of 30"))
     }
 
-    // MARK: P2.5 / P2.4
-
-    @Test func everyArticleCarriesProvenanceAndIsLabeledUntilReviewed() {
-        #expect(EducationCatalog.articles.count >= 8)
-        #expect(Set(EducationCatalog.articles.map(\.id)).count == EducationCatalog.articles.count)
-        for article in EducationCatalog.articles {
-            #expect(!article.references.isEmpty && !article.emergencyBoundary.isEmpty && !article.jurisdiction.isEmpty)
-            #expect(!article.author.isEmpty && !article.reviewer.isEmpty)
-            #expect(!article.isClinicallyReviewed, "Articles must stay labeled as drafts until a named clinician signs off.")
-        }
-        for stage in LifeStageKind.allCases {
-            #expect(EducationCatalog.articles(for: stage).count == stage.educationIDs.count)
-        }
-        #expect(EducationCatalog.search("lochia").map(\.id) == ["postpartum"])
-        #expect(EducationCatalog.search("  ").count == EducationCatalog.articles.count)
-    }
+    // MARK: P2.4
 
     @Test func onlyReviewFirstAppleCapabilitiesAreEnabled() {
         #expect(AppleEcosystemCapability.allCases.filter(\.isEnabledInThisBuild) == [.appIntents])

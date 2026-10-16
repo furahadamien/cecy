@@ -30,15 +30,10 @@ struct P2DepthView: View {
                 Text("These are records, not diagnoses. Postpartum bleeding stays separate from periods, and biomarkers do not change forecasts or confirm ovulation or pregnancy.")
             }
             Section {
-                NavigationLink { EducationLibraryView() } label: {
-                    SettingsRow(title: "Learning library", systemImage: "books.vertical",
-                                detail: "\(EducationCatalog.articles.count) articles")
-                }
-                .accessibilityIdentifier("p2Learning")
                 NavigationLink { AppleIntegrationBoundaryView() } label: {
                     SettingsRow(title: "Apple integrations", systemImage: "apple.logo", detail: "Shortcuts available")
                 }
-            } header: { Text("Learn and connect") }
+            } header: { Text("Connect") }
             footer: { Text("Integrations that could save health data without your review stay off until permissions, signing, privacy, and device testing are complete.") }
         }
     }
@@ -116,11 +111,6 @@ private struct LifeStageSummaryCard: View {
                     LabeledContent(item.kind.title, value: "\(item.count) days").font(.footnote)
                 }
             }
-            DisclosureGroup("Related reading") {
-                ForEach(EducationCatalog.articles(for: episode.kind)) { article in
-                    NavigationLink(article.title) { EducationArticleView(article: article) }
-                }
-            }
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .contain)
@@ -161,9 +151,8 @@ private struct LifeStageEditor: View {
         NavigationStack {
             Form {
                 Section {
-                    Picker("Life stage", selection: $value.kind) {
-                        ForEach(LifeStageKind.allCases, id: \.self) { Text($0.title).tag($0) }
-                    }
+                    ChipPicker(title: "Life stage", options: LifeStageKind.allCases, selection: $value.kind,
+                               label: \.title, symbol: { $0.symbol })
                     DatePicker(value.kind == .postpartum ? "Birth or pregnancy-end date" : "Started",
                                selection: P2Dates.binding($value.start), in: ...P2Dates.now, displayedComponents: .date)
                     Toggle("Has an end date", isOn: $hasEnd)
@@ -172,9 +161,7 @@ private struct LifeStageEditor: View {
                                    in: value.start.formattingDate...P2Dates.now, displayedComponents: .date)
                     }
                     if value.kind == .postpartum {
-                        Picker("Feeding context", selection: feeding) {
-                            ForEach(FeedingContext.allCases, id: \.self) { Text($0.title).tag($0) }
-                        }
+                        ChipPicker(title: "Feeding context", options: FeedingContext.allCases, selection: feeding, label: \.title)
                     }
                     TextField("Private note (optional)", text: $notes, axis: .vertical).lineLimit(2...5)
                 } footer: {
@@ -274,11 +261,8 @@ private struct PostpartumBleedingView: View {
                 Section { Text("Add a postpartum life-stage record first so Cecy can keep these observations in the correct context.") }
             }
             Section {
-                Text("These records never create a period or enter cycle averages. Seek urgent care for soaking a pad in an hour or less, large clots, fainting, fever, chest pain, trouble breathing, or other severe symptoms.")
+                Text("These records never create a period or enter cycle averages. If you are worried about bleeding or how you feel, contact a healthcare professional.")
                     .font(.footnote)
-                NavigationLink("Postpartum bleeding and cycle return") {
-                    if let article = EducationCatalog.article(id: "postpartum") { EducationArticleView(article: article) }
-                }
             }
         }
         .navigationTitle("Postpartum bleeding")
@@ -313,11 +297,9 @@ private struct PostpartumBleedingEditor: View {
         NavigationStack {
             Form {
                 DatePicker("Date", selection: P2Dates.binding($value.day), in: ...P2Dates.now, displayedComponents: .date)
-                Picker("Observation", selection: $value.state) {
-                    ForEach(PostpartumBleedingState.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
+                ChipPicker(title: "Observation", options: PostpartumBleedingState.allCases, selection: $value.state, label: \.title)
                 if value.state == .bleeding {
-                    Picker("Flow", selection: flow) { ForEach(PeriodFlow.allCases, id: \.self) { Text($0.title).tag($0) } }
+                    ChipPicker(title: "Flow", options: PeriodFlow.allCases, selection: flow, label: \.title, symbol: { $0.symbol })
                 }
                 TextField("Private note (optional)", text: $notes, axis: .vertical)
                 if let error { Section { InlineError(message: error) } }
@@ -376,8 +358,10 @@ private struct BiomarkerTrackingView: View {
         List {
             if let today = session.today, !recordedKinds.isEmpty {
                 Section {
-                    Picker("Record type", selection: $chartKind) {
-                        ForEach(recordedKinds, id: \.self) { Text($0.title).tag($0) }
+                    if recordedKinds.count > 1 {
+                        ChipPicker(title: "Show", options: recordedKinds, selection: $chartKind, label: \.title)
+                    } else {
+                        Text(chartKind.title).font(.headline)
                     }
                     let trend = BiomarkerTrend.make(kind: chartKind, entries: session.snapshot.p2.biomarkers, through: today)
                     if !trend.points.isEmpty {
@@ -454,9 +438,7 @@ private struct BiomarkerEditor: View {
         NavigationStack {
             Form {
                 DatePicker("Date", selection: P2Dates.binding($day), in: ...P2Dates.now, displayedComponents: .date)
-                Picker("Record type", selection: $kind) {
-                    ForEach(BiomarkerKind.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
+                ChipPicker(title: "Record type", options: BiomarkerKind.allCases, selection: $kind, label: \.title)
                 .disabled(original?.provenance == .appleHealth)
                 .onChange(of: kind) { _, new in result = new.allowedResults.first ?? .notSure; numeric = "" }
                 if kind.supportsNumericValue {
@@ -464,7 +446,7 @@ private struct BiomarkerEditor: View {
                         .keyboardType(.decimalPad)
                         .accessibilityIdentifier("biomarkerValue")
                 } else {
-                    Picker("Result", selection: $result) { ForEach(kind.allowedResults, id: \.self) { Text($0.title).tag($0) } }
+                    ChipPicker(title: "Result", options: kind.allowedResults, selection: $result, label: \.title)
                 }
                 TextField("Private note (optional)", text: $notes, axis: .vertical)
                 if let error { Section { InlineError(message: error) } }
@@ -514,62 +496,6 @@ private struct BiomarkerEditor: View {
         }
         error = session.saveP2Data(data, confirmation: "Biomarker record saved without changing forecasts.")
         if error == nil { dismiss() }
-    }
-}
-
-// MARK: - Education
-
-struct EducationLibraryView: View {
-    @State private var query = ""
-
-    var body: some View {
-        List {
-            let results = EducationCatalog.search(query)
-            ForEach(results) { article in
-                NavigationLink { EducationArticleView(article: article) } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(article.title).font(.headline)
-                        Text(article.summary).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
-                    }
-                }
-            }
-            if results.isEmpty { Text("No articles match your search.").foregroundStyle(.secondary) }
-            Section {
-                Text("General education, not personal medical advice. Articles show their review status, sources, and limits.")
-                    .font(.footnote)
-            }
-        }
-        .searchable(text: $query, prompt: Text("Search articles"))
-        .navigationTitle("Learning library")
-    }
-}
-
-struct EducationArticleView: View {
-    let article: EducationArticle
-
-    var body: some View {
-        List {
-            if !article.isClinicallyReviewed {
-                Section {
-                    Label("Draft awaiting qualified clinical review", systemImage: "exclamationmark.triangle")
-                        .font(.subheadline.weight(.semibold))
-                }
-            }
-            Section {
-                Text(article.summary).font(.headline)
-                ForEach(article.body, id: \.self) { Text($0) }
-            }
-            Section("When to seek care") { Text(article.emergencyBoundary) }
-            Section("Review and sources") {
-                LabeledContent("Author", value: article.author)
-                LabeledContent("Reviewer", value: article.reviewer)
-                LabeledContent("Last updated", value: DayText.full(article.reviewedOn))
-                Text(article.jurisdiction).font(.footnote)
-                ForEach(article.references, id: \.self) { Text($0).font(.footnote) }
-            }
-        }
-        .navigationTitle(article.title)
-        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

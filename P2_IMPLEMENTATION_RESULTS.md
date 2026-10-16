@@ -30,8 +30,9 @@ All seven P2 workstreams are implemented to the extent possible in this reposito
 - Dated birth/pregnancy-end stage with optional feeding context; a separate breastfeeding/chestfeeding stage.
 - Postpartum bleeding (lochia, spotting, bleeding, not sure) is a separate record type. It never creates a period and never enters cycle statistics.
 - Postpartum and feeding stages exclude overlapping intervals from forecast averages by default. The exclusion is visible and reversible, and period records are never changed.
-- Summary reports the first period start recorded after the stage began, or states that none is recorded and Cecy does not predict return.
+- Summary reports the first period start recorded after the stage began, or states that none is recorded and that Cecy does not predict when periods return.
 - Wording explicitly includes pregnancy loss and invites recording only what helps.
+- No clinical guidance or urgent-care thresholds are shown; the postpartum screen says these records never count as periods and suggests contacting a healthcare professional if worried.
 - Editing that would leave postpartum bleeding outside a postpartum stage is blocked with an explanation.
 
 ### P2.3 Biomarkers
@@ -48,12 +49,9 @@ All seven P2 workstreams are implemented to the extent possible in this reposito
 - An in-app integrations screen lists each capability and why it is or isn’t enabled.
 - Health biomarker reads, Health write-back, widgets, and Apple Watch remain disabled (see External gates).
 
-### P2.5 Education
+### P2.5 Education — removed
 
-- Eight local articles: cycle estimates, irregular cycles and missing records, heavy bleeding and pain, contraception and bleeding, perimenopause, postpartum bleeding and cycle return, breastfeeding and cycle return, preparing for an appointment.
-- Each shows author, reviewer, references, last-updated date, scope limits, and a when-to-seek-care section.
-- Searchable library; articles are linked from each life stage and from postpartum bleeding.
-- Every article shows a **“Draft awaiting qualified clinical review”** banner. A test keeps this flag in place until a named clinician signs off.
+The learning library was built and then **removed on October 16, 2026** at the product owner's request. Every article (including "Postpartum bleeding and cycle return") needed qualified clinical review, and no reviewer is available. Clinical guidance copy was also removed: specific urgent-care thresholds and "return timing varies" claims. What remains are factual statements about how Cecy treats records, plus a general prompt to contact a healthcare professional if worried. P2.5 can be revisited if a clinical reviewer becomes available.
 
 ### P2.6 Localization and inclusive language
 
@@ -77,6 +75,11 @@ All seven P2 workstreams are implemented to the extent possible in this reposito
 - Imported P2 data merges using the same conflict strategies as P1 and is fully validated before preview (e.g., orphaned postpartum bleeding or mismatched units are rejected).
 - Appointment report: new optional **Life stages** and **Biomarker records** sections. They are off by default and their toggles appear only when such records exist. They are included in the text, CSV, and PDF formats.
 
+## UI refinements (October 16, 2026)
+
+- **Cycle factors explained:** the Cycle factors screen now opens with "What are cycle factors?" They are things that might affect the length or regularity of your cycle, such as illness, stress, travel, pregnancy, or starting or stopping contraception. The editor footer repeats the definition.
+- **Dropdowns replaced with chips:** a shared `ChipPicker` (built on the existing `SelectionChip` and `SelectionFlowLayout`) shows every option as a tappable chip with a checkmark instead of a hidden menu. It is used for life stage, feeding context, postpartum observation, flow, biomarker type and result, the chart selector (hidden when only one type exists), cycle factor type, treatment type, method and schedule, import conflict choice, and check-in symptom ratings. Chips wrap at large text sizes and expose selected state to VoiceOver. Segmented controls (date range, report format, feedback) were kept.
+
 ## Defect found and fixed: forecasts disappearing with exclusions
 
 The new P2 tests found a defect present since P1. The prediction engines require a continuous sequence of intervals ending at the latest period start. When a cycle factor (P1) or life stage (P2) excluded an interval **in the middle or at the end** of history, validation failed and the **forecast disappeared completely**. A typical case is an ongoing postpartum stage.
@@ -85,9 +88,9 @@ Fix (`CycleCalculator.forecastChain`): the displayed intervals keep their real d
 
 ## Validation
 
-- New `cecyTests/P2RoadmapTests.swift`: 18 domain tests (one parameterized) and 3 repository tests. They cover forecast exclusion and reversal, postpartum and biomarker forecast isolation, validation failing closed, life-stage summaries, check-in tailoring, unit conversion and trends, education metadata, Apple capability gating, insight hiding and resurfacing, V9 round trip, import rejection, report sections, persistence, rollback, reset, transactional import, and on-disk V8 → V9 migration.
+- New `cecyTests/P2RoadmapTests.swift`: 17 domain tests (one parameterized) and 3 repository tests. They cover forecast exclusion and reversal, postpartum and biomarker forecast isolation, validation failing closed, life-stage summaries, check-in tailoring, unit conversion and trends, Apple capability gating, insight hiding and resurfacing, V9 round trip, import rejection, report sections, persistence, rollback, reset, transactional import, and on-disk V8 → V9 migration.
 - Focused P2 + P1 + forecast suites: **27 passed, 0 failed.**
-- Full unit target (`cecyTests`, serial): **451 tests in 84 suites passed, 0 failed, 1 expected skip.** The skip checks file-protection attributes, which Simulator does not expose.
+- Full unit target (`cecyTests`, serial): **450 tests in 84 suites passed, 0 failed, 1 expected skip** (after removing the education test). The skip checks file-protection attributes, which Simulator does not expose.
 - Clean app build succeeded; the String Catalog compiles into the bundle.
 
 ### Test-environment note
@@ -96,7 +99,7 @@ Parallel test runs left about 120 cloned-simulator processes running and pushed 
 
 ## External gates (not complete)
 
-- Qualified clinical review of all education articles and of the perimenopause, postpartum, loss, heavy-bleeding, and emergency copy; replace the reviewer placeholder and set `isClinicallyReviewed`.
+- Any future medical or educational copy needs qualified clinical review before it ships (education was removed rather than shipped unreviewed).
 - Choose target languages from market research; native-language medical review before shipping any translation; RTL, Dynamic Type, and VoiceOver acceptance in each language.
 - Apple Health biomarker read and write-back: per-type authorization design, provenance/deduplication/loop prevention, and signed physical-device testing.
 - WidgetKit and watchOS targets: provisioning, discreet lock-screen review, and accessibility acceptance.

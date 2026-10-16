@@ -65,20 +65,14 @@ private struct TreatmentEditorView: View {
         NavigationStack {
             Form {
                 Section("Record") {
-                    Picker("Type", selection: $value.category) {
-                        ForEach(TreatmentCategory.allCases, id: \.self) { Text($0.title).tag($0) }
-                    }
+                    ChipPicker(title: "Type", options: TreatmentCategory.allCases, selection: $value.category, label: \.title)
                     TextField(value.category == .contraception ? "Method name" : "Name", text: $value.name)
                         .textInputAutocapitalization(.words)
                     if value.category == .contraception {
-                        Picker("Method", selection: contraceptionBinding) {
-                            ForEach(ContraceptionType.allCases, id: \.self) { Text($0.title).tag($0) }
-                        }
+                        ChipPicker(title: "Method", options: ContraceptionType.allCases, selection: contraceptionBinding, label: \.title)
                     }
                     TextField("Dose or instructions (optional)", text: optionalText($value.dose))
-                    Picker("Schedule", selection: $value.cadence) {
-                        ForEach(TreatmentCadence.allCases, id: \.self) { Text($0.title).tag($0) }
-                    }
+                    ChipPicker(title: "Schedule", options: TreatmentCadence.allCases, selection: $value.cadence, label: \.title)
                 }
                 Section("Dates") {
                     DatePicker("Started", selection: dayBinding($value.start), in: ...Date(), displayedComponents: .date)

@@ -22,9 +22,7 @@ struct ImportRecordsView: View {
 
             if data != nil {
                 Section("Conflict choice") {
-                    Picker("When records conflict", selection: $strategy) {
-                        ForEach(ImportConflictStrategy.allCases, id: \.self) { Text($0.title).tag($0) }
-                    }
+                    ChipPicker(title: "When records conflict", options: ImportConflictStrategy.allCases, selection: $strategy, label: \.title)
                     .onChange(of: strategy) { _, _ in preparePreview() }
                     Text("Duplicates are never added twice. Conflicts are records for the same date or identity with different content.")
                         .font(.footnote).foregroundStyle(.secondary)

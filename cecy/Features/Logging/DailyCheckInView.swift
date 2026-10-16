@@ -162,14 +162,9 @@ struct DailyCheckInView: View {
                 if !selectedKinds.isEmpty {
                     Section("Optional ratings") {
                         ForEach(selectedKinds, id: \.self) { kind in
-                            Picker(selection: rating(for: kind)) {
-                                Text("Not rated").tag(Int?.none)
-                                ForEach(1...3, id: \.self) { value in
-                                    Text(kind.ratingLabels[value - 1]).tag(Int?.some(value))
-                                }
-                            } label: {
-                                Label(kind.title, systemImage: kind.symbol)
-                            }
+                            ChipPicker(title: kind.title, options: [Int?.none] + (1...3).map(Int?.some),
+                                       selection: rating(for: kind),
+                                       label: { $0.map { kind.ratingLabels[$0 - 1] } ?? String(localized: "Not rated") })
                             .accessibilityIdentifier("checkInRating_\(kind.rawValue)")
                         }
                     }
