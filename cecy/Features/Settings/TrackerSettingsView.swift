@@ -30,6 +30,27 @@ struct TrackerSettingsView: View {
                 }.accessibilityIdentifier("accountSettings")
             }
             Section {
+                NavigationLink { TreatmentTrackingView(session: session) } label: {
+                    SettingsRow(title: "Medication and contraception", systemImage: "pills",
+                                detail: "\(session.snapshot.treatments.count) recorded")
+                }
+                .accessibilityIdentifier("treatmentSettings")
+                NavigationLink { CycleFactorsView(session: session) } label: {
+                    SettingsRow(title: "Cycle factors", systemImage: "timeline.selection",
+                                detail: "\(session.snapshot.cycleFactors.count) dated")
+                }
+                .accessibilityIdentifier("cycleFactorSettings")
+                NavigationLink { P2DepthView(session: session) } label: {
+                    SettingsRow(title: "Life stages and deeper records", systemImage: "person.line.dotted.person",
+                                detail: "\(session.snapshot.p2.lifeStages.count) life stages · \(session.snapshot.p2.biomarkers.count) biomarkers")
+                }
+                .accessibilityIdentifier("p2DepthSettings")
+            } header: {
+                Text("Tracking records")
+            } footer: {
+                Text("Records provide context only. Cecy does not calculate medication effects, contraception effectiveness, or pregnancy risk.")
+            }
+            Section {
                 NavigationLink { PrivacySettingsView(session: session) } label: {
                     SettingsRow(title: "Privacy and export", systemImage: "lock.shield",
                                 detail: "App lock: \(session.privacy.preferences.lockEnabled ? "On" : "Off")")
@@ -73,6 +94,19 @@ struct TrackerSettingsView: View {
                                 detail: SupportContact.email)
                 }
                 .accessibilityIdentifier("contactSupport")
+                Link(destination: PrivacyPolicy.url) {
+                    HStack {
+                        SettingsRow(title: "Privacy policy", systemImage: "hand.raised",
+                                    detail: "How Cecy handles your information")
+                        Image(systemName: "arrow.up.forward")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .foregroundStyle(.primary)
+                .accessibilityHint("Opens in your browser")
+                .accessibilityIdentifier("privacyPolicy")
                 NavigationLink { PredictionSettingsInfoView() } label: {
                     SettingsRow(title: "How predictions work", systemImage: "calendar",
                                 detail: "Estimates, not guarantees")
@@ -119,7 +153,7 @@ struct SettingsForm<Content: View>: View {
     }
 }
 
-private struct SettingsRow: View {
+struct SettingsRow: View {
     let title: String
     let systemImage: String
     let detail: String

@@ -36,6 +36,8 @@ struct PreparedExport: Identifiable {
     @ObservationIgnored private var prediction: CyclePrediction?
     @ObservationIgnored private var now = Date()
     @ObservationIgnored private var timeZone = TimeZone.current
+    @ObservationIgnored private var periods: [Period] = []
+    @ObservationIgnored private var treatments: [TreatmentRecord] = []
 
     init(storage: any PrivacyPreferenceStoring, authentication: any DeviceAuthenticating,
          exports: any ExportFileManaging, delivery: any ReminderDelivering,
@@ -119,6 +121,19 @@ struct PreparedExport: Identifiable {
             preferences = candidate
             return nil
         } catch { return "Appearance couldn’t be saved. Your previous setting is unchanged." }
+    }
+
+    func setCheckInPreferences(_ value: CheckInPreferences) -> String? {
+        guard canAccess else { return "Unlock Cecy to customize your check-in." }
+        var normalized = value
+        normalized.normalize()
+        var candidate = preferences
+        candidate.checkInPreferences = normalized
+        do {
+            try storage.save(candidate)
+            preferences = candidate
+            return nil
+        } catch { return "Check-in customization couldn’t be saved. Your previous choices are unchanged." }
     }
 
     func setAIEnabled(_ enabled: Bool, now: Date = Date()) -> String? {
@@ -214,18 +229,24 @@ struct PreparedExport: Identifiable {
 
     func clearDailyInsight() { try? dailyInsightStore.clear() }
 
-    func trackingChanged(prediction: CyclePrediction?, now: Date, timeZone: TimeZone) {
+    func trackingChanged(prediction: CyclePrediction?, now: Date, timeZone: TimeZone,
+                         periods: [Period] = [], treatments: [TreatmentRecord] = []) {
         self.prediction = prediction
         self.now = now
         self.timeZone = timeZone
+        self.periods = periods
+        self.treatments = treatments
         reschedule()
     }
 
     private func reschedule() {
         guard isReady else { return }
         let enabled = preferences.dailyReminder || preferences.windowReminder
+            || preferences.periodFollowUpReminder == true || preferences.missedLogReminder == true
+            || preferences.symptomReminderKinds?.isEmpty == false || treatments.contains(where: \.reminderEnabled)
         do {
-            let requests = try ReminderPlanner.requests(preferences: preferences, prediction: prediction, now: now, timeZone: timeZone)
+            let requests = try ReminderPlanner.requests(preferences: preferences, prediction: prediction, now: now,
+                                                        timeZone: timeZone, periods: periods, treatments: treatments)
             reminders.replace(with: requests, enabled: enabled)
         } catch {
             reminders.replace(with: [], enabled: false)
@@ -263,6 +284,36 @@ struct PreparedExport: Identifiable {
         } catch { message = "Reminder settings were not saved. Try again."; return .failed }
     }
 
+    func setUsefulReminders(periodFollowUp: Bool, symptomKinds: [SymptomKind], missedLog: Bool,
+                            detailedKinds: Set<ReminderRequest.Kind>? = nil) async -> ReminderSaveResult {
+        guard canAccess, !isChangingReminders else { return .interrupted }
+        isChangingReminders = true
+        defer { isChangingReminders = false }
+        let needsPermission = periodFollowUp || !symptomKinds.isEmpty || missedLog || treatments.contains(where: \.reminderEnabled)
+        if needsPermission, (await reminders.permissionForUserRequest()) == false { return .permissionUnavailable }
+        var candidate = preferences
+        candidate.periodFollowUpReminder = periodFollowUp
+        candidate.symptomReminderKinds = symptomKinds
+        candidate.missedLogReminder = missedLog
+        if let detailedKinds {
+            candidate.reminderDetailsByKind = Dictionary(uniqueKeysWithValues: ReminderRequest.Kind.allCases.map {
+                ($0.rawValue, detailedKinds.contains($0))
+            })
+        }
+        do {
+            try storage.save(candidate); preferences = candidate; reschedule(); await reminders.flush(); return .saved
+        } catch { message = "Reminder settings were not saved. Try again."; return .failed }
+    }
+
+    func snoozeRemindersUntilTomorrow() {
+        guard canAccess, let today = try? LocalDay(date: now, timeZone: timeZone),
+              let tomorrow = try? today.adding(days: 1) else { return }
+        var candidate = preferences
+        candidate.remindersSnoozedUntilDay = tomorrow.key
+        do { try storage.save(candidate); preferences = candidate; reschedule(); message = "Check-in reminders snoozed until tomorrow." }
+        catch { message = "Reminders couldn’t be snoozed. Try again." }
+    }
+
     func export(snapshot: TrackerSnapshot, includeNotes: Bool, generatedAt: Date = Date(), includeProfile: Bool = false,
                 includeSexualActivity: Bool = false) {
         guard canAccess else { return }
@@ -291,6 +342,23 @@ struct PreparedExport: Identifiable {
         }
     }
 
+    func exportReport(_ document: AppointmentSummaryDocument, format: AppointmentReportFormat) {
+        guard canAccess else { return }
+        do {
+            let data: Data
+            switch format {
+            case .text: data = Data(document.text.utf8)
+            case .csv: data = AppointmentReportCSV.encode(document)
+            case .pdf: data = AppointmentReportPDF.encode(document)
+            }
+            preparedExport = PreparedExport(url: try exports.prepareReport(data, fileExtension: format.fileExtension))
+            message = nil
+        } catch {
+            preparedExport = nil
+            message = "The appointment report couldn’t be prepared. Try again."
+        }
+    }
+
     /// Ancillary cleanup precedes record deletion. A failure preserves records but may already disable reminders.
     func prepareForReset() throws {
         guard canAccess, !isAuthenticating, !isChangingReminders else { throw TrackingError.invalidData }
@@ -304,6 +372,11 @@ struct PreparedExport: Identifiable {
         dailyInsightsBlocked = true
         candidate.dailyReminder = false
         candidate.windowReminder = false
+        candidate.periodFollowUpReminder = nil
+        candidate.symptomReminderKinds = nil
+        candidate.missedLogReminder = nil
+        candidate.remindersSnoozedUntilDay = nil
+        candidate.reminderDetailsByKind = nil
         candidate.reminderHour = 20
         candidate.reminderMinute = 0
         try storage.save(candidate)

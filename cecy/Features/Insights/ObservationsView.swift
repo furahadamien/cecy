@@ -2,6 +2,10 @@ import SwiftUI
 
 struct ObservationsView: View {
     let session: TrackerSession
+    @State private var showHidden = false
+    private var arranged: (visible: [CycleInsight], hidden: [CycleInsight]) {
+        InsightQuality.arrange(session.insights, feedback: session.snapshot.p2.insightFeedback)
+    }
     var body: some View {
         TrackerPage(title: "Observations", subtitle: "From your records, not assumptions.") {
             if let confirmation = session.confirmation {
@@ -21,7 +25,7 @@ struct ObservationsView: View {
             if session.insights.isEmpty {
                 TrackerCard {
                     Text("No repeated pattern to show yet.").font(.headline)
-                    Text("You can still generate a description of the records available so far.")
+                    Text("Keep logging to build a clearer local record over time.")
                     Text("Timing observations need matching logs near at least three eligible period starts. Changes compare two groups of three completed records. Sparse or missing logs do not mean symptom-free days.")
                 }
             }
@@ -36,12 +40,28 @@ struct ObservationsView: View {
                 .font(.footnote).foregroundStyle(.secondary)
             }
             .frame(minHeight: 44)
-            ForEach(session.insights) { insight in
-                InsightCard(insight: insight)
+            ForEach(arranged.visible) { insight in
+                InsightCard(insight: insight, session: session)
                 NavigationLink {
                     AIFeatureView(session: session, feature: .insight(insight))
                 } label: { Label("Explain this observation", systemImage: "sparkles").frame(minHeight: 44) }
                 .accessibilityIdentifier("explainInsight_\(insight.id)")
+            }
+            if !arranged.hidden.isEmpty {
+                DisclosureGroup(isExpanded: $showHidden) {
+                    Text("Hidden because you marked them not helpful. They return automatically if new records change the evidence.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    ForEach(arranged.hidden) { insight in
+                        HStack {
+                            Text(insight.title)
+                            Spacer()
+                            Button("Show again") { _ = session.clearInsightFeedback(InsightQuality.fingerprint(insight)) }
+                                .buttonStyle(.bordered)
+                        }
+                    }
+                } label: { Text("Hidden observations (\(arranged.hidden.count))") }
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("hiddenInsights")
             }
             TrackerCard {
                 Text("Recorded-day counts · All history").font(.headline)
@@ -67,12 +87,19 @@ struct ObservationsView: View {
 
 struct InsightCard: View {
     let insight: CycleInsight
+    var session: TrackerSession?
+    @State private var askingWhy = false
+    private var key: String { InsightQuality.fingerprint(insight) }
+    private var feedback: InsightFeedback? { session?.snapshot.p2.insightFeedback.first { $0.insightID == key } }
     var body: some View {
         TrackerCard {
             Text(insight.title).font(.headline)
             Text(insight.explanation)
             Text(insight.evidence.rawValue).font(.subheadline.weight(.medium))
             Text(DayText.range(insight.rangeStart, insight.rangeEnd)).font(.footnote)
+            Text("Evidence coverage: " + InsightQuality.coverage(insight)).font(.footnote).foregroundStyle(.secondary)
+            Text("What would make this stronger: " + InsightQuality.strengthening(insight))
+                .font(.footnote).foregroundStyle(.secondary)
             DisclosureGroup("Supporting records") {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(insight.timing, id: \.start) { support in
@@ -92,6 +119,86 @@ struct InsightCard: View {
                 }
             }
             .frame(minHeight: 44)
+            if let session {
+                if let feedback {
+                    Label(feedback.helpful ? "Marked helpful on this device" : "Marked not helpful on this device",
+                          systemImage: feedback.helpful ? "hand.thumbsup.fill" : "hand.thumbsdown.fill")
+                        .font(.footnote)
+                    if !feedback.reasons.isEmpty {
+                        Text(InsightFeedbackReason.allCases.filter(feedback.reasons.contains).map(\.title).joined(separator: " · "))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                HStack {
+                    Button("Helpful") { _ = session.rateInsight(key, helpful: true); askingWhy = true }
+                        .accessibilityIdentifier("insightHelpful_\(insight.id)")
+                    Button("Not helpful") { askingWhy = true }
+                        .accessibilityIdentifier("insightNotHelpful_\(insight.id)")
+                }
+                .buttonStyle(.bordered)
+                Text("Feedback stays on this device and never changes your records.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
+        .sheet(isPresented: $askingWhy) {
+            if let session {
+                InsightFeedbackSheet(session: session, key: key, initialHelpful: feedback?.helpful ?? false,
+                                     initialReasons: feedback?.reasons ?? [])
+            }
+        }
+    }
+}
+
+private struct InsightFeedbackSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let session: TrackerSession
+    let key: String
+    @State var helpful: Bool
+    @State var reasons: Set<InsightFeedbackReason>
+    @State private var error: String?
+
+    init(session: TrackerSession, key: String, initialHelpful: Bool, initialReasons: Set<InsightFeedbackReason>) {
+        self.session = session
+        self.key = key
+        _helpful = State(initialValue: initialHelpful)
+        _reasons = State(initialValue: initialReasons)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Picker("This observation was", selection: $helpful) {
+                    Text("Helpful").tag(true)
+                    Text("Not helpful").tag(false)
+                }
+                .pickerStyle(.segmented)
+                Section {
+                    ForEach(InsightFeedbackReason.allCases.filter { $0.isPositive == helpful }, id: \.self) { reason in
+                        Toggle(reason.title, isOn: Binding(get: { reasons.contains(reason) }, set: {
+                            if $0 { reasons.insert(reason) } else { reasons.remove(reason) }
+                        }))
+                    }
+                } header: { Text("Why? (optional)") }
+                footer: {
+                    Text(helpful ? "Saved only on this device."
+                         : "Saved only on this device. This observation will be hidden until new records change its evidence.")
+                }
+                if let error { Section { InlineError(message: error) } }
+            }
+            .navigationTitle("Observation feedback")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        error = session.rateInsight(key, helpful: helpful,
+                                                    reasons: reasons.filter { $0.isPositive == helpful })
+                        if error == nil { dismiss() }
+                    }
+                    .accessibilityIdentifier("saveInsightFeedback")
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }

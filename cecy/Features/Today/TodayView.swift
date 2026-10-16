@@ -27,6 +27,20 @@ struct TodayView: View {
             ActivityCalendarStrip(today: today, activityIndex: session.activityIndex,
                                   forecast: session.cycleForecast, selection: $selection, compact: true)
             hero
+            DailyCheckInButton(session: session, day: selection)
+                .disabled(selection > today)
+            if needsPersonalization {
+                TrackerCard {
+                    Label("Make Cecy yours", systemImage: "slider.horizontal.3")
+                        .font(.headline)
+                    Text("Optional answers can put common symptoms first and tailor your experience. Add them whenever you’re ready.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    NavigationLink("Personalize profile") { ProfileSettingsView(session: session) }
+                    NavigationLink("Choose reminders") { ReminderSettingsView(privacy: session.privacy) }
+                    NavigationLink("Review Apple Health import") { HealthImportSettingsView(session: session) }
+                }
+                .accessibilityIdentifier("postOnboardingPersonalization")
+            }
             Group {
                 if dynamicTypeSize.isAccessibilitySize {
                     VStack(spacing: 10) { loggingButtons }
@@ -65,6 +79,12 @@ struct TodayView: View {
                 PredictionExplanation(estimate: estimate, sources: Array(overview.intervals.suffix(6)), replay: session.predictionReplay)
             }
         }
+    }
+
+    private var needsPersonalization: Bool {
+        guard let profile = session.snapshot.profile else { return false }
+        return profile.commonSymptoms.isEmpty && profile.cycleContext.isEmpty && profile.goals.isEmpty
+            && profile.heightCentimeters == nil && profile.weightKilograms == nil
     }
 
     private var hero: some View {

@@ -16,7 +16,7 @@ nonisolated enum SymptomCategory: String, CaseIterable, Sendable {
     var kinds: [SymptomKind] { SymptomKind.allCases.filter { $0.category == self } }
 }
 
-nonisolated enum SymptomKind: String, CaseIterable, Sendable {
+nonisolated enum SymptomKind: String, Codable, CaseIterable, Sendable {
     case cramps, headache, bloating, fatigue, moodChanges, acne, backPain, nausea
     case breastTenderness, sleepQuality, energyLevel, cravings, digestiveChanges
     case pelvicPain, jointPain, muscleAches, breastSwelling

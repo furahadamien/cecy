@@ -49,7 +49,7 @@ struct PrivacySettingsView: View {
                     Text("Accepted Apple Health period dates are included. Health sample identifiers and source metadata are not exported.")
                     Text("Sexual activity is excluded unless enabled above. Partner answers require both this option and Include personal profile. Activity notes also require Include private notes.")
                     Text("Personal profile includes your name, birth date, gender answer, measurements and preferences, including wellness choices and food allergies. Apple identity is never exported.")
-                    Text("JSON is a readable data file. Importing it back into Cecy is not supported.")
+                    Text("JSON is a readable data file. A Cecy JSON export can be reviewed and imported back into Cecy.")
                     Text("Leaving Cecy while sharing may cancel the export.")
                 }
                 Label("Not encrypted. Share only with a destination you trust.", systemImage: "exclamationmark.shield")
@@ -67,6 +67,10 @@ struct PrivacySettingsView: View {
                 Text("Saved or shared copies leave Cecy’s control. Delete all data won’t remove them.")
             }
             Section {
+                NavigationLink { ImportRecordsView(session: session) } label: {
+                    Label("Import Cecy JSON", systemImage: "square.and.arrow.down").frame(minHeight: 44)
+                }
+                .accessibilityIdentifier("importRecords")
                 NavigationLink { StorageSettingsInfoView() } label: {
                     Label("Storage and backups", systemImage: "externaldrive")
                         .frame(minHeight: 44)
@@ -94,7 +98,7 @@ private struct StorageSettingsInfoView: View {
             }
             Section("System backups") {
                 Text("Local records, your profile and preferences are excluded from future system backups. Earlier backups may still contain data. Deleting data in Cecy does not erase earlier backups or guarantee overwriting storage pages.")
-                Text("No cloud sync or automatic restore is available yet. Keep a trusted export if needed; importing it into Cecy is not currently supported.")
+                Text("No cloud sync or automatic restore is available yet. You can restore a user-selected Cecy JSON export with preview and conflict review.")
                 Text("Apple Health manages its own records and sync settings. Cecy’s read-only import and local deletion do not change those records or settings.")
             }
             Section("Exported files") {
@@ -125,6 +129,10 @@ struct ReminderSettingsView: View {
     @State private var window: Bool
     @State private var showDetails: Bool
     @State private var time: Date
+    @State private var periodFollowUp: Bool
+    @State private var missedLog: Bool
+    @State private var symptomKinds: Set<SymptomKind>
+    @State private var detailedKinds: Set<ReminderRequest.Kind>
 
     init(privacy: TrackerPrivacy) {
         self.privacy = privacy
@@ -132,6 +140,13 @@ struct ReminderSettingsView: View {
         _daily = State(initialValue: preferences.dailyReminder)
         _window = State(initialValue: preferences.windowReminder)
         _showDetails = State(initialValue: preferences.reminderDetailsEnabled == true)
+        _periodFollowUp = State(initialValue: preferences.periodFollowUpReminder == true)
+        _missedLog = State(initialValue: preferences.missedLogReminder == true)
+        _symptomKinds = State(initialValue: Set(preferences.symptomReminderKinds ?? []))
+        let details = preferences.reminderDetailsByKind
+        _detailedKinds = State(initialValue: Set(ReminderRequest.Kind.allCases.filter {
+            details?[$0.rawValue] ?? (preferences.reminderDetailsEnabled == true)
+        }))
         _time = State(initialValue: Calendar.current.date(from: DateComponents(year: 2001, month: 1, day: 1,
                       hour: preferences.reminderHour, minute: preferences.reminderMinute)) ?? Date())
     }
@@ -141,6 +156,12 @@ struct ReminderSettingsView: View {
         let saved = privacy.preferences
         return daily != saved.dailyReminder || window != saved.windowReminder
             || showDetails != (saved.reminderDetailsEnabled == true)
+            || periodFollowUp != (saved.periodFollowUpReminder == true)
+            || missedLog != (saved.missedLogReminder == true)
+            || symptomKinds != Set(saved.symptomReminderKinds ?? [])
+            || detailedKinds != Set(ReminderRequest.Kind.allCases.filter {
+                saved.reminderDetailsByKind?[$0.rawValue] ?? (saved.reminderDetailsEnabled == true)
+            })
             || parts.hour != saved.reminderHour || parts.minute != saved.reminderMinute
     }
 
@@ -162,10 +183,41 @@ struct ReminderSettingsView: View {
                 }
             }
             Section {
+                Toggle("Period start/end follow-up", isOn: $periodFollowUp)
+                Toggle("Neutral missed-log prompt", isOn: $missedLog)
+                DisclosureGroup("Symptom check-ins") {
+                    ForEach(SymptomKind.allCases, id: \.self) { kind in
+                        Toggle(kind.title, isOn: Binding(get: { symptomKinds.contains(kind) }, set: {
+                            if $0 { symptomKinds.insert(kind) } else { symptomKinds.remove(kind) }
+                        }))
+                    }
+                }
+                Button("Snooze check-in reminders until tomorrow") { privacy.snoozeRemindersUntilTomorrow() }
+            } header: { Text("Useful follow-ups") }
+            footer: { Text("Missed-log wording never means ‘no bleeding.’ Medication and contraception reminders use the schedules saved with those records.") }
+            Section {
+                DisclosureGroup("Lock-screen wording by reminder") {
+                    ForEach(ReminderRequest.Kind.allCases, id: \.self) { kind in
+                        Toggle(kind.title, isOn: Binding(get: { detailedKinds.contains(kind) }, set: {
+                            if $0 { detailedKinds.insert(kind) } else { detailedKinds.remove(kind) }
+                        }))
+                    }
+                }
+                Text("Off uses ‘Cecy check-in’ and a discreet message. On names that reminder’s purpose, but never includes recorded symptoms, medication names, or notes.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            } header: { Text("Privacy text") }
+            Section {
                 Button("Save changes") {
                     let parts = Calendar.current.dateComponents([.hour, .minute], from: time)
-                    Task { await privacy.setReminders(daily: daily, window: window, hour: parts.hour ?? 20, minute: parts.minute ?? 0,
-                                                     showDetails: showDetails) }
+                    Task {
+                        let base = await privacy.setReminders(daily: daily, window: window, hour: parts.hour ?? 20,
+                                                              minute: parts.minute ?? 0, showDetails: showDetails)
+                        if base == .saved {
+                            _ = await privacy.setUsefulReminders(periodFollowUp: periodFollowUp,
+                                symptomKinds: SymptomKind.allCases.filter { symptomKinds.contains($0) }, missedLog: missedLog,
+                                detailedKinds: detailedKinds)
+                        }
+                    }
                 }
                 .frame(minHeight: 44).accessibilityIdentifier("saveReminders")
                 if privacy.isChangingReminders { ProgressView("Updating reminders…") }

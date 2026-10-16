@@ -112,11 +112,13 @@ nonisolated struct StoredDailyInsight: Codable, Equatable, Sendable {
 @MainActor protocol ExportFileManaging {
     func prepare(_ data: Data) throws -> URL
     func prepareSummary(_ data: Data) throws -> URL
+    func prepareReport(_ data: Data, fileExtension: String) throws -> URL
     func clean() throws
 }
 
 extension ExportFileManaging {
     func prepareSummary(_ data: Data) throws -> URL { throw TrackingError.invalidData }
+    func prepareReport(_ data: Data, fileExtension: String) throws -> URL { throw TrackingError.invalidData }
 }
 
 @MainActor final class ProtectedExportFiles: ExportFileManaging {
@@ -127,6 +129,10 @@ extension ExportFileManaging {
     }
     func prepareSummary(_ data: Data) throws -> URL {
         try prepare(data, filename: "Cecy-summary.txt")
+    }
+    func prepareReport(_ data: Data, fileExtension: String) throws -> URL {
+        guard ["txt", "csv", "pdf"].contains(fileExtension) else { throw TrackingError.invalidData }
+        return try prepare(data, filename: "Cecy-appointment-report.\(fileExtension)")
     }
     private func prepare(_ data: Data, filename: String) throws -> URL {
         try clean()

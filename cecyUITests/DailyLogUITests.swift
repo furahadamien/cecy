@@ -72,6 +72,25 @@ final class DailyLogUITests: XCTestCase {
         XCTAssertFalse(app.buttons["editPeriod"].exists)
     }
 
+    @MainActor func testPersonalizedDailyCheckInSavesCombinedAnswersAndRestoresThem() {
+        let app = launch()
+        tap("dailyCheckIn", in: app)
+        XCTAssertTrue(app.buttons["saveDailyCheckIn"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["checkInSymptom_cramps"].isSelected)
+        tap("checkInSymptom_headache", in: app)
+        tap("checkInBleeding_noBleeding", in: app)
+        app.buttons["saveDailyCheckIn"].tap()
+        XCTAssertTrue(app.buttons["saveDailyCheckIn"].waitForNonExistence(timeout: 10))
+
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.buttons["dailyCheckIn"].waitForExistence(timeout: 10))
+        tap("dailyCheckIn", in: app)
+        XCTAssertTrue(app.buttons["saveDailyCheckIn"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["checkInSymptom_cramps"].isSelected)
+        XCTAssertTrue(app.buttons["checkInSymptom_headache"].isSelected)
+        XCTAssertEqual(app.buttons["checkInBleeding_noBleeding"].value as? String, "Selected")
+    }
+
     @MainActor func testOlderAndNewerPagesKeepDaysReachable() {
         let app = launch(fixture: "ai")
         tap("dailyLogHistory", in: app)
