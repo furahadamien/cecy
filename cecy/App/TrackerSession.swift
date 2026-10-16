@@ -259,6 +259,12 @@ final class TrackerSession {
         }
     }
 
+    func saveOnboardingProgress(_ progress: OnboardingProgress) -> String? {
+        mutate(confirmation: nil, failure: "Your setup progress couldn’t be saved. Your answers are still on screen.") { repository, today, _ in
+            try repository.saveOnboardingProgress(progress, today: today)
+        }
+    }
+
     func saveDailyInsightPreferences(_ preferences: WellnessPreferences?) -> String? {
         guard let preferences, preferences.isReadyForInsights else {
             return "Choose your activity, exercise, diet, allergies and goals first."
@@ -304,7 +310,8 @@ final class TrackerSession {
             await Task.yield()
             try checkAccess()
             overview = ForecastAvailabilityPolicy.applying(to: CycleCalculator.overview(
-                periods: staged.periods, today: day, engine: EvidencePredictionEngine(), profile: staged.profile))
+                periods: staged.periods, today: day, engine: EvidencePredictionEngine(), profile: staged.profile,
+                factors: staged.cycleFactors))
             predictionReplay = try PredictionBacktester.evaluate(periods: staged.periods, today: day)
             setupStage = .insights
             await Task.yield()
@@ -312,7 +319,8 @@ final class TrackerSession {
             insights = try CycleInsightEngine.generate(periods: staged.periods, symptoms: staged.symptoms, today: day)
             insightMessage = nil
             setupStage = .reminders
-            privacy.trackingChanged(prediction: overview?.estimate, now: now, timeZone: zone())
+            privacy.trackingChanged(prediction: overview?.estimate, now: now, timeZone: zone(),
+                                    periods: staged.periods, treatments: staged.treatments)
             let reminderResult = await privacy.setReminders(daily: draft.dailyReminder, window: draft.windowReminder,
                                                            hour: draft.reminderHour, minute: draft.reminderMinute,
                                                            showDetails: draft.reminderDetailsEnabled)
@@ -370,7 +378,8 @@ final class TrackerSession {
         activityIndex = DayActivityIndex(snapshot: snapshot)
         self.today = today
         overview = ForecastAvailabilityPolicy.applying(to: CycleCalculator.overview(
-            periods: snapshot.periods, today: today, engine: EvidencePredictionEngine(), profile: snapshot.profile))
+            periods: snapshot.periods, today: today, engine: EvidencePredictionEngine(), profile: snapshot.profile,
+            factors: snapshot.cycleFactors))
         cycleForecast = overview.map { CycleForecast.calculate(overview: $0, profile: snapshot.profile, periods: snapshot.periods, asOf: today, dailyBleeding: snapshot.dailyBleeding) } ?? CycleForecast()
         // Built after the forecast so the phase estimate carries its uncertainty. Setup stays the
         // gate for preparation; v2 nulls still yield successful "unavailable" sections if needed.
@@ -379,7 +388,8 @@ final class TrackerSession {
             : nil
         predictionReplay = try? PredictionBacktester.evaluate(periods: snapshot.periods, today: today)
         statistics = try? CycleStatistics.calculate(periods: snapshot.periods, today: today)
-        privacy.trackingChanged(prediction: overview?.estimate, now: clock(), timeZone: zone())
+        privacy.trackingChanged(prediction: overview?.estimate, now: clock(), timeZone: zone(),
+                                periods: snapshot.periods, treatments: snapshot.treatments)
         do {
             insights = try CycleInsightEngine.generate(periods: snapshot.periods, symptoms: snapshot.symptoms, today: today)
             insightMessage = nil
@@ -440,6 +450,42 @@ final class TrackerSession {
         mutate(confirmation: "Daily check-in saved.",
                failure: "Your check-in hasn’t been saved. Your draft is still here; try again.") {
             try $0.saveDailyCheckIn(update, today: $1, now: $2)
+        }
+    }
+
+    func saveCycleFactor(_ factor: CycleFactor) -> String? {
+        mutate(confirmation: "Cycle factor saved.", failure: "This cycle factor hasn’t been saved. Try again.") {
+            try $0.saveCycleFactor(factor, today: $1, now: $2)
+        }
+    }
+
+    func deleteCycleFactor(id: UUID) -> String? {
+        mutate(confirmation: "Cycle factor deleted.", failure: "This cycle factor wasn’t deleted. Try again.") { repository, _, _ in
+            try repository.deleteCycleFactor(id: id)
+        }
+    }
+
+    func saveTreatment(_ treatment: TreatmentRecord) -> String? {
+        mutate(confirmation: "Treatment saved.", failure: "This treatment hasn’t been saved. Try again.") {
+            try $0.saveTreatment(treatment, today: $1, now: $2)
+        }
+    }
+
+    func deleteTreatment(id: UUID) -> String? {
+        mutate(confirmation: "Treatment deleted.", failure: "This treatment wasn’t deleted. Try again.") { repository, _, _ in
+            try repository.deleteTreatment(id: id)
+        }
+    }
+
+    func saveTreatmentAdherence(_ adherence: TreatmentAdherence) -> String? {
+        mutate(confirmation: "Treatment check-in saved.", failure: "This treatment check-in hasn’t been saved. Try again.") {
+            try $0.saveTreatmentAdherence(adherence, today: $1, now: $2)
+        }
+    }
+
+    func importRecords(_ imported: TrackerSnapshot) -> String? {
+        mutate(confirmation: "Import complete.", failure: "Nothing was imported. Your existing records are unchanged.") { repository, today, _ in
+            try repository.importSnapshot(imported, today: today)
         }
     }
 

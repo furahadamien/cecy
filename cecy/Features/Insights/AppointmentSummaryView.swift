@@ -48,6 +48,8 @@ struct AppointmentSummaryView: View {
     @State private var options = AppointmentSummaryOptions()
     @State private var preview: SummaryPreview?
     @State private var error: String?
+    @State private var concern = ""
+    @State private var question = ""
 
     private struct SummaryPreview: Identifiable {
         let id = UUID()
@@ -72,13 +74,24 @@ struct AppointmentSummaryView: View {
                 Toggle("Daily answers", isOn: $options.dailyAnswers).accessibilityIdentifier("summaryDaily")
                 Toggle("Symptoms and wellness", isOn: $options.symptoms).accessibilityIdentifier("summarySymptoms")
                 Toggle("Current cycle context", isOn: $options.context).accessibilityIdentifier("summaryContext")
+                Toggle("Period and symptom trends", isOn: $options.trends)
+                if !session.snapshot.treatments.isEmpty || !session.snapshot.cycleFactors.isEmpty {
+                    Toggle("Medication, contraception and factors", isOn: $options.treatments)
+                }
                 if options.periods || options.symptoms {
                     Toggle("Private notes", isOn: $options.notes).accessibilityIdentifier("summaryNotes")
                 }
             }
             Section {
+                TextField("Top concern (optional)", text: $concern, axis: .vertical).lineLimit(2...4)
+                TextField("Question for your clinician (optional)", text: $question, axis: .vertical).lineLimit(2...4)
+            } header: { Text("Prepare your visit") }
+            footer: { Text("Included only in this report preview. Keep each entry to 500 characters.") }
+            Section {
                 Button("Preview summary") {
                     do {
+                        options.concerns = concern.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] : [concern]
+                        options.questions = question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] : [question]
                         preview = SummaryPreview(document: try AppointmentSummary.document(snapshot: session.snapshot,
                             start: start, end: end, options: options))
                         error = nil
@@ -113,6 +126,7 @@ private struct AppointmentSummaryPreview: View {
     @Environment(\.colorScheme) private var colorScheme
     @Bindable var privacy: TrackerPrivacy
     let document: AppointmentSummaryDocument
+    @State private var format: AppointmentReportFormat = .pdf
 
     private var palette: TrackerPalette { TrackerPalette(scheme: colorScheme) }
 
@@ -133,6 +147,10 @@ private struct AppointmentSummaryPreview: View {
                             .background(palette.sage, in: RoundedRectangle(cornerRadius: 12))
                         Text(document.notice).font(.footnote).foregroundStyle(.secondary)
                             .lineSpacing(3)
+                        DisclosureGroup("Redaction preview") {
+                            Text("Only the sections visible below will be exported. Profile identity and sexual activity are excluded. Notes appear only if you selected Private notes.")
+                            Text("Medication and factor records appear only when selected. Forecast dates and generated AI content are excluded.")
+                        }
                     }
                     ForEach(document.sections) { section in
                         TrackerCard {
@@ -176,11 +194,14 @@ private struct AppointmentSummaryPreview: View {
             }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 12) {
+                    Picker("Format", selection: $format) {
+                        ForEach(AppointmentReportFormat.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }.pickerStyle(.segmented)
                     Label("Not encrypted. Shared copies leave Cecy’s control.", systemImage: "exclamationmark.shield")
                         .font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    Button { privacy.exportSummary(document.text) } label: {
-                        Label("Share summary", systemImage: "square.and.arrow.up")
+                    Button { privacy.exportReport(document, format: format) } label: {
+                        Label("Share \(format.title) report", systemImage: "square.and.arrow.up")
                             .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(TrackerPrimaryButtonStyle())
@@ -206,6 +227,9 @@ private extension AppointmentSummaryDocument.Section.Kind {
         case .periods: "Recorded periods"
         case .symptoms: "Symptoms and wellness"
         case .context: "Current cycle context"
+        case .trends: "Recorded trends"
+        case .concerns: "Top concerns and questions"
+        case .treatments: "Medication, contraception and factors"
         }
     }
 
@@ -215,6 +239,9 @@ private extension AppointmentSummaryDocument.Section.Kind {
         case .periods: "drop.fill"
         case .symptoms: "waveform.path.ecg"
         case .context: "person.text.rectangle"
+        case .trends: "chart.bar.xaxis"
+        case .concerns: "text.bubble"
+        case .treatments: "pills"
         }
     }
 }

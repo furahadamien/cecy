@@ -9,7 +9,8 @@ nonisolated enum ForecastAvailabilityPolicy {
         guard let start = overview.latestStart,
               CycleSetupPolicy.cycleDays.contains(start.days(until: estimate.center)) else {
             return CycleOverview(latestStart: overview.latestStart, currentDay: overview.currentDay,
-                                 intervals: overview.intervals, prediction: .unavailable(.unsupportedEstimate))
+                                 intervals: overview.intervals, excludedIntervals: overview.excludedIntervals,
+                                 prediction: .unavailable(.unsupportedEstimate))
         }
         return overview
     }

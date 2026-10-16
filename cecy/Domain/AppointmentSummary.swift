@@ -24,7 +24,11 @@ nonisolated struct AppointmentSummaryOptions: Equatable, Sendable {
     var symptoms = false
     var context = false
     var notes = false
-    var hasSection: Bool { periods || dailyAnswers || symptoms || context }
+    var trends = false
+    var treatments = false
+    var concerns: [String] = []
+    var questions: [String] = []
+    var hasSection: Bool { periods || dailyAnswers || symptoms || context || trends || treatments || !concerns.isEmpty || !questions.isEmpty }
 }
 
 nonisolated struct AppointmentSummaryDocument: Equatable, Sendable {
@@ -34,6 +38,9 @@ nonisolated struct AppointmentSummaryDocument: Equatable, Sendable {
             case periods = "RECORDED PERIODS"
             case symptoms = "SYMPTOMS AND WELLNESS"
             case context = "CURRENT SELF-REPORTED CONTEXT"
+            case trends = "RECORDED TRENDS"
+            case concerns = "TOP CONCERNS AND QUESTIONS"
+            case treatments = "MEDICATION, CONTRACEPTION AND FACTORS"
         }
         let kind: Kind
         let lines: [String]
@@ -122,6 +129,41 @@ nonisolated enum AppointmentSummary {
                 if context.isEmpty { lines.append("No cycle context recorded.") }
             } else { lines.append("No profile context recorded.") }
             sections.append(.init(kind: .context, lines: lines))
+        }
+        if options.trends {
+            let periods = snapshot.periods.filter { $0.start >= start && $0.start <= end }.sorted { $0.start < $1.start }
+            let symptoms = snapshot.symptoms.filter { $0.day >= start && $0.day <= end }
+            let counts = Dictionary(grouping: symptoms, by: \.kind).mapValues(\.count)
+            var lines = ["Coverage: \(coverage.loggedDays) of \(coverage.totalDays) days have a daily bleeding answer.",
+                         "Period starts: " + (periods.isEmpty ? "none recorded" : periods.map { date($0.start) }.joined(separator: ", "))]
+            let ranked = counts.sorted { $0.value == $1.value ? $0.key.rawValue < $1.key.rawValue : $0.value > $1.value }
+            lines += ranked.prefix(8).map { "\($0.key.title): \($0.value) entr\($0.value == 1 ? "y" : "ies") " + String(repeating: "■", count: min($0.value, 12)) }
+            if counts.isEmpty { lines.append("No symptom trend can be shown for this range.") }
+            lines.append("Bars count saved entries, not days when a symptom was absent. Unlogged days remain unknown.")
+            sections.append(.init(kind: .trends, lines: lines))
+        }
+        let selectedConcerns = options.concerns.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        let selectedQuestions = options.questions.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        if !selectedConcerns.isEmpty || !selectedQuestions.isEmpty {
+            guard (selectedConcerns + selectedQuestions).allSatisfy({ $0.count <= 500 }) else { throw TrackingError.noteTooLong }
+            var lines = selectedConcerns.map { "Concern: \($0)" }
+            lines += selectedQuestions.map { "Question: \($0)" }
+            sections.append(.init(kind: .concerns, lines: lines))
+        }
+        if options.treatments {
+            let treatments = snapshot.treatments.filter { $0.start <= end && ($0.end ?? end) >= start }
+            let factors = snapshot.cycleFactors.filter { $0.start <= end && ($0.end ?? end) >= start }
+            var lines = treatments.map {
+                "\($0.category.title): \($0.name)" + ($0.dose.map { " · \($0)" } ?? "")
+                    + " · \(date($0.start)) – \($0.end.map(date) ?? "ongoing")"
+            }
+            lines += factors.map {
+                "Factor: \($0.kind.title) · \(date($0.start)) – \($0.end.map(date) ?? "ongoing")"
+                    + ($0.excludesFromForecast ? " · excluded from forecast intervals" : "")
+            }
+            if lines.isEmpty { lines.append("No medication, contraception, or dated factors recorded in this range.") }
+            lines.append("Self-reported records only; no effectiveness, interaction, or pregnancy-risk calculation.")
+            sections.append(.init(kind: .treatments, lines: lines))
         }
         return AppointmentSummaryDocument(title: "Cecy · Appointment summary",
             dateRange: "\(date(start)) – \(date(end))",

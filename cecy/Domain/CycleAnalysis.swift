@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum PeriodFlow: String, CaseIterable, Sendable {
+nonisolated enum PeriodFlow: String, Codable, CaseIterable, Sendable {
     case light, moderate, heavy
     var title: String { rawValue.capitalized }
     var symbol: String {
@@ -12,7 +12,7 @@ nonisolated enum PeriodFlow: String, CaseIterable, Sendable {
     }
 }
 
-nonisolated struct Period: Identifiable, Equatable, Sendable {
+nonisolated struct Period: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     var start: LocalDay
     var end: LocalDay?
@@ -156,7 +156,17 @@ nonisolated struct CycleOverview: Equatable, Sendable {
     let latestStart: LocalDay?
     let currentDay: Int?
     let intervals: [CycleInterval]
+    let excludedIntervals: [CycleInterval]
     let prediction: PredictionOutcome
+
+    init(latestStart: LocalDay?, currentDay: Int?, intervals: [CycleInterval],
+         excludedIntervals: [CycleInterval] = [], prediction: PredictionOutcome) {
+        self.latestStart = latestStart
+        self.currentDay = currentDay
+        self.intervals = intervals
+        self.excludedIntervals = excludedIntervals
+        self.prediction = prediction
+    }
 
     var estimate: CyclePrediction? {
         if case .available(let estimate) = prediction { return estimate }
@@ -166,19 +176,25 @@ nonisolated struct CycleOverview: Equatable, Sendable {
 
 nonisolated enum CycleCalculator {
     static func overview(periods: [Period], today: LocalDay, engine: any CyclePredicting = BaselinePredictionEngine(),
-                         profile: LocalProfile? = nil) -> CycleOverview {
+                         profile: LocalProfile? = nil, factors: [CycleFactor] = []) -> CycleOverview {
         do {
             try PeriodValidation.validate(periods, asOf: today)
+            try P1RecordValidation.validate(factors: factors, treatments: [], adherence: [], asOf: today)
             let sorted = periods.sorted { $0.start < $1.start }
-            let intervals = zip(sorted, sorted.dropFirst()).map {
+            let allIntervals = zip(sorted, sorted.dropFirst()).map {
                 CycleInterval(id: $0.id, start: $0.start, nextStart: $1.start)
             }
             guard let last = sorted.last else {
                 return CycleOverview(latestStart: nil, currentDay: nil, intervals: [], prediction: .insufficientHistory(completedIntervals: 0))
             }
+            let excluded = allIntervals.filter { interval in
+                factors.contains { $0.excludesFromForecast && $0.overlaps(start: interval.start, end: interval.nextStart) }
+            }
+            let excludedIDs = Set(excluded.map(\.id))
+            let intervals = allIntervals.filter { !excludedIDs.contains($0.id) }
             let prediction = try engine.predict(intervals: intervals, latestStart: last.start, profile: profile)
             return CycleOverview(latestStart: last.start, currentDay: last.start.days(until: today) + 1,
-                                 intervals: intervals, prediction: prediction)
+                                 intervals: intervals, excludedIntervals: excluded, prediction: prediction)
         } catch {
             return CycleOverview(latestStart: nil, currentDay: nil, intervals: [], prediction: .unavailable(error as? TrackingError ?? .invalidData))
         }
@@ -193,6 +209,10 @@ nonisolated struct TrackerSnapshot: Equatable, Sendable {
     var sexualActivities: [SexualActivityEntry] = []
     var healthImports: [HealthImportReceipt] = []
     var dailyBleeding: [DailyBleedingObservation] = []
+    var cycleFactors: [CycleFactor] = []
+    var treatments: [TreatmentRecord] = []
+    var treatmentAdherence: [TreatmentAdherence] = []
+    var onboardingProgress: OnboardingProgress?
 
     /// The period's potential last day: a confirmed end when set, otherwise the latest recorded
     /// linked bleeding day. The derived value is tentative (evidence-based, not user-confirmed) and
@@ -243,6 +263,13 @@ protocol PeriodRepository {
     func deleteDailyBleeding(id: UUID) throws -> TrackerSnapshot
     func reconcileBleeding(_ review: BleedingReconciliation, today: LocalDay, now: Date) throws -> TrackerSnapshot
     func saveDailyCheckIn(_ update: DailyCheckInUpdate, today: LocalDay, now: Date) throws -> TrackerSnapshot
+    func saveOnboardingProgress(_ progress: OnboardingProgress, today: LocalDay) throws -> TrackerSnapshot
+    func saveCycleFactor(_ factor: CycleFactor, today: LocalDay, now: Date) throws -> TrackerSnapshot
+    func deleteCycleFactor(id: UUID) throws -> TrackerSnapshot
+    func saveTreatment(_ treatment: TreatmentRecord, today: LocalDay, now: Date) throws -> TrackerSnapshot
+    func deleteTreatment(id: UUID) throws -> TrackerSnapshot
+    func saveTreatmentAdherence(_ adherence: TreatmentAdherence, today: LocalDay, now: Date) throws -> TrackerSnapshot
+    func importSnapshot(_ snapshot: TrackerSnapshot, today: LocalDay) throws -> TrackerSnapshot
 }
 
 extension PeriodRepository {
@@ -257,6 +284,13 @@ extension PeriodRepository {
     func saveDailyCheckIn(_ update: DailyCheckInUpdate, today: LocalDay, now: Date) throws -> TrackerSnapshot {
         throw DailyCheckInError.unavailable
     }
+    func saveOnboardingProgress(_ progress: OnboardingProgress, today: LocalDay) throws -> TrackerSnapshot { throw TrackingError.invalidData }
+    func saveCycleFactor(_ factor: CycleFactor, today: LocalDay, now: Date) throws -> TrackerSnapshot { throw TrackingError.invalidData }
+    func deleteCycleFactor(id: UUID) throws -> TrackerSnapshot { throw TrackingError.invalidData }
+    func saveTreatment(_ treatment: TreatmentRecord, today: LocalDay, now: Date) throws -> TrackerSnapshot { throw TrackingError.invalidData }
+    func deleteTreatment(id: UUID) throws -> TrackerSnapshot { throw TrackingError.invalidData }
+    func saveTreatmentAdherence(_ adherence: TreatmentAdherence, today: LocalDay, now: Date) throws -> TrackerSnapshot { throw TrackingError.invalidData }
+    func importSnapshot(_ snapshot: TrackerSnapshot, today: LocalDay) throws -> TrackerSnapshot { throw TrackingError.invalidData }
 
     // Older test repositories do not gain an implicit, non-atomic import implementation.
     func importHealthStart(_ sample: HealthFlowSample, confirmedStart: LocalDay,

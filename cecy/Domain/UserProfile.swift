@@ -185,7 +185,7 @@ nonisolated enum ProfileError: Error, LocalizedError {
     }
 }
 
-nonisolated struct OnboardingDraft: Equatable, Sendable {
+nonisolated struct OnboardingDraft: Codable, Equatable, Sendable {
     var profile = LocalProfile()
     var periods: [Period] = []
     var dailyReminder = false

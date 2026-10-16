@@ -55,7 +55,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
 
     static func local(url: URL, clearLegacyData: @escaping () throws -> Void = {}) throws -> SwiftDataPeriodRepository {
         try ProtectedFiles.directory(url.deletingLastPathComponent(), excludeFromBackup: true)
-        let schema = Schema(versionedSchema: TrackerSchemaV7.self)
+        let schema = Schema(versionedSchema: TrackerSchemaV8.self)
         let configuration = ModelConfiguration("CecyLocal", schema: schema, url: url, cloudKitDatabase: .none)
         return try SwiftDataPeriodRepository(container: ModelContainer(for: schema, migrationPlan: TrackerMigrationPlan.self,
                                                                        configurations: [configuration]), clearLegacyData: clearLegacyData)
@@ -75,7 +75,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
     }
 
     static func inMemory() throws -> SwiftDataPeriodRepository {
-        let schema = Schema(versionedSchema: TrackerSchemaV7.self)
+        let schema = Schema(versionedSchema: TrackerSchemaV8.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         return try SwiftDataPeriodRepository(container: ModelContainer(for: schema, migrationPlan: TrackerMigrationPlan.self,
                                                                        configurations: [configuration]))
@@ -100,11 +100,21 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         guard Set(imports.map(\.id)).count == imports.count else { throw TrackingError.invalidData }
         let daily = try context.fetch(FetchDescriptor<TrackerSchemaV7.DailyBleedingRecord>()).map { try $0.value() }
         try DailyBleedingValidation.validate(daily, periods: periods)
+        let factors = try context.fetch(FetchDescriptor<TrackerSchemaV8.CycleFactorRecord>()).map { try $0.value() }
+        let treatments = try context.fetch(FetchDescriptor<TrackerSchemaV8.TreatmentDataRecord>()).map { try $0.value() }
+        let adherence = try context.fetch(FetchDescriptor<TrackerSchemaV8.TreatmentAdherenceRecord>()).map { try $0.value() }
+        try P1RecordValidation.validate(factors: factors, treatments: treatments, adherence: adherence)
+        let progressRecords = try context.fetch(FetchDescriptor<TrackerSchemaV8.OnboardingProgressRecord>())
+        guard progressRecords.count <= 1 else { throw TrackingError.invalidData }
+        let progress = try progressRecords.first?.value()
         return TrackerSnapshot(periods: periods, onboardingCompletedAt: states.first?.onboardingCompletedAt,
                                symptoms: SymptomValidation.sorted(symptoms), profile: try profiles.first?.value(),
                                sexualActivities: SexualActivityValidation.sorted(activities),
                                healthImports: imports.sorted { $0.id.uuidString < $1.id.uuidString },
-                               dailyBleeding: DailyBleedingValidation.sorted(daily))
+                               dailyBleeding: DailyBleedingValidation.sorted(daily),
+                               cycleFactors: P1RecordValidation.sorted(factors),
+                               treatments: P1RecordValidation.sorted(treatments),
+                               treatmentAdherence: P1RecordValidation.sorted(adherence), onboardingProgress: progress)
     }
 
     private func writeProfile(_ profile: LocalProfile) throws {
@@ -156,8 +166,10 @@ final class SwiftDataPeriodRepository: PeriodRepository {
             if let state = try context.fetch(FetchDescriptor<TrackerSchemaV2.AppStateRecord>()).first {
                 state.onboardingCompletedAt = now
             } else { context.insert(TrackerSchemaV2.AppStateRecord(completedAt: now)) }
+            try context.fetch(FetchDescriptor<TrackerSchemaV8.OnboardingProgressRecord>()).forEach { context.delete($0) }
             try saveContext(context)
             candidate.onboardingCompletedAt = now
+            candidate.onboardingProgress = nil
             return candidate
         } catch { context.rollback(); throw error }
     }
@@ -530,6 +542,172 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         } catch { context.rollback(); throw error }
     }
 
+    func saveOnboardingProgress(_ progress: OnboardingProgress, today: LocalDay) throws -> TrackerSnapshot {
+        var candidate = try load()
+        guard candidate.onboardingCompletedAt == nil,
+              progress.updatedAt.timeIntervalSinceReferenceDate.isFinite else { throw ProfileError.alreadyCompleted }
+        try progress.draft.profile.validate(today: today, requireBasics: false)
+        try PeriodValidation.validate(progress.draft.periods, asOf: today)
+        do {
+            let records = try context.fetch(FetchDescriptor<TrackerSchemaV8.OnboardingProgressRecord>())
+            guard records.count <= 1 else { throw TrackingError.invalidData }
+            if let record = records.first { try record.update(progress) }
+            else { context.insert(try TrackerSchemaV8.OnboardingProgressRecord(progress)) }
+            try saveContext(context)
+            candidate.onboardingProgress = progress
+            return candidate
+        } catch { context.rollback(); throw error }
+    }
+
+    func saveCycleFactor(_ factor: CycleFactor, today: LocalDay, now: Date) throws -> TrackerSnapshot {
+        var candidate = try load()
+        var value = factor
+        value.updatedAt = now
+        if let index = candidate.cycleFactors.firstIndex(where: { $0.id == value.id }) {
+            value = CycleFactor(id: value.id, kind: value.kind, start: value.start, end: value.end,
+                excludesFromForecast: value.excludesFromForecast, notes: value.notes,
+                createdAt: candidate.cycleFactors[index].createdAt, updatedAt: now)
+            candidate.cycleFactors[index] = value
+        } else { candidate.cycleFactors.append(value) }
+        try P1RecordValidation.validate(factors: candidate.cycleFactors, treatments: candidate.treatments,
+                                        adherence: candidate.treatmentAdherence, asOf: today)
+        do {
+            let records = try context.fetch(FetchDescriptor<TrackerSchemaV8.CycleFactorRecord>())
+            if let record = records.first(where: { $0.id == value.id }) { try record.update(value) }
+            else { context.insert(try TrackerSchemaV8.CycleFactorRecord(value)) }
+            try saveContext(context)
+            candidate.cycleFactors = P1RecordValidation.sorted(candidate.cycleFactors)
+            return candidate
+        } catch { context.rollback(); throw error }
+    }
+
+    func deleteCycleFactor(id: UUID) throws -> TrackerSnapshot {
+        var candidate = try load()
+        guard !candidate.treatments.contains(where: { $0.id == id && $0.category == .contraception }) else {
+            throw TrackingError.invalidData
+        }
+        guard let record = try context.fetch(FetchDescriptor<TrackerSchemaV8.CycleFactorRecord>()).first(where: { $0.id == id }) else {
+            throw TrackingError.missingRecord
+        }
+        do {
+            context.delete(record)
+            try saveContext(context)
+            candidate.cycleFactors.removeAll { $0.id == id }
+            return candidate
+        } catch { context.rollback(); throw error }
+    }
+
+    func saveTreatment(_ treatment: TreatmentRecord, today: LocalDay, now: Date) throws -> TrackerSnapshot {
+        var candidate = try load()
+        var value = treatment
+        value.updatedAt = now
+        if let index = candidate.treatments.firstIndex(where: { $0.id == value.id }) {
+            value = TreatmentRecord(id: value.id, category: value.category, name: value.name, dose: value.dose,
+                contraceptionType: value.contraceptionType, start: value.start, end: value.end,
+                cadence: value.cadence, reminderEnabled: value.reminderEnabled,
+                reminderHour: value.reminderHour, reminderMinute: value.reminderMinute,
+                createdAt: candidate.treatments[index].createdAt, updatedAt: now)
+            candidate.treatments[index] = value
+        } else { candidate.treatments.append(value) }
+        candidate.cycleFactors.removeAll { $0.id == value.id }
+        if value.category == .contraception, let method = value.contraceptionType {
+            candidate.cycleFactors.append(CycleFactor(id: value.id, kind: method.factorKind, start: value.start,
+                end: value.end, excludesFromForecast: method.factorKind.defaultExcludesForecast,
+                notes: "Contraception method: \(value.name)", createdAt: value.createdAt, updatedAt: now))
+        }
+        try P1RecordValidation.validate(factors: candidate.cycleFactors, treatments: candidate.treatments,
+                                        adherence: candidate.treatmentAdherence, asOf: today)
+        do {
+            let records = try context.fetch(FetchDescriptor<TrackerSchemaV8.TreatmentDataRecord>())
+            if let record = records.first(where: { $0.id == value.id }) { try record.update(value) }
+            else { context.insert(try TrackerSchemaV8.TreatmentDataRecord(value)) }
+            let factorRecords = try context.fetch(FetchDescriptor<TrackerSchemaV8.CycleFactorRecord>())
+            if let factor = candidate.cycleFactors.first(where: { $0.id == value.id }) {
+                if let record = factorRecords.first(where: { $0.id == value.id }) { try record.update(factor) }
+                else { context.insert(try TrackerSchemaV8.CycleFactorRecord(factor)) }
+            } else if let record = factorRecords.first(where: { $0.id == value.id }) { context.delete(record) }
+            try saveContext(context)
+            candidate.treatments = P1RecordValidation.sorted(candidate.treatments)
+            candidate.cycleFactors = P1RecordValidation.sorted(candidate.cycleFactors)
+            return candidate
+        } catch { context.rollback(); throw error }
+    }
+
+    func deleteTreatment(id: UUID) throws -> TrackerSnapshot {
+        var candidate = try load()
+        guard let record = try context.fetch(FetchDescriptor<TrackerSchemaV8.TreatmentDataRecord>()).first(where: { $0.id == id }) else {
+            throw TrackingError.missingRecord
+        }
+        do {
+            context.delete(record)
+            try context.fetch(FetchDescriptor<TrackerSchemaV8.TreatmentAdherenceRecord>())
+                .filter { (try? $0.value().treatmentID) == id }.forEach { context.delete($0) }
+            try context.fetch(FetchDescriptor<TrackerSchemaV8.CycleFactorRecord>())
+                .filter { $0.id == id }.forEach { context.delete($0) }
+            try saveContext(context)
+            candidate.treatments.removeAll { $0.id == id }
+            candidate.treatmentAdherence.removeAll { $0.treatmentID == id }
+            candidate.cycleFactors.removeAll { $0.id == id }
+            return candidate
+        } catch { context.rollback(); throw error }
+    }
+
+    func saveTreatmentAdherence(_ adherence: TreatmentAdherence, today: LocalDay, now: Date) throws -> TrackerSnapshot {
+        var candidate = try load()
+        guard candidate.treatments.contains(where: { $0.id == adherence.treatmentID }) else { throw TrackingError.missingRecord }
+        var value = adherence
+        value.updatedAt = now
+        if let index = candidate.treatmentAdherence.firstIndex(where: { $0.treatmentID == value.treatmentID && $0.day == value.day }) {
+            let original = candidate.treatmentAdherence[index]
+            value = TreatmentAdherence(id: original.id, treatmentID: value.treatmentID, day: value.day,
+                state: value.state, notes: value.notes, createdAt: original.createdAt, updatedAt: now)
+            candidate.treatmentAdherence[index] = value
+        } else { candidate.treatmentAdherence.append(value) }
+        try P1RecordValidation.validate(factors: candidate.cycleFactors, treatments: candidate.treatments,
+                                        adherence: candidate.treatmentAdherence, asOf: today)
+        do {
+            let records = try context.fetch(FetchDescriptor<TrackerSchemaV8.TreatmentAdherenceRecord>())
+            if let record = records.first(where: { (try? $0.value().treatmentID) == value.treatmentID && (try? $0.value().day) == value.day }) {
+                try record.update(value)
+            } else { context.insert(try TrackerSchemaV8.TreatmentAdherenceRecord(value)) }
+            try saveContext(context)
+            candidate.treatmentAdherence = P1RecordValidation.sorted(candidate.treatmentAdherence)
+            return candidate
+        } catch { context.rollback(); throw error }
+    }
+
+    /// Replaces the complete local record set in one SwiftData transaction after import preview.
+    func importSnapshot(_ candidate: TrackerSnapshot, today: LocalDay) throws -> TrackerSnapshot {
+        try PeriodValidation.validate(candidate.periods, asOf: today)
+        try SymptomValidation.validate(candidate.symptoms, asOf: today)
+        try SexualActivityValidation.validate(candidate.sexualActivities, asOf: today)
+        try DailyBleedingValidation.validate(candidate.dailyBleeding, periods: candidate.periods, asOf: today)
+        try P1RecordValidation.validate(factors: candidate.cycleFactors, treatments: candidate.treatments,
+                                        adherence: candidate.treatmentAdherence, asOf: today)
+        do {
+            try context.fetch(FetchDescriptor<TrackerSchemaV2.PeriodRecord>()).forEach { context.delete($0) }
+            try context.fetch(FetchDescriptor<TrackerSchemaV3.SymptomRecord>()).forEach { context.delete($0) }
+            try context.fetch(FetchDescriptor<TrackerSchemaV4.ProfileRecord>()).forEach { context.delete($0) }
+            try context.fetch(FetchDescriptor<TrackerSchemaV5.SexualActivityRecord>()).forEach { context.delete($0) }
+            try context.fetch(FetchDescriptor<TrackerSchemaV6.HealthImportRecord>()).forEach { context.delete($0) }
+            try context.fetch(FetchDescriptor<TrackerSchemaV7.DailyBleedingRecord>()).forEach { context.delete($0) }
+            try context.fetch(FetchDescriptor<TrackerSchemaV8.CycleFactorRecord>()).forEach { context.delete($0) }
+            try context.fetch(FetchDescriptor<TrackerSchemaV8.TreatmentDataRecord>()).forEach { context.delete($0) }
+            try context.fetch(FetchDescriptor<TrackerSchemaV8.TreatmentAdherenceRecord>()).forEach { context.delete($0) }
+            candidate.periods.forEach { context.insert(TrackerSchemaV2.PeriodRecord($0)) }
+            candidate.symptoms.forEach { context.insert(TrackerSchemaV3.SymptomRecord($0)) }
+            if let profile = candidate.profile { context.insert(try TrackerSchemaV4.ProfileRecord(profile)) }
+            candidate.sexualActivities.forEach { context.insert(TrackerSchemaV5.SexualActivityRecord($0)) }
+            for value in candidate.healthImports { context.insert(try TrackerSchemaV6.HealthImportRecord(value)) }
+            candidate.dailyBleeding.forEach { context.insert(TrackerSchemaV7.DailyBleedingRecord($0)) }
+            for value in candidate.cycleFactors { context.insert(try TrackerSchemaV8.CycleFactorRecord(value)) }
+            for value in candidate.treatments { context.insert(try TrackerSchemaV8.TreatmentDataRecord(value)) }
+            for value in candidate.treatmentAdherence { context.insert(try TrackerSchemaV8.TreatmentAdherenceRecord(value)) }
+            try saveContext(context)
+            return candidate
+        } catch { context.rollback(); throw error }
+    }
+
     func deleteAll() throws -> TrackerSnapshot {
         do {
             // Fetch before deleting anything. Reset also works for malformed domain records.
@@ -540,6 +718,10 @@ final class SwiftDataPeriodRepository: PeriodRepository {
             let activities = try context.fetch(FetchDescriptor<TrackerSchemaV5.SexualActivityRecord>())
             let imports = try context.fetch(FetchDescriptor<TrackerSchemaV6.HealthImportRecord>())
             let daily = try context.fetch(FetchDescriptor<TrackerSchemaV7.DailyBleedingRecord>())
+            let factors = try context.fetch(FetchDescriptor<TrackerSchemaV8.CycleFactorRecord>())
+            let treatments = try context.fetch(FetchDescriptor<TrackerSchemaV8.TreatmentDataRecord>())
+            let adherence = try context.fetch(FetchDescriptor<TrackerSchemaV8.TreatmentAdherenceRecord>())
+            let progress = try context.fetch(FetchDescriptor<TrackerSchemaV8.OnboardingProgressRecord>())
             try clearLegacyData()
             records.forEach { context.delete($0) }
             states.forEach { context.delete($0) }
@@ -548,6 +730,10 @@ final class SwiftDataPeriodRepository: PeriodRepository {
             activities.forEach { context.delete($0) }
             imports.forEach { context.delete($0) }
             daily.forEach { context.delete($0) }
+            factors.forEach { context.delete($0) }
+            treatments.forEach { context.delete($0) }
+            adherence.forEach { context.delete($0) }
+            progress.forEach { context.delete($0) }
             try saveContext(context)
             return TrackerSnapshot()
         } catch {

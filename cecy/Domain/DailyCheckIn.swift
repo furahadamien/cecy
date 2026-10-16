@@ -52,6 +52,15 @@ nonisolated struct DailyCheckInUpdate: Equatable, Sendable {
         guard let index = symptoms.firstIndex(where: { $0.kind == kind }) else { return }
         symptoms[index].value = value
     }
+
+    mutating func copyAnswers(from snapshot: TrackerSnapshot, previousDay: LocalDay) {
+        if let prior = snapshot.dailyBleeding.first(where: { $0.day == previousDay }) {
+            setBleeding(prior.state, flow: prior.flow)
+        }
+        symptoms = SymptomValidation.sorted(snapshot.symptoms.filter { $0.day == previousDay }.map {
+            SymptomEntry(day: day, kind: $0.kind, value: $0.value)
+        })
+    }
 }
 
 nonisolated enum DailyCheckInError: Error, LocalizedError, Equatable {
@@ -90,10 +99,16 @@ extension CommonSymptom {
 nonisolated enum DailyCheckInSuggestions {
     private static let defaults: [SymptomKind] = [.cramps, .headache, .bloating, .fatigue, .moodChanges, .energyLevel]
 
-    static func symptoms(profile: LocalProfile?, existing: [SymptomEntry]) -> [SymptomKind] {
-        let preferred = profile?.commonSymptoms.compactMap(\.symptomKind) ?? []
+    static func symptoms(profile: LocalProfile?, existing: [SymptomEntry], recent: [SymptomEntry] = [],
+                         preferences: CheckInPreferences? = nil) -> [SymptomKind] {
+        let hidden = preferences?.hiddenSymptoms ?? []
+        let pinned = preferences?.pinnedSymptoms ?? []
+        let selected = Set(profile?.commonSymptoms.compactMap(\.symptomKind) ?? [])
+        let preferred = SymptomKind.allCases.filter { selected.contains($0) }
         let base = preferred.isEmpty ? defaults : preferred
-        let included = Set(base + existing.map(\.kind))
-        return SymptomKind.allCases.filter { included.contains($0) }
+        let recentKinds = recent.sorted { $0.day > $1.day }.map(\.kind)
+        let ordered = pinned + base + recentKinds + existing.map(\.kind)
+        var seen = Set<SymptomKind>()
+        return ordered.filter { !hidden.contains($0) && seen.insert($0).inserted }
     }
 }

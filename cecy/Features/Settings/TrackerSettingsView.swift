@@ -30,6 +30,22 @@ struct TrackerSettingsView: View {
                 }.accessibilityIdentifier("accountSettings")
             }
             Section {
+                NavigationLink { TreatmentTrackingView(session: session) } label: {
+                    SettingsRow(title: "Medication and contraception", systemImage: "pills",
+                                detail: "\(session.snapshot.treatments.count) recorded")
+                }
+                .accessibilityIdentifier("treatmentSettings")
+                NavigationLink { CycleFactorsView(session: session) } label: {
+                    SettingsRow(title: "Cycle factors", systemImage: "timeline.selection",
+                                detail: "\(session.snapshot.cycleFactors.count) dated")
+                }
+                .accessibilityIdentifier("cycleFactorSettings")
+            } header: {
+                Text("Tracking records")
+            } footer: {
+                Text("Records provide context only. Cecy does not calculate medication effects, contraception effectiveness, or pregnancy risk.")
+            }
+            Section {
                 NavigationLink { PrivacySettingsView(session: session) } label: {
                     SettingsRow(title: "Privacy and export", systemImage: "lock.shield",
                                 detail: "App lock: \(session.privacy.preferences.lockEnabled ? "On" : "Off")")

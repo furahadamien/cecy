@@ -28,6 +28,7 @@ struct DailyCheckInView: View {
     @State private var saveError: String?
     @State private var confirmDiscard = false
     @State private var saving = false
+    @State private var showingCustomization = false
     @AccessibilityFocusState private var errorFocused: Bool
 
     init(session: TrackerSession, day: LocalDay) {
@@ -37,7 +38,20 @@ struct DailyCheckInView: View {
     }
 
     private var suggested: [SymptomKind] {
-        DailyCheckInSuggestions.symptoms(profile: session.snapshot.profile, existing: update.expectedSymptoms)
+        DailyCheckInSuggestions.symptoms(profile: session.snapshot.profile, existing: update.expectedSymptoms,
+            recent: recentSymptoms, preferences: session.privacy.preferences.checkInPreferences)
+    }
+
+    private var recentSymptoms: [SymptomEntry] {
+        guard let start = try? day.adding(days: -7) else { return [] }
+        return session.snapshot.symptoms.filter { $0.day >= start && $0.day < day }
+    }
+
+    private var previousDay: LocalDay? { try? day.adding(days: -1) }
+    private var hasPreviousAnswers: Bool {
+        guard let previousDay else { return false }
+        return session.snapshot.dailyBleeding.contains { $0.day == previousDay }
+            || session.snapshot.symptoms.contains { $0.day == previousDay }
     }
 
     private var selectedKinds: [SymptomKind] {
@@ -55,6 +69,15 @@ struct DailyCheckInView: View {
                     Text(DayText.full(day)).font(.headline)
                     Text("A check-in records this day only. To start a period or change its dates, use Log period.")
                         .font(.footnote).foregroundStyle(.secondary)
+                    if hasPreviousAnswers, let previousDay {
+                        Button {
+                            update.copyAnswers(from: session.snapshot, previousDay: previousDay)
+                        } label: {
+                            Label("Review same as yesterday", systemImage: "arrow.uturn.forward.circle")
+                        }
+                        .accessibilityHint("Copies yesterday’s answers into this draft. Nothing is saved until you choose Save.")
+                        .accessibilityIdentifier("sameAsYesterday")
+                    }
                 }
 
                 Section {
@@ -82,6 +105,25 @@ struct DailyCheckInView: View {
                     Text("Bleeding today")
                 } footer: {
                     Text("Skipping this question is different from recording no bleeding.")
+                }
+
+                let preferences = session.privacy.preferences.checkInPreferences ?? CheckInPreferences()
+                if preferences.showSexualActivity || preferences.showTreatments {
+                    Section("Other records") {
+                        if preferences.showSexualActivity {
+                            NavigationLink {
+                                SexualActivityEntryView(session: session, day: day,
+                                    entry: session.snapshot.sexualActivities.first { $0.day == day })
+                            } label: { Label("Sexual activity", systemImage: "heart.circle") }
+                        }
+                        if preferences.showTreatments {
+                            NavigationLink {
+                                TreatmentCheckInView(session: session, day: day)
+                            } label: { Label("Medication and contraception", systemImage: "pills") }
+                        }
+                        Text("These sensitive records open their own review and Save step. They are never inferred from an unselected choice.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
 
                 Section {
@@ -148,6 +190,9 @@ struct DailyCheckInView: View {
                         .disabled(!update.hasAnswer || !update.hasChanges || saving || session.isSaving)
                         .accessibilityIdentifier("saveDailyCheckIn")
                 }
+                ToolbarItem(placement: .secondaryAction) {
+                    Button("Customize check-in") { showingCustomization = true }
+                }
             }
             .interactiveDismissDisabled(update.hasChanges || saving)
             .confirmationDialog("Discard this check-in?", isPresented: $confirmDiscard, titleVisibility: .visible) {
@@ -155,6 +200,9 @@ struct DailyCheckInView: View {
                 Button("Keep editing", role: .cancel) { }
             }
             .onChange(of: update) { _, _ in saveError = nil }
+            .sheet(isPresented: $showingCustomization) {
+                CheckInCustomizationView(privacy: session.privacy)
+            }
         }
     }
 
@@ -199,5 +247,74 @@ struct DailyCheckInView: View {
             saving = false
             if saveError == nil { dismiss() } else { errorFocused = true }
         }
+    }
+}
+
+private struct CheckInCustomizationView: View {
+    @Environment(\.dismiss) private var dismiss
+    let privacy: TrackerPrivacy
+    @State private var preferences: CheckInPreferences
+    @State private var error: String?
+
+    init(privacy: TrackerPrivacy) {
+        self.privacy = privacy
+        _preferences = State(initialValue: privacy.preferences.checkInPreferences ?? CheckInPreferences())
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Pinned symptoms") {
+                    ForEach(preferences.pinnedSymptoms, id: \.self) { kind in
+                        Label(kind.title, systemImage: kind.symbol)
+                    }
+                    .onMove { preferences.pinnedSymptoms.move(fromOffsets: $0, toOffset: $1) }
+                    if preferences.pinnedSymptoms.isEmpty { Text("No pinned symptoms yet.").foregroundStyle(.secondary) }
+                }
+                Section {
+                    ForEach(SymptomKind.allCases, id: \.self) { kind in
+                        Toggle(isOn: pinBinding(kind)) { Label(kind.title, systemImage: kind.symbol) }
+                    }
+                } header: { Text("Choose favorites") }
+                footer: { Text("Favorites appear first. Use Edit above to reorder them.") }
+                Section("Hidden symptoms") {
+                    ForEach(SymptomKind.allCases, id: \.self) { kind in
+                        Toggle(kind.title, isOn: hiddenBinding(kind))
+                    }
+                }
+                Section("Sensitive categories") {
+                    Toggle("Sexual activity", isOn: $preferences.showSexualActivity)
+                    Toggle("Medication and contraception", isOn: $preferences.showTreatments)
+                    Text("Hiding a category changes only this check-in. Existing records and direct shortcuts remain available.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                if let error { Section { InlineError(message: error) } }
+            }
+            .navigationTitle("Customize check-in")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .topBarLeading) { EditButton() }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        error = privacy.setCheckInPreferences(preferences)
+                        if error == nil { dismiss() }
+                    }
+                }
+            }
+        }
+    }
+
+    private func pinBinding(_ kind: SymptomKind) -> Binding<Bool> {
+        Binding(get: { preferences.pinnedSymptoms.contains(kind) }, set: { selected in
+            preferences.pinnedSymptoms.removeAll { $0 == kind }
+            if selected { preferences.hiddenSymptoms.remove(kind); preferences.pinnedSymptoms.append(kind) }
+        })
+    }
+
+    private func hiddenBinding(_ kind: SymptomKind) -> Binding<Bool> {
+        Binding(get: { preferences.hiddenSymptoms.contains(kind) }, set: { hidden in
+            if hidden { preferences.hiddenSymptoms.insert(kind); preferences.pinnedSymptoms.removeAll { $0 == kind } }
+            else { preferences.hiddenSymptoms.remove(kind) }
+        })
     }
 }

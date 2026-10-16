@@ -13,6 +13,11 @@ nonisolated enum ReminderAuthorization: Sendable { case notDetermined, allowed, 
 
 @MainActor final class LocalReminderDelivery: ReminderDelivering {
     private let center = UNUserNotificationCenter.current()
+    init() {
+        center.delegate = ReminderNotificationDelegate.shared
+        let snooze = UNNotificationAction(identifier: "CECY_SNOOZE", title: "Snooze until tomorrow")
+        center.setNotificationCategories([UNNotificationCategory(identifier: "CECY_REMINDER", actions: [snooze], intentIdentifiers: [])])
+    }
     func authorization() async -> ReminderAuthorization {
         let settings = await center.notificationSettings()
         switch settings.authorizationStatus {
@@ -26,8 +31,10 @@ nonisolated enum ReminderAuthorization: Sendable { case notDetermined, allowed, 
         try await center.requestAuthorization(options: [.alert, .sound])
     }
     func clear() async {
-        center.removePendingNotificationRequests(withIdentifiers: ReminderRequest.identifiers)
-        center.removeDeliveredNotifications(withIdentifiers: ReminderRequest.identifiers)
+        let pending = await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix(ReminderRequest.identifierPrefix) }
+        let delivered = await center.deliveredNotifications().map { $0.request.identifier }.filter { $0.hasPrefix(ReminderRequest.identifierPrefix) }
+        center.removePendingNotificationRequests(withIdentifiers: pending)
+        center.removeDeliveredNotifications(withIdentifiers: delivered)
         // Round-trip to the notification service before reset reports reconciliation complete.
         _ = await center.pendingNotificationRequests()
         _ = await center.deliveredNotifications()
@@ -37,6 +44,8 @@ nonisolated enum ReminderAuthorization: Sendable { case notDetermined, allowed, 
         content.title = request.kind.notificationTitle(showDetails: request.showDetails)
         content.body = request.kind.notificationBody(showDetails: request.showDetails)
         content.sound = .default
+        content.categoryIdentifier = "CECY_REMINDER"
+        content.userInfo = ["deepLink": request.deepLink]
         var components = DateComponents()
         components.calendar = Calendar(identifier: .gregorian)
         components.hour = request.hour
@@ -46,8 +55,22 @@ nonisolated enum ReminderAuthorization: Sendable { case notDetermined, allowed, 
             components.month = day.month
             components.day = day.day
         }
-        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: request.kind == .daily)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: request.day == nil)
         try await center.add(UNNotificationRequest(identifier: request.id, content: content, trigger: trigger))
+    }
+}
+
+extension Notification.Name {
+    static let cecyReminderOpen = Notification.Name("cecy.reminder.open")
+    static let cecyReminderSnooze = Notification.Name("cecy.reminder.snooze")
+}
+
+private final class ReminderNotificationDelegate: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
+    static let shared = ReminderNotificationDelegate()
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        let name: Notification.Name = response.actionIdentifier == "CECY_SNOOZE" ? .cecyReminderSnooze : .cecyReminderOpen
+        let link = response.notification.request.content.userInfo["deepLink"] as? String
+        await MainActor.run { NotificationCenter.default.post(name: name, object: link) }
     }
 }
 
