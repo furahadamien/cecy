@@ -94,6 +94,19 @@ struct TrackerSettingsView: View {
                                 detail: SupportContact.email)
                 }
                 .accessibilityIdentifier("contactSupport")
+                Link(destination: PrivacyPolicy.url) {
+                    HStack {
+                        SettingsRow(title: "Privacy policy", systemImage: "hand.raised",
+                                    detail: "How Cecy handles your information")
+                        Image(systemName: "arrow.up.forward")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .foregroundStyle(.primary)
+                .accessibilityHint("Opens in your browser")
+                .accessibilityIdentifier("privacyPolicy")
                 NavigationLink { PredictionSettingsInfoView() } label: {
                     SettingsRow(title: "How predictions work", systemImage: "calendar",
                                 detail: "Estimates, not guarantees")

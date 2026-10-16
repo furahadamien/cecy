@@ -2,6 +2,11 @@ import SwiftUI
 import MessageUI
 import UIKit
 
+enum PrivacyPolicy {
+    /// Published policy. Opened in the system browser; Cecy embeds no web content.
+    static let url = URL(string: "https://thabo.xyz/cecy/privacy")!
+}
+
 /// Deliberately independent of the session: no records or diagnostics enter an email.
 enum SupportContact {
     static let email = "support@thabo.xyz"

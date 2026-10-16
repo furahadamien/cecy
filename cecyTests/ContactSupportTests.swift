@@ -4,6 +4,12 @@ import Testing
 @testable import cecy
 
 @MainActor struct ContactSupportTests {
+    @Test func privacyPolicyLinkIsThePublishedHTTPSPage() {
+        #expect(PrivacyPolicy.url.absoluteString == "https://thabo.xyz/cecy/privacy")
+        #expect(PrivacyPolicy.url.scheme == "https")
+        #expect(PrivacyPolicy.url.query == nil && PrivacyPolicy.url.fragment == nil)
+    }
+
     @Test func mailLinkContainsOnlyRecipientAndGenericSubject() throws {
         let url = try #require(SupportContact.mailURL)
         let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
