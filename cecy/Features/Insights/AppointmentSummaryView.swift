@@ -78,7 +78,15 @@ struct AppointmentSummaryView: View {
                 if !session.snapshot.treatments.isEmpty || !session.snapshot.cycleFactors.isEmpty {
                     Toggle("Medication, contraception and factors", isOn: $options.treatments)
                 }
-                if options.periods || options.symptoms {
+                if !session.snapshot.p2.lifeStages.isEmpty {
+                    Toggle("Life stages and postpartum bleeding", isOn: $options.lifeStages)
+                        .accessibilityIdentifier("summaryLifeStages")
+                }
+                if !session.snapshot.p2.biomarkers.isEmpty {
+                    Toggle("Biomarker records", isOn: $options.biomarkers)
+                        .accessibilityIdentifier("summaryBiomarkers")
+                }
+                if options.periods || options.symptoms || options.lifeStages {
                     Toggle("Private notes", isOn: $options.notes).accessibilityIdentifier("summaryNotes")
                 }
             }
@@ -230,6 +238,8 @@ private extension AppointmentSummaryDocument.Section.Kind {
         case .trends: "Recorded trends"
         case .concerns: "Top concerns and questions"
         case .treatments: "Medication, contraception and factors"
+        case .lifeStages: "Life stages"
+        case .biomarkers: "Biomarker records"
         }
     }
 
@@ -242,6 +252,8 @@ private extension AppointmentSummaryDocument.Section.Kind {
         case .trends: "chart.bar.xaxis"
         case .concerns: "text.bubble"
         case .treatments: "pills"
+        case .lifeStages: "person.line.dotted.person"
+        case .biomarkers: "waveform.path.ecg.rectangle"
         }
     }
 }

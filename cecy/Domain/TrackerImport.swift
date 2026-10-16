@@ -39,7 +39,7 @@ nonisolated enum TrackerImport {
                                                     debugDescription: "Invalid ISO-8601 date"))
         }
         let document = try decoder.decode(TrackerExport.Document.self, from: data)
-        guard (1...8).contains(document.formatVersion) else { throw TrackingError.invalidData }
+        guard (1...9).contains(document.formatVersion) else { throw TrackingError.invalidData }
         var added = 0, duplicates = 0, conflicts = 0
 
         let importedPeriods = try document.periods.map {
@@ -84,6 +84,34 @@ nonisolated enum TrackerImport {
             return TreatmentAdherence(id: $0.id, treatmentID: $0.treatmentID, day: try day($0.date), state: state,
                 notes: $0.notes, createdAt: exact($0.createdAt, $0.createdAtReference), updatedAt: exact($0.updatedAt, $0.updatedAtReference))
         }
+        let importedStages = try (document.lifeStages ?? []).map {
+            guard let kind = LifeStageKind(rawValue: $0.kind) else { throw TrackingError.invalidData }
+            return LifeStageEpisode(id: $0.id, kind: kind, start: try day($0.start), end: try $0.end.map(day),
+                feedingContext: try optionalRaw($0.feedingContext, FeedingContext.init(rawValue:)),
+                forecastExclusion: $0.forecastExclusion, notes: $0.notes,
+                createdAt: try reference($0.createdAtReference), updatedAt: try reference($0.updatedAtReference))
+        }
+        let importedPostpartum = try (document.postpartumBleeding ?? []).map {
+            guard let state = PostpartumBleedingState(rawValue: $0.state) else { throw TrackingError.invalidData }
+            return PostpartumBleedingEntry(id: $0.id, day: try day($0.date), state: state,
+                flow: try optionalRaw($0.flow, PeriodFlow.init(rawValue:)), notes: $0.notes,
+                createdAt: try reference($0.createdAtReference), updatedAt: try reference($0.updatedAtReference))
+        }
+        let importedBiomarkers = try (document.biomarkers ?? []).map {
+            guard let kind = BiomarkerKind(rawValue: $0.type),
+                  let provenance = RecordProvenance(rawValue: $0.provenance),
+                  $0.value == nil || $0.unit == kind.unit else { throw TrackingError.invalidData }
+            return BiomarkerEntry(id: $0.id, day: try day($0.date), kind: kind, numericValue: $0.value,
+                result: try optionalRaw($0.result, BiomarkerResult.init(rawValue:)), provenance: provenance,
+                sourceName: $0.sourceName, notes: $0.notes,
+                createdAt: try reference($0.createdAtReference), updatedAt: try reference($0.updatedAtReference))
+        }
+        let importedFeedback = try (document.insightFeedback ?? []).map {
+            let reasons = Set($0.reasons.compactMap(InsightFeedbackReason.init(rawValue:)))
+            guard reasons.count == $0.reasons.count else { throw TrackingError.invalidData }
+            return InsightFeedback(insightID: $0.insightID, helpful: $0.helpful, reasons: reasons,
+                                   updatedAt: try reference($0.updatedAtReference))
+        }
 
         var result = existing
         result.periods = merge(existing.periods, importedPeriods, key: { $0.start.key }, updated: { $0.updatedAt },
@@ -101,6 +129,15 @@ nonisolated enum TrackerImport {
         result.treatmentAdherence = merge(existing.treatmentAdherence, importedAdherence,
             key: { "\($0.treatmentID):\($0.day.key)" }, updated: { $0.updatedAt }, strategy: strategy,
             added: &added, duplicates: &duplicates, conflicts: &conflicts)
+        result.p2.lifeStages = merge(existing.p2.lifeStages, importedStages, key: { $0.id }, updated: { $0.updatedAt },
+                                     strategy: strategy, added: &added, duplicates: &duplicates, conflicts: &conflicts)
+        result.p2.postpartumBleeding = merge(existing.p2.postpartumBleeding, importedPostpartum, key: { $0.id },
+            updated: { $0.updatedAt }, strategy: strategy, added: &added, duplicates: &duplicates, conflicts: &conflicts)
+        result.p2.biomarkers = merge(existing.p2.biomarkers, importedBiomarkers, key: { $0.id }, updated: { $0.updatedAt },
+                                     strategy: strategy, added: &added, duplicates: &duplicates, conflicts: &conflicts)
+        result.p2.insightFeedback = merge(existing.p2.insightFeedback, importedFeedback, key: { $0.insightID },
+            updated: { $0.updatedAt }, strategy: strategy, added: &added, duplicates: &duplicates, conflicts: &conflicts)
+        result.p2 = P2RecordValidation.sorted(result.p2)
         if let profileRecord = document.profile {
             let imported = try profile(profileRecord, id: existing.profile?.id ?? UUID())
             if let current = existing.profile {
@@ -118,6 +155,7 @@ nonisolated enum TrackerImport {
         try DailyBleedingValidation.validate(result.dailyBleeding, periods: result.periods, asOf: today)
         try P1RecordValidation.validate(factors: result.cycleFactors, treatments: result.treatments,
                                         adherence: result.treatmentAdherence, asOf: today)
+        try P2RecordValidation.validate(result.p2, asOf: today)
         return TrackerImportPreview(snapshot: result, formatVersion: document.formatVersion,
                                     added: added, duplicates: duplicates, conflicts: conflicts)
     }
@@ -141,6 +179,11 @@ nonisolated enum TrackerImport {
     private static func exact(_ fallback: Date, _ reference: Double?) -> Date {
         guard let reference, reference.isFinite else { return fallback }
         return Date(timeIntervalSinceReferenceDate: reference)
+    }
+
+    private static func reference(_ value: Double) throws -> Date {
+        guard value.isFinite else { throw TrackingError.invalidData }
+        return Date(timeIntervalSinceReferenceDate: value)
     }
 
     private static func day(_ text: String) throws -> LocalDay {

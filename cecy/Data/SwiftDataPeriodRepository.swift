@@ -55,7 +55,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
 
     static func local(url: URL, clearLegacyData: @escaping () throws -> Void = {}) throws -> SwiftDataPeriodRepository {
         try ProtectedFiles.directory(url.deletingLastPathComponent(), excludeFromBackup: true)
-        let schema = Schema(versionedSchema: TrackerSchemaV8.self)
+        let schema = Schema(versionedSchema: TrackerSchemaV9.self)
         let configuration = ModelConfiguration("CecyLocal", schema: schema, url: url, cloudKitDatabase: .none)
         return try SwiftDataPeriodRepository(container: ModelContainer(for: schema, migrationPlan: TrackerMigrationPlan.self,
                                                                        configurations: [configuration]), clearLegacyData: clearLegacyData)
@@ -75,7 +75,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
     }
 
     static func inMemory() throws -> SwiftDataPeriodRepository {
-        let schema = Schema(versionedSchema: TrackerSchemaV8.self)
+        let schema = Schema(versionedSchema: TrackerSchemaV9.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         return try SwiftDataPeriodRepository(container: ModelContainer(for: schema, migrationPlan: TrackerMigrationPlan.self,
                                                                        configurations: [configuration]))
@@ -107,6 +107,10 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         let progressRecords = try context.fetch(FetchDescriptor<TrackerSchemaV8.OnboardingProgressRecord>())
         guard progressRecords.count <= 1 else { throw TrackingError.invalidData }
         let progress = try progressRecords.first?.value()
+        let p2Records = try context.fetch(FetchDescriptor<TrackerSchemaV9.P2DataRecord>())
+        guard p2Records.count <= 1 else { throw TrackingError.invalidData }
+        let p2 = try p2Records.first?.value() ?? P2Data()
+        try P2RecordValidation.validate(p2)
         return TrackerSnapshot(periods: periods, onboardingCompletedAt: states.first?.onboardingCompletedAt,
                                symptoms: SymptomValidation.sorted(symptoms), profile: try profiles.first?.value(),
                                sexualActivities: SexualActivityValidation.sorted(activities),
@@ -114,7 +118,8 @@ final class SwiftDataPeriodRepository: PeriodRepository {
                                dailyBleeding: DailyBleedingValidation.sorted(daily),
                                cycleFactors: P1RecordValidation.sorted(factors),
                                treatments: P1RecordValidation.sorted(treatments),
-                               treatmentAdherence: P1RecordValidation.sorted(adherence), onboardingProgress: progress)
+                               treatmentAdherence: P1RecordValidation.sorted(adherence), onboardingProgress: progress,
+                               p2: P2RecordValidation.sorted(p2))
     }
 
     private func writeProfile(_ profile: LocalProfile) throws {
@@ -676,6 +681,21 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         } catch { context.rollback(); throw error }
     }
 
+    func saveP2Data(_ data: P2Data, today: LocalDay) throws -> TrackerSnapshot {
+        var candidate = try load()
+        try P2RecordValidation.validate(data, asOf: today)
+        let value = P2RecordValidation.sorted(data)
+        do {
+            let records = try context.fetch(FetchDescriptor<TrackerSchemaV9.P2DataRecord>())
+            guard records.count <= 1 else { throw TrackingError.invalidData }
+            if let record = records.first { try record.update(value) }
+            else if !value.isEmpty { context.insert(try TrackerSchemaV9.P2DataRecord(value)) }
+            try saveContext(context)
+            candidate.p2 = value
+            return candidate
+        } catch { context.rollback(); throw error }
+    }
+
     /// Replaces the complete local record set in one SwiftData transaction after import preview.
     func importSnapshot(_ candidate: TrackerSnapshot, today: LocalDay) throws -> TrackerSnapshot {
         try PeriodValidation.validate(candidate.periods, asOf: today)
@@ -684,6 +704,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
         try DailyBleedingValidation.validate(candidate.dailyBleeding, periods: candidate.periods, asOf: today)
         try P1RecordValidation.validate(factors: candidate.cycleFactors, treatments: candidate.treatments,
                                         adherence: candidate.treatmentAdherence, asOf: today)
+        try P2RecordValidation.validate(candidate.p2, asOf: today)
         do {
             try context.fetch(FetchDescriptor<TrackerSchemaV2.PeriodRecord>()).forEach { context.delete($0) }
             try context.fetch(FetchDescriptor<TrackerSchemaV3.SymptomRecord>()).forEach { context.delete($0) }
@@ -694,6 +715,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
             try context.fetch(FetchDescriptor<TrackerSchemaV8.CycleFactorRecord>()).forEach { context.delete($0) }
             try context.fetch(FetchDescriptor<TrackerSchemaV8.TreatmentDataRecord>()).forEach { context.delete($0) }
             try context.fetch(FetchDescriptor<TrackerSchemaV8.TreatmentAdherenceRecord>()).forEach { context.delete($0) }
+            try context.fetch(FetchDescriptor<TrackerSchemaV9.P2DataRecord>()).forEach { context.delete($0) }
             candidate.periods.forEach { context.insert(TrackerSchemaV2.PeriodRecord($0)) }
             candidate.symptoms.forEach { context.insert(TrackerSchemaV3.SymptomRecord($0)) }
             if let profile = candidate.profile { context.insert(try TrackerSchemaV4.ProfileRecord(profile)) }
@@ -703,6 +725,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
             for value in candidate.cycleFactors { context.insert(try TrackerSchemaV8.CycleFactorRecord(value)) }
             for value in candidate.treatments { context.insert(try TrackerSchemaV8.TreatmentDataRecord(value)) }
             for value in candidate.treatmentAdherence { context.insert(try TrackerSchemaV8.TreatmentAdherenceRecord(value)) }
+            if !candidate.p2.isEmpty { context.insert(try TrackerSchemaV9.P2DataRecord(P2RecordValidation.sorted(candidate.p2))) }
             try saveContext(context)
             return candidate
         } catch { context.rollback(); throw error }
@@ -722,6 +745,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
             let treatments = try context.fetch(FetchDescriptor<TrackerSchemaV8.TreatmentDataRecord>())
             let adherence = try context.fetch(FetchDescriptor<TrackerSchemaV8.TreatmentAdherenceRecord>())
             let progress = try context.fetch(FetchDescriptor<TrackerSchemaV8.OnboardingProgressRecord>())
+            let p2 = try context.fetch(FetchDescriptor<TrackerSchemaV9.P2DataRecord>())
             try clearLegacyData()
             records.forEach { context.delete($0) }
             states.forEach { context.delete($0) }
@@ -734,6 +758,7 @@ final class SwiftDataPeriodRepository: PeriodRepository {
             treatments.forEach { context.delete($0) }
             adherence.forEach { context.delete($0) }
             progress.forEach { context.delete($0) }
+            p2.forEach { context.delete($0) }
             try saveContext(context)
             return TrackerSnapshot()
         } catch {

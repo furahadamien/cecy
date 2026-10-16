@@ -40,6 +40,11 @@ struct TrackerSettingsView: View {
                                 detail: "\(session.snapshot.cycleFactors.count) dated")
                 }
                 .accessibilityIdentifier("cycleFactorSettings")
+                NavigationLink { P2DepthView(session: session) } label: {
+                    SettingsRow(title: "Life stages and deeper records", systemImage: "person.line.dotted.person",
+                                detail: "\(session.snapshot.p2.lifeStages.count) life stages · \(session.snapshot.p2.biomarkers.count) biomarkers")
+                }
+                .accessibilityIdentifier("p2DepthSettings")
             } header: {
                 Text("Tracking records")
             } footer: {
@@ -135,7 +140,7 @@ struct SettingsForm<Content: View>: View {
     }
 }
 
-private struct SettingsRow: View {
+struct SettingsRow: View {
     let title: String
     let systemImage: String
     let detail: String

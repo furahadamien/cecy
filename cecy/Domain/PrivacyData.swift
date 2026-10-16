@@ -187,6 +187,49 @@ nonisolated enum TrackerExport {
         let cycleFactors: [CycleFactorRecord]?
         let treatments: [TreatmentRecordExport]?
         let treatmentAdherence: [TreatmentAdherenceRecord]?
+        var lifeStages: [LifeStageRecord]? = nil
+        var postpartumBleeding: [PostpartumBleedingRecord]? = nil
+        var biomarkers: [BiomarkerRecord]? = nil
+        var insightFeedback: [InsightFeedbackRecord]? = nil
+    }
+    struct LifeStageRecord: Codable {
+        let id: UUID
+        let kind: String
+        let start: String
+        let end: String?
+        let feedingContext: String?
+        let forecastExclusion: Bool?
+        let notes: String?
+        let createdAtReference: Double
+        let updatedAtReference: Double
+    }
+    struct PostpartumBleedingRecord: Codable {
+        let id: UUID
+        let date: String
+        let state: String
+        let flow: String?
+        let notes: String?
+        let createdAtReference: Double
+        let updatedAtReference: Double
+    }
+    struct BiomarkerRecord: Codable {
+        let id: UUID
+        let date: String
+        let type: String
+        let value: Double?
+        let unit: String?
+        let result: String?
+        let provenance: String
+        let sourceName: String?
+        let notes: String?
+        let createdAtReference: Double
+        let updatedAtReference: Double
+    }
+    struct InsightFeedbackRecord: Codable {
+        let insightID: String
+        let helpful: Bool
+        let reasons: [String]
+        let updatedAtReference: Double
     }
     struct ProfileRecord: Codable {
         let preferredName: String
@@ -334,10 +377,12 @@ nonisolated enum TrackerExport {
         try DailyBleedingValidation.validate(snapshot.dailyBleeding, periods: snapshot.periods)
         guard generatedAt.timeIntervalSinceReferenceDate.isFinite else { throw TrackingError.invalidData }
         let includesIdentity = includeProfile && (snapshot.profile?.genderIdentity != nil || (includeSexualActivity && snapshot.profile?.sexualPartners != nil))
-        let version = !snapshot.cycleFactors.isEmpty || !snapshot.treatments.isEmpty || !snapshot.treatmentAdherence.isEmpty ? 8
+        try P2RecordValidation.validate(snapshot.p2)
+        let version = !snapshot.p2.isEmpty ? 9
+            : !snapshot.cycleFactors.isEmpty || !snapshot.treatments.isEmpty || !snapshot.treatmentAdherence.isEmpty ? 8
             : !snapshot.dailyBleeding.isEmpty ? 7 : includeProfile && snapshot.profile?.typicalCycleDays != nil ? 6
             : includesIdentity ? 5 : (includeProfile && snapshot.profile?.wellnessPreferences != nil ? 4 : (includeSexualActivity ? 3 : (includeProfile ? 2 : 1)))
-        let document = Document(formatVersion: version, generatedAt: generatedAt, includesPrivateNotes: includeNotes,
+        var document = Document(formatVersion: version, generatedAt: generatedAt, includesPrivateNotes: includeNotes,
             periods: snapshot.periods.sorted { $0.start < $1.start }.map {
                 PeriodRecord(id: $0.id, start: civilDate($0.start), end: $0.end.map(civilDate), flow: $0.flow?.rawValue,
                     notes: includeNotes ? $0.notes : nil, createdAt: $0.createdAt, updatedAt: $0.updatedAt,
@@ -382,6 +427,40 @@ nonisolated enum TrackerExport {
                     createdAtReference: $0.createdAt.timeIntervalSinceReferenceDate,
                     updatedAtReference: $0.updatedAt.timeIntervalSinceReferenceDate)
             })
+        let p2 = P2RecordValidation.sorted(snapshot.p2)
+        if !p2.lifeStages.isEmpty {
+            document.lifeStages = p2.lifeStages.map {
+                LifeStageRecord(id: $0.id, kind: $0.kind.rawValue, start: civilDate($0.start), end: $0.end.map(civilDate),
+                    feedingContext: $0.feedingContext?.rawValue, forecastExclusion: $0.forecastExclusion,
+                    notes: includeNotes ? $0.notes : nil,
+                    createdAtReference: $0.createdAt.timeIntervalSinceReferenceDate,
+                    updatedAtReference: $0.updatedAt.timeIntervalSinceReferenceDate)
+            }
+        }
+        if !p2.postpartumBleeding.isEmpty {
+            document.postpartumBleeding = p2.postpartumBleeding.map {
+                PostpartumBleedingRecord(id: $0.id, date: civilDate($0.day), state: $0.state.rawValue, flow: $0.flow?.rawValue,
+                    notes: includeNotes ? $0.notes : nil,
+                    createdAtReference: $0.createdAt.timeIntervalSinceReferenceDate,
+                    updatedAtReference: $0.updatedAt.timeIntervalSinceReferenceDate)
+            }
+        }
+        if !p2.biomarkers.isEmpty {
+            document.biomarkers = p2.biomarkers.map {
+                BiomarkerRecord(id: $0.id, date: civilDate($0.day), type: $0.kind.rawValue, value: $0.numericValue,
+                    unit: $0.numericValue == nil ? nil : $0.kind.unit, result: $0.result?.rawValue,
+                    provenance: $0.provenance.rawValue, sourceName: $0.sourceName, notes: includeNotes ? $0.notes : nil,
+                    createdAtReference: $0.createdAt.timeIntervalSinceReferenceDate,
+                    updatedAtReference: $0.updatedAt.timeIntervalSinceReferenceDate)
+            }
+        }
+        if !p2.insightFeedback.isEmpty {
+            document.insightFeedback = p2.insightFeedback.map {
+                InsightFeedbackRecord(insightID: $0.insightID, helpful: $0.helpful,
+                    reasons: $0.reasons.map(\.rawValue).sorted(),
+                    updatedAtReference: $0.updatedAt.timeIntervalSinceReferenceDate)
+            }
+        }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .custom { date, encoder in

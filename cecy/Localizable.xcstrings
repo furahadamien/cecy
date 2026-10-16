@@ -1,0 +1,53 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%lld postpartum bleeding records would fall outside a postpartum stage. Adjust the dates or delete those records first." : {
+      "comment" : "Life-stage editor validation. Count of postpartum bleeding records that would be orphaned.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : { "stringUnit" : { "state" : "translated", "value" : "%lld postpartum bleeding record would fall outside a postpartum stage. Adjust the dates or delete that record first." } },
+              "other" : { "stringUnit" : { "state" : "translated", "value" : "%lld postpartum bleeding records would fall outside a postpartum stage. Adjust the dates or delete those records first." } }
+            }
+          }
+        }
+      }
+    },
+    "Postpartum bleeding recorded on %lld days, kept separate from periods." : {
+      "comment" : "Life-stage summary. Number of days with postpartum bleeding records. Medical copy: requires native-language clinical review before shipping a translation.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : { "stringUnit" : { "state" : "translated", "value" : "Postpartum bleeding recorded on %lld day, kept separate from periods." } },
+              "other" : { "stringUnit" : { "state" : "translated", "value" : "Postpartum bleeding recorded on %lld days, kept separate from periods." } }
+            }
+          }
+        }
+      }
+    },
+    "Period starts recorded in this stage: %lld." : {
+      "comment" : "Life-stage summary for cycle change. Count of recorded period starts."
+    },
+    "Hidden observations (%lld)" : {
+      "comment" : "Observations screen. Number of insights the user marked not helpful."
+    },
+    "Recorded on %lld of %lld days." : {
+      "comment" : "Biomarker coverage: days with a saved reading out of days in the window. Unlogged days are unknown, not normal."
+    },
+    "Daily bleeding answers on %lld of %lld days. Unlogged days remain unknown." : {
+      "comment" : "Life-stage coverage. Must preserve the meaning that unlogged days are unknown, not negative."
+    },
+    "Draft awaiting qualified clinical review" : {
+      "comment" : "Education article status banner. Must remain visible until a named clinician has reviewed the article."
+    },
+    "Bleeding — not recorded as a period" : {
+      "comment" : "Postpartum bleeding state. Must make clear this is not menstruation. Requires clinical translation review."
+    },
+    "Postpartum discharge (lochia)" : {
+      "comment" : "Postpartum bleeding state. Use the locally accepted clinical term for lochia. Requires clinical translation review."
+    }
+  },
+  "version" : "1.0"
+}

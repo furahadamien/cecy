@@ -221,8 +221,12 @@ private struct TrackerTabs: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .cecyReminderOpen)) { notification in
             guard let link = notification.object as? String else { return }
+            _ = CecyLaunchRoute.consume()
             if link == "cecy://check-in" { selectedTab = 0; showReminderCheckIn = true }
             else if link == "cecy://forecast" { selectedTab = 1 }
+        }
+        .onAppear {
+            if CecyLaunchRoute.consume() == CecyLaunchRoute.checkIn { selectedTab = 0; showReminderCheckIn = true }
         }
         .task(id: InsightPresentationKey(day: today, active: scenePhase == .active,
                 onToday: selectedTab == 0, available: session.privacy.canAccess && !session.isUpdatingPredictions,

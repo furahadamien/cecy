@@ -192,12 +192,27 @@ nonisolated enum CycleCalculator {
             }
             let excludedIDs = Set(excluded.map(\.id))
             let intervals = allIntervals.filter { !excludedIDs.contains($0.id) }
-            let prediction = try engine.predict(intervals: intervals, latestStart: last.start, profile: profile)
+            let chain = excluded.isEmpty ? intervals : try forecastChain(intervals, latestStart: last.start)
+            let prediction = try engine.predict(intervals: chain, latestStart: last.start, profile: profile)
             return CycleOverview(latestStart: last.start, currentDay: last.start.days(until: today) + 1,
                                  intervals: intervals, excludedIntervals: excluded, prediction: prediction)
         } catch {
             return CycleOverview(latestStart: nil, currentDay: nil, intervals: [], prediction: .unavailable(error as? TrackingError ?? .invalidData))
         }
+    }
+
+    /// Engines score contiguous interval lengths ending at the latest start. When factors exclude intervals
+    /// in the middle or at the end of history, the remaining lengths are re-chained in order so the forecast
+    /// still uses only included evidence. Displayed intervals keep their real dates.
+    static func forecastChain(_ intervals: [CycleInterval], latestStart: LocalDay) throws -> [CycleInterval] {
+        var end = latestStart
+        var chained: [CycleInterval] = []
+        for interval in intervals.reversed() {
+            let start = try end.adding(days: -interval.length)
+            chained.append(CycleInterval(id: interval.id, start: start, nextStart: end))
+            end = start
+        }
+        return chained.reversed()
     }
 }
 
@@ -213,6 +228,7 @@ nonisolated struct TrackerSnapshot: Equatable, Sendable {
     var treatments: [TreatmentRecord] = []
     var treatmentAdherence: [TreatmentAdherence] = []
     var onboardingProgress: OnboardingProgress?
+    var p2 = P2Data()
 
     /// The period's potential last day: a confirmed end when set, otherwise the latest recorded
     /// linked bleeding day. The derived value is tentative (evidence-based, not user-confirmed) and
@@ -269,6 +285,7 @@ protocol PeriodRepository {
     func saveTreatment(_ treatment: TreatmentRecord, today: LocalDay, now: Date) throws -> TrackerSnapshot
     func deleteTreatment(id: UUID) throws -> TrackerSnapshot
     func saveTreatmentAdherence(_ adherence: TreatmentAdherence, today: LocalDay, now: Date) throws -> TrackerSnapshot
+    func saveP2Data(_ data: P2Data, today: LocalDay) throws -> TrackerSnapshot
     func importSnapshot(_ snapshot: TrackerSnapshot, today: LocalDay) throws -> TrackerSnapshot
 }
 
@@ -290,6 +307,7 @@ extension PeriodRepository {
     func saveTreatment(_ treatment: TreatmentRecord, today: LocalDay, now: Date) throws -> TrackerSnapshot { throw TrackingError.invalidData }
     func deleteTreatment(id: UUID) throws -> TrackerSnapshot { throw TrackingError.invalidData }
     func saveTreatmentAdherence(_ adherence: TreatmentAdherence, today: LocalDay, now: Date) throws -> TrackerSnapshot { throw TrackingError.invalidData }
+    func saveP2Data(_ data: P2Data, today: LocalDay) throws -> TrackerSnapshot { throw TrackingError.invalidData }
     func importSnapshot(_ snapshot: TrackerSnapshot, today: LocalDay) throws -> TrackerSnapshot { throw TrackingError.invalidData }
 
     // Older test repositories do not gain an implicit, non-atomic import implementation.

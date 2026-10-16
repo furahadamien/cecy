@@ -39,7 +39,8 @@ struct DailyCheckInView: View {
 
     private var suggested: [SymptomKind] {
         DailyCheckInSuggestions.symptoms(profile: session.snapshot.profile, existing: update.expectedSymptoms,
-            recent: recentSymptoms, preferences: session.privacy.preferences.checkInPreferences)
+            recent: recentSymptoms, preferences: session.privacy.preferences.checkInPreferences,
+            lifeStage: LifeStageCheckIn.symptoms(for: session.snapshot.p2, on: day))
     }
 
     private var recentSymptoms: [SymptomEntry] {

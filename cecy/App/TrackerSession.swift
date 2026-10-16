@@ -311,7 +311,7 @@ final class TrackerSession {
             try checkAccess()
             overview = ForecastAvailabilityPolicy.applying(to: CycleCalculator.overview(
                 periods: staged.periods, today: day, engine: EvidencePredictionEngine(), profile: staged.profile,
-                factors: staged.cycleFactors))
+                factors: P2Forecast.factors(for: staged)))
             predictionReplay = try PredictionBacktester.evaluate(periods: staged.periods, today: day)
             setupStage = .insights
             await Task.yield()
@@ -379,7 +379,7 @@ final class TrackerSession {
         self.today = today
         overview = ForecastAvailabilityPolicy.applying(to: CycleCalculator.overview(
             periods: snapshot.periods, today: today, engine: EvidencePredictionEngine(), profile: snapshot.profile,
-            factors: snapshot.cycleFactors))
+            factors: P2Forecast.factors(for: snapshot)))
         cycleForecast = overview.map { CycleForecast.calculate(overview: $0, profile: snapshot.profile, periods: snapshot.periods, asOf: today, dailyBleeding: snapshot.dailyBleeding) } ?? CycleForecast()
         // Built after the forecast so the phase estimate carries its uncertainty. Setup stays the
         // gate for preparation; v2 nulls still yield successful "unavailable" sections if needed.
@@ -481,6 +481,27 @@ final class TrackerSession {
         mutate(confirmation: "Treatment check-in saved.", failure: "This treatment check-in hasn’t been saved. Try again.") {
             try $0.saveTreatmentAdherence(adherence, today: $1, now: $2)
         }
+    }
+
+    func saveP2Data(_ data: P2Data, confirmation: String = "Record saved.") -> String? {
+        mutate(confirmation: confirmation, failure: "Your changes haven’t been saved. Keep them on screen and try again.") { repository, today, _ in
+            try repository.saveP2Data(data, today: today)
+        }
+    }
+
+    func rateInsight(_ insightID: String, helpful: Bool, reasons: Set<InsightFeedbackReason> = []) -> String? {
+        guard !insightID.isEmpty else { return "This insight can’t be rated." }
+        var data = snapshot.p2
+        data.insightFeedback.removeAll { $0.insightID == insightID }
+        data.insightFeedback.append(InsightFeedback(insightID: insightID, helpful: helpful,
+                                                     reasons: reasons, updatedAt: clock()))
+        return saveP2Data(data, confirmation: "Insight feedback saved on this device.")
+    }
+
+    func clearInsightFeedback(_ insightID: String) -> String? {
+        var data = snapshot.p2
+        data.insightFeedback.removeAll { $0.insightID == insightID }
+        return saveP2Data(data, confirmation: "Observation shown again.")
     }
 
     func importRecords(_ imported: TrackerSnapshot) -> String? {

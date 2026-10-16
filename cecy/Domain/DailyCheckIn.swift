@@ -100,14 +100,14 @@ nonisolated enum DailyCheckInSuggestions {
     private static let defaults: [SymptomKind] = [.cramps, .headache, .bloating, .fatigue, .moodChanges, .energyLevel]
 
     static func symptoms(profile: LocalProfile?, existing: [SymptomEntry], recent: [SymptomEntry] = [],
-                         preferences: CheckInPreferences? = nil) -> [SymptomKind] {
+                         preferences: CheckInPreferences? = nil, lifeStage: [SymptomKind] = []) -> [SymptomKind] {
         let hidden = preferences?.hiddenSymptoms ?? []
         let pinned = preferences?.pinnedSymptoms ?? []
         let selected = Set(profile?.commonSymptoms.compactMap(\.symptomKind) ?? [])
         let preferred = SymptomKind.allCases.filter { selected.contains($0) }
         let base = preferred.isEmpty ? defaults : preferred
         let recentKinds = recent.sorted { $0.day > $1.day }.map(\.kind)
-        let ordered = pinned + base + recentKinds + existing.map(\.kind)
+        let ordered = pinned + lifeStage + base + recentKinds + existing.map(\.kind)
         var seen = Set<SymptomKind>()
         return ordered.filter { !hidden.contains($0) && seen.insert($0).inserted }
     }

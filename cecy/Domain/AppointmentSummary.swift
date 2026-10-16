@@ -26,9 +26,14 @@ nonisolated struct AppointmentSummaryOptions: Equatable, Sendable {
     var notes = false
     var trends = false
     var treatments = false
+    var lifeStages = false
+    var biomarkers = false
     var concerns: [String] = []
     var questions: [String] = []
-    var hasSection: Bool { periods || dailyAnswers || symptoms || context || trends || treatments || !concerns.isEmpty || !questions.isEmpty }
+    var hasSection: Bool {
+        periods || dailyAnswers || symptoms || context || trends || treatments || lifeStages || biomarkers
+            || !concerns.isEmpty || !questions.isEmpty
+    }
 }
 
 nonisolated struct AppointmentSummaryDocument: Equatable, Sendable {
@@ -41,6 +46,8 @@ nonisolated struct AppointmentSummaryDocument: Equatable, Sendable {
             case trends = "RECORDED TRENDS"
             case concerns = "TOP CONCERNS AND QUESTIONS"
             case treatments = "MEDICATION, CONTRACEPTION AND FACTORS"
+            case lifeStages = "LIFE STAGES"
+            case biomarkers = "BIOMARKER RECORDS"
         }
         let kind: Kind
         let lines: [String]
@@ -164,6 +171,36 @@ nonisolated enum AppointmentSummary {
             if lines.isEmpty { lines.append("No medication, contraception, or dated factors recorded in this range.") }
             lines.append("Self-reported records only; no effectiveness, interaction, or pregnancy-risk calculation.")
             sections.append(.init(kind: .treatments, lines: lines))
+        }
+        if options.lifeStages {
+            let episodes = P2RecordValidation.sorted(snapshot.p2).lifeStages.filter { $0.overlaps(start: start, end: end) }
+            var lines: [String] = []
+            for episode in episodes {
+                lines.append("\(episode.kind.title): \(date(episode.start)) – \(episode.end.map(date) ?? "ongoing")"
+                    + (episode.feedingContext.map { " · \($0.title)" } ?? ""))
+                let summary = LifeStageSummary.make(episode: episode, snapshot: snapshot, through: end)
+                lines += summary.observations(format: date)
+                lines += summary.relevantSymptoms.map { "\($0.kind.title): recorded on \($0.count) days" }
+                if options.notes, let note = episode.notes { lines.append("Note: \(note)") }
+            }
+            let postpartum = snapshot.p2.postpartumBleeding.filter { $0.day >= start && $0.day <= end }
+                .sorted { $0.day < $1.day }
+            for entry in postpartum {
+                lines.append("\(date(entry.day)): \(entry.state.title)" + (entry.flow.map { " · \($0.title) flow" } ?? ""))
+            }
+            if lines.isEmpty { lines.append("No life-stage records in this range.") }
+            lines.append("Self-recorded context, not a diagnosis. Postpartum bleeding is listed separately from periods.")
+            sections.append(.init(kind: .lifeStages, lines: lines))
+        }
+        if options.biomarkers {
+            let entries = P2RecordValidation.sorted(snapshot.p2).biomarkers.filter { $0.day >= start && $0.day <= end }
+            var lines = entries.map {
+                "\(date($0.day)): \($0.kind.title) · \($0.valueText)"
+                    + ($0.provenance == .appleHealth ? " · from Apple Health" : "")
+            }
+            if lines.isEmpty { lines.append("No biomarker records in this range.") }
+            lines.append("Recorded values only. Not used to confirm ovulation or pregnancy, or to predict fertility.")
+            sections.append(.init(kind: .biomarkers, lines: lines))
         }
         return AppointmentSummaryDocument(title: "Cecy · Appointment summary",
             dateRange: "\(date(start)) – \(date(end))",
