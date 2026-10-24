@@ -118,6 +118,38 @@ import Testing
         #expect(!kinds(input(snapshot, today: try estimate.latest.adding(days: 31))).contains(.windowPassed))
     }
 
+    @Test func windowPassedStaysQuietWhenSomethingIsAlreadyNoted() throws {
+        let periods = [20260601, 20260629, 20260727, 20260824, 20260921].map { Period(start: day($0), end: try! day($0).adding(days: 4), createdAt: longAgo) }
+        var snapshot = TrackerSnapshot(periods: periods, onboardingCompletedAt: longAgo)
+        guard case .available(let estimate) = input(snapshot, today: day(20261019)).overview.prediction else { Issue.record("No estimate"); return }
+        let today = try estimate.latest.adding(days: 2)
+        #expect(kinds(input(snapshot, today: today)).contains(.windowPassed))
+        // A factor added from this question (or earlier) answers it.
+        snapshot.cycleFactors = [CycleFactor(kind: .stress, start: day(20261001), createdAt: longAgo)]
+        #expect(!kinds(input(snapshot, today: today)).contains(.windowPassed))
+    }
+
+    @Test func newCycleIsAskedWhenUnusualCycleQuestionsAreOff() {
+        let snapshot = TrackerSnapshot(periods: unusualPeriods, onboardingCompletedAt: longAgo)
+        let today = day(20261004)
+        #expect(!kinds(input(snapshot, today: today)).contains(.newCycle))
+        var memory = FollowUpMemory()
+        memory.disabledKinds = [.unusualCycle]
+        let asked = kinds(input(snapshot, today: today, memory: memory))
+        #expect(asked.contains(.newCycle) && !asked.contains(.unusualCycle))
+    }
+
+    @Test func openPeriodAsksWhetherItIsStillGoing() throws {
+        var periods = [20260601, 20260629, 20260727, 20260824].map { Period(start: day($0), end: try! day($0).adding(days: 4), createdAt: longAgo) }
+        periods.append(Period(start: day(20260921), createdAt: longAgo))
+        var snapshot = TrackerSnapshot(periods: periods, onboardingCompletedAt: longAgo)
+        let today = day(20260922)
+        let prompt = try #require(FollowUpEngine.eligible(input(snapshot, today: today)).first { $0.kind == .periodToday })
+        guard case .periodContinuing = prompt.context else { Issue.record("Expected the still-going question"); return }
+        snapshot.dailyBleeding = [DailyBleedingObservation(day: today, state: .noBleeding)]
+        #expect(!kinds(input(snapshot, today: today)).contains(.periodToday))
+    }
+
     @Test func biomarkerFollowUpOnlyForRegularRecorders() {
         var snapshot = TrackerSnapshot(onboardingCompletedAt: longAgo)
         let today = day(20261010)

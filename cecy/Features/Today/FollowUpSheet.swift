@@ -84,6 +84,8 @@ struct FollowUpSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        // While saving or showing the confirmation, a swipe must not count as "Not now".
+        .interactiveDismissDisabled(saving || saved != nil)
         .accessibilityIdentifier("followUpSheet")
         .sheet(item: $editor, onDismiss: editorClosed) { editor in
             switch editor {

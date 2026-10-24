@@ -202,7 +202,9 @@ nonisolated struct FollowUpInput: Sendable {
         if let value = windowPassed(input) { result.append(value) }
         let unusual = unusualCycle(input)
         if let unusual { result.append(unusual) }
-        if unusual == nil, let value = newCycle(input) { result.append(value) }
+        // One question per cycle start: "anything new?" yields to the unusual-cycle question,
+        // unless the user turned that question type off.
+        if unusual == nil || input.memory.disabledKinds.contains(.unusualCycle), let value = newCycle(input) { result.append(value) }
         result += openFactors(input)
         result += treatmentDoses(input)
         result += treatmentReviews(input)
@@ -240,6 +242,10 @@ nonisolated struct FollowUpInput: Sendable {
               estimate.latest.days(until: input.today) <= 30,
               (input.overview.latestStart.map { $0 < estimate.earliest } ?? true),
               !input.snapshot.resolvedPeriods.contains(where: { $0.start >= estimate.earliest }) else { return nil }
+        // Something already noted for this time (a factor or life stage) explains the wait; don't ask.
+        guard !input.snapshot.cycleFactors.contains(where: { $0.overlaps(start: estimate.earliest, end: input.today) }),
+              !input.snapshot.p2.lifeStages.contains(where: { $0.overlaps(start: estimate.earliest, end: input.today) })
+        else { return nil }
         let days = estimate.latest.days(until: input.today)
         return FollowUpPrompt(kind: .windowPassed, subject: "windowPassed:\(estimate.center.key)",
             title: String(localized: "Your estimated window has passed"),

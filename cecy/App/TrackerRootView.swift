@@ -159,6 +159,8 @@ private struct TrackerTabs: View {
     @State private var followUp: FollowUpPrompt?
     @State private var presentedFollowUp: FollowUpPrompt?
     @State private var followUpHandoff: FollowUpHandoff?
+    /// Set when the sheet itself answered, skipped or turned off the question.
+    @State private var followUpHandled = false
     @State private var viewingToday = true
     /// Per foreground visit: a visit that opened from a reminder/Shortcut, or already showed the
     /// daily insights pop-up, never also shows a follow-up question.
@@ -176,9 +178,11 @@ private struct TrackerTabs: View {
         let blockedThisVisit: Bool
     }
 
+    /// Today's insights pop-up still has to show, or is still being prepared. Questions wait for it
+    /// so the two never compete for the same moment.
     private var dailyInsightsPending: Bool {
-        session.privacy.preferences.dailyInsightPresentationDay != today.key
-            && (!session.privacy.dailyInsightsEnabled || session.dailyInsightOutput != nil)
+        guard session.privacy.preferences.dailyInsightPresentationDay != today.key else { return false }
+        return !session.privacy.dailyInsightsEnabled || session.dailyInsightOutput != nil || session.dailyAI.isLoading
     }
 
     private var followUpKey: FollowUpPresentationKey {
@@ -255,6 +259,7 @@ private struct TrackerTabs: View {
         }
         .sheet(item: $followUp, onDismiss: followUpDismissed) { prompt in
             FollowUpSheet(session: session, prompt: prompt) { handoff in
+                followUpHandled = true
                 followUpHandoff = handoff
                 followUp = nil
             }
@@ -286,22 +291,21 @@ private struct TrackerTabs: View {
         .task(id: InsightPresentationKey(day: today, active: scenePhase == .active,
                 onToday: selectedTab == 0, available: session.privacy.canAccess && !session.isUpdatingPredictions,
                 enabled: session.privacy.dailyInsightsEnabled, ready: session.dailyInsightOutput != nil,
-                occupied: loggingDay != nil || showHistory || showDailyInsights)) {
+                occupied: loggingDay != nil || showHistory || showDailyInsights || showReminderCheckIn || followUp != nil)) {
             guard scenePhase == .active, selectedTab == 0, session.privacy.canAccess,
                   !session.isUpdatingPredictions, loggingDay == nil, !showHistory, !showDailyInsights,
+                  !showReminderCheckIn, followUp == nil,
                   !session.privacy.dailyInsightsEnabled || session.dailyInsightOutput != nil else { return }
             if session.privacy.reserveDailyInsightPresentation(on: today) { showDailyInsights = true }
         }
     }
 
-    /// Swiping the question away counts as "Not now" unless it was already answered or skipped.
+    /// Swiping the question away without answering counts as "Not now".
     /// Then opens the screen an answer handed off to (log a period or the daily check-in).
     private func followUpDismissed() {
-        if let prompt = presentedFollowUp, let input = session.followUpInput(),
-           FollowUpEngine.eligible(input).contains(where: { $0.subject == prompt.subject }) {
-            session.snoozeFollowUp(prompt)
-        }
+        if let prompt = presentedFollowUp, !followUpHandled { session.snoozeFollowUp(prompt) }
         presentedFollowUp = nil
+        followUpHandled = false
         switch followUpHandoff {
         case .logPeriod(let day): loggingDay = day
         case .checkIn: showReminderCheckIn = true

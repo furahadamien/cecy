@@ -56,7 +56,7 @@ struct TodayHighlightsView: View {
                 .font(.footnote).foregroundStyle(.secondary)
 
         case .activeContext(let cycleDay, let factors, let stages):
-            heading(cycleDay.map { "Cycle day \($0)" } ?? "Right now", symbol: "sun.max")
+            localizedHeading(cycleDay.map { String(localized: "Cycle day \($0)") } ?? String(localized: "Right now"), symbol: "sun.max")
             SelectionFlowLayout {
                 ForEach(stages, id: \.self) { tag($0.title, symbol: $0.symbol) }
                 ForEach(factors, id: \.self) { tag($0.title, symbol: "timeline.selection") }
@@ -87,8 +87,11 @@ struct TodayHighlightsView: View {
             .accessibilityAddTraits(.isHeader)
     }
 
-    private func heading(_ title: String, symbol: String) -> some View {
-        heading(LocalizedStringKey(title), symbol: symbol)
+    /// Already-localized text (for example with a number filled in).
+    private func localizedHeading(_ title: String, symbol: String) -> some View {
+        Label { Text(verbatim: title) } icon: { Image(systemName: symbol).foregroundStyle(palette.accent) }
+            .font(.headline)
+            .accessibilityAddTraits(.isHeader)
     }
 
     private func stat(_ value: String, label: LocalizedStringKey) -> some View {
