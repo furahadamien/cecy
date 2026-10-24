@@ -117,7 +117,7 @@ private struct LifeStageSummaryCard: View {
     }
 }
 
-private struct LifeStageEditor: View {
+struct LifeStageEditor: View {
     @Environment(\.dismiss) private var dismiss
     let session: TrackerSession
     let original: LifeStageEpisode?
@@ -408,7 +408,7 @@ private struct BiomarkerTrackingView: View {
     }
 }
 
-private struct BiomarkerEditor: View {
+struct BiomarkerEditor: View {
     @Environment(\.dismiss) private var dismiss
     let session: TrackerSession
     let original: BiomarkerEntry?
@@ -420,11 +420,11 @@ private struct BiomarkerEditor: View {
     @State private var notes: String
     @State private var error: String?
 
-    init(session: TrackerSession, entry: BiomarkerEntry?, system: MeasurementSystem) {
+    init(session: TrackerSession, entry: BiomarkerEntry?, system: MeasurementSystem, initialKind: BiomarkerKind? = nil) {
         self.session = session
         original = entry
         self.system = system
-        let kind = entry?.kind ?? .basalBodyTemperature
+        let kind = entry?.kind ?? initialKind ?? .basalBodyTemperature
         _day = State(initialValue: entry?.day ?? session.today ?? (try! LocalDay(key: 20010101)))
         _kind = State(initialValue: kind)
         _numeric = State(initialValue: entry?.numericValue.map {

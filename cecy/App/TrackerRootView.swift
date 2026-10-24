@@ -156,6 +156,39 @@ private struct TrackerTabs: View {
     @State private var showHistory = false
     @State private var showDailyInsights = false
     @State private var showReminderCheckIn = false
+    @State private var followUp: FollowUpPrompt?
+    @State private var presentedFollowUp: FollowUpPrompt?
+    @State private var followUpHandoff: FollowUpHandoff?
+    @State private var viewingToday = true
+    /// Per foreground visit: a visit that opened from a reminder/Shortcut, or already showed the
+    /// daily insights pop-up, never also shows a follow-up question.
+    @State private var openedByRoute = false
+    @State private var dailyShownThisVisit = false
+
+    private struct FollowUpPresentationKey: Equatable {
+        let day: LocalDay
+        let active: Bool
+        let onToday: Bool
+        let viewingToday: Bool
+        let available: Bool
+        let occupied: Bool
+        let dailyPending: Bool
+        let blockedThisVisit: Bool
+    }
+
+    private var dailyInsightsPending: Bool {
+        session.privacy.preferences.dailyInsightPresentationDay != today.key
+            && (!session.privacy.dailyInsightsEnabled || session.dailyInsightOutput != nil)
+    }
+
+    private var followUpKey: FollowUpPresentationKey {
+        FollowUpPresentationKey(day: today, active: scenePhase == .active, onToday: selectedTab == 0,
+                                viewingToday: viewingToday,
+                                available: session.privacy.canAccess && !session.isUpdatingPredictions && !session.isSaving,
+                                occupied: loggingDay != nil || showHistory || showDailyInsights || showReminderCheckIn || followUp != nil,
+                                dailyPending: dailyInsightsPending,
+                                blockedThisVisit: openedByRoute || dailyShownThisVisit)
+    }
 
     private struct InsightPresentationKey: Equatable {
         let day: LocalDay
@@ -171,7 +204,8 @@ private struct TrackerTabs: View {
         TabView(selection: $selectedTab) {
             NavigationStack {
                 TodayView(session: session, today: today, overview: overview,
-                          onLog: { loggingDay = $0 }, onHistory: { showHistory = true })
+                          onLog: { loggingDay = $0 }, onHistory: { showHistory = true },
+                          onViewingTodayChange: { viewingToday = $0 })
             }
             .tabItem { Label("Today", systemImage: "sun.max") }.tag(0)
             NavigationStack {
@@ -219,14 +253,35 @@ private struct TrackerTabs: View {
         .sheet(isPresented: $showReminderCheckIn) {
             DailyCheckInView(session: session, day: session.today ?? today)
         }
+        .sheet(item: $followUp, onDismiss: followUpDismissed) { prompt in
+            FollowUpSheet(session: session, prompt: prompt) { handoff in
+                followUpHandoff = handoff
+                followUp = nil
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .cecyReminderOpen)) { notification in
             guard let link = notification.object as? String else { return }
             _ = CecyLaunchRoute.consume()
+            openedByRoute = true
             if link == "cecy://check-in" { selectedTab = 0; showReminderCheckIn = true }
             else if link == "cecy://forecast" { selectedTab = 1 }
         }
         .onAppear {
-            if CecyLaunchRoute.consume() == CecyLaunchRoute.checkIn { selectedTab = 0; showReminderCheckIn = true }
+            if CecyLaunchRoute.consume() == CecyLaunchRoute.checkIn { openedByRoute = true; selectedTab = 0; showReminderCheckIn = true }
+        }
+        .onChange(of: showDailyInsights) { _, shown in if shown { dailyShownThisVisit = true } }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { openedByRoute = false; dailyShownThisVisit = false }
+        }
+        .task(id: followUpKey) {
+            let key = followUpKey
+            guard key.active, key.onToday, key.viewingToday, key.available, !key.occupied,
+                  !key.dailyPending, !key.blockedThisVisit else { return }
+            // Let Today settle first; never pop up the instant the app opens.
+            do { try await Task.sleep(for: .seconds(1)) } catch { return }
+            guard followUpKey == key, let prompt = session.nextFollowUp(), session.markFollowUpShown() else { return }
+            presentedFollowUp = prompt
+            followUp = prompt
         }
         .task(id: InsightPresentationKey(day: today, active: scenePhase == .active,
                 onToday: selectedTab == 0, available: session.privacy.canAccess && !session.isUpdatingPredictions,
@@ -237,6 +292,22 @@ private struct TrackerTabs: View {
                   !session.privacy.dailyInsightsEnabled || session.dailyInsightOutput != nil else { return }
             if session.privacy.reserveDailyInsightPresentation(on: today) { showDailyInsights = true }
         }
+    }
+
+    /// Swiping the question away counts as "Not now" unless it was already answered or skipped.
+    /// Then opens the screen an answer handed off to (log a period or the daily check-in).
+    private func followUpDismissed() {
+        if let prompt = presentedFollowUp, let input = session.followUpInput(),
+           FollowUpEngine.eligible(input).contains(where: { $0.subject == prompt.subject }) {
+            session.snoozeFollowUp(prompt)
+        }
+        presentedFollowUp = nil
+        switch followUpHandoff {
+        case .logPeriod(let day): loggingDay = day
+        case .checkIn: showReminderCheckIn = true
+        case nil: break
+        }
+        followUpHandoff = nil
     }
 }
 

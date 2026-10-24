@@ -43,7 +43,7 @@ struct TreatmentTrackingView: View {
     }
 }
 
-private struct TreatmentEditorView: View {
+struct TreatmentEditorView: View {
     @Environment(\.dismiss) private var dismiss
     let session: TrackerSession
     let original: TreatmentRecord?

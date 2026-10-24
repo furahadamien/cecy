@@ -8,15 +8,19 @@ struct TodayView: View {
     let overview: CycleOverview
     let onLog: (LocalDay) -> Void
     let onHistory: () -> Void
+    /// Lets Today's container hold the follow-up pop-up while a past or future day is selected.
+    var onViewingTodayChange: ((Bool) -> Void)? = nil
     @State private var showExplanation = false
     @State private var selection: LocalDay
 
-    init(session: TrackerSession, today: LocalDay, overview: CycleOverview, onLog: @escaping (LocalDay) -> Void, onHistory: @escaping () -> Void) {
+    init(session: TrackerSession, today: LocalDay, overview: CycleOverview, onLog: @escaping (LocalDay) -> Void,
+         onHistory: @escaping () -> Void, onViewingTodayChange: ((Bool) -> Void)? = nil) {
         self.session = session
         self.today = today
         self.overview = overview
         self.onLog = onLog
         self.onHistory = onHistory
+        self.onViewingTodayChange = onViewingTodayChange
         _selection = State(initialValue: today)
     }
 
@@ -58,6 +62,8 @@ struct TodayView: View {
                 TrackerCard { ProjectedCycleDetails(cycle: cycle, todayStyle: true) }
             }
             DailyInsightsCard(session: session)
+            // New dynamic cards live only in this slot, between insights and the forecast.
+            if selection == today { TodayHighlightsView(session: session) }
             if !session.cycleForecast.cycles.isEmpty {
                 TrackerCard { UpcomingCycleForecastView(forecast: session.cycleForecast, today: today, todayStyle: true) }
             }
@@ -74,6 +80,7 @@ struct TodayView: View {
             if let message = session.insightMessage { InlineError(message: message) }
         }
         .onChange(of: today) { old, new in if selection == old { selection = new } }
+        .onChange(of: selection == today, initial: true) { _, viewingToday in onViewingTodayChange?(viewingToday) }
         .sheet(isPresented: $showExplanation) {
             if let estimate = overview.estimate {
                 PredictionExplanation(estimate: estimate, sources: Array(overview.intervals.suffix(6)), replay: session.predictionReplay)
