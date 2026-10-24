@@ -17,11 +17,13 @@ final class TodayEngagementUITests: XCTestCase {
 
     @MainActor func testUnusualCycleQuestionSavesAFactorAndDoesNotReturn() {
         let id = UUID().uuidString
+        let launchedAt = Date()
         let app = launch(id: id)
 
-        // The question appears on its own after Today settles.
+        // The question appears on its own after Today settles, never sooner than 3 seconds after launch.
         let title = app.staticTexts["followUpTitle"]
-        XCTAssertTrue(title.waitForExistence(timeout: 10))
+        XCTAssertTrue(title.waitForExistence(timeout: 12))
+        XCTAssertGreaterThanOrEqual(Date().timeIntervalSince(launchedAt), 3)
         XCTAssertEqual(title.label, "Your last cycle was longer than usual")
         XCTAssertTrue(app.buttons["followUpNotNow"].exists)
 
@@ -50,7 +52,7 @@ final class TodayEngagementUITests: XCTestCase {
         app.terminate()
         let again = launch(id: id)
         XCTAssertTrue(again.buttons["logPeriod"].waitForExistence(timeout: 10))
-        XCTAssertFalse(again.staticTexts["followUpTitle"].waitForExistence(timeout: 4))
+        XCTAssertFalse(again.staticTexts["followUpTitle"].waitForExistence(timeout: 7))
     }
 
     @MainActor func testNotNowClosesWithoutSavingAndTheDailyLimitHolds() {
@@ -63,13 +65,13 @@ final class TodayEngagementUITests: XCTestCase {
         app.terminate()
         let again = launch(id: id)
         XCTAssertTrue(again.buttons["logPeriod"].waitForExistence(timeout: 10))
-        XCTAssertFalse(again.staticTexts["followUpTitle"].waitForExistence(timeout: 4))
+        XCTAssertFalse(again.staticTexts["followUpTitle"].waitForExistence(timeout: 7))
     }
 
     @MainActor func testDynamicCardsSitBetweenInsightsAndForecast() {
         let app = launch(followUps: false)
         XCTAssertTrue(app.buttons["logPeriod"].waitForExistence(timeout: 10))
-        XCTAssertFalse(app.staticTexts["followUpTitle"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["followUpTitle"].waitForExistence(timeout: 6))
 
         let highlight = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'todayHighlight.'")).firstMatch
         UIViewport.reveal(highlight, in: app)

@@ -153,6 +153,17 @@ nonisolated struct FollowUpInput: Sendable {
     var timeZone: TimeZone
 }
 
+/// How a scheduled treatment is asked about, so questions match the method.
+/// `nil` from `FollowUpEngine.doseStyle` means there's no sensible daily question (IUD, implant, barrier).
+nonisolated enum DoseStyle: Equatable, Sendable {
+    case take, changePatch, changeRing, shot, use
+}
+
+/// How "is this still current?" is asked: long-acting methods are "in place", medicines are "taken".
+nonisolated enum ReviewStyle: Equatable, Sendable {
+    case inPlace, taking, using
+}
+
 /// Main-actor because prompts use the app's localized date formatting (`DayText`).
 @MainActor enum FollowUpEngine {
     static let weeklyLimit = 3
@@ -221,13 +232,17 @@ nonisolated struct FollowUpInput: Sendable {
               !input.snapshot.dailyBleeding.contains(where: { $0.day == today }),
               !input.snapshot.resolvedPeriods.contains(where: { $0.contains(today) }) else { return nil }
         if input.forecast.currentBleeding?.contains(today) == true {
-            return FollowUpPrompt(kind: .periodToday, subject: "periodToday:\(today.key)",
-                title: String(localized: "Is your period still going?"),
-                message: String(localized: "Your latest period is still open, and today isn't logged yet."),
-                explainer: String(localized: "A quick answer keeps your calendar accurate. Days you don't answer stay unknown."),
-                reason: String(localized: "Your recorded period has no end date, and Cecy estimates it may still be going today."),
-                context: .periodContinuing(day: today))
+        return FollowUpPrompt(kind: .periodToday, subject: "periodToday:\(today.key)",
+            title: String(localized: "Is your period still going?"),
+            message: String(localized: "Your latest period is still open, and today isn't logged yet."),
+            explainer: String(localized: "A quick answer keeps your calendar accurate. Days you don't answer stay unknown."),
+            reason: String(localized: "Your recorded period has no end date, and Cecy estimates it may still be going today."),
+            context: .periodContinuing(day: today))
         }
+        // After birth or while feeding, bleeding often isn't a period; don't suggest one from an estimate.
+        guard !input.snapshot.p2.lifeStages.contains(where: {
+            [.postpartum, .breastfeeding].contains($0.kind) && $0.overlaps(start: today, end: today)
+        }) else { return nil }
         return FollowUpPrompt(kind: .periodToday, subject: "periodToday:\(today.key)",
             title: String(localized: "Has your period started?"),
             message: String(localized: "Today falls within your estimated period days."),
@@ -328,17 +343,61 @@ nonisolated struct FollowUpInput: Sendable {
         return treatment.start.days(until: day) % interval == 0
     }
 
+    /// The question style for a scheduled treatment, or `nil` when a dose question wouldn't make sense.
+    static func doseStyle(_ treatment: TreatmentRecord) -> DoseStyle? {
+        guard treatment.category == .contraception else { return .take }
+        switch treatment.contraceptionType {
+        case .pill: return .take
+        case .patch: return .changePatch
+        case .ring: return .changeRing
+        case .shot: return .shot
+        // Long-acting or used-when-needed methods have no "dose" to log.
+        case .implant, .hormonalIUD, .copperIUD, .barrier: return nil
+        case .other, nil: return .use
+        }
+    }
+
+    static func reviewStyle(_ treatment: TreatmentRecord) -> ReviewStyle {
+        switch treatment.contraceptionType {
+        case .implant, .hormonalIUD, .copperIUD: .inPlace
+        default: treatment.category == .contraception ? .using : .taking
+        }
+    }
+
+    /// Long-acting methods last years, so they're checked yearly rather than every 90 days.
+    static func reviewInterval(for treatment: TreatmentRecord) -> Int {
+        reviewStyle(treatment) == .inPlace ? 365 : 90
+    }
+
+    static func isPregnant(_ input: FollowUpInput) -> Bool {
+        input.snapshot.cycleFactors.contains { $0.kind == .pregnancy && ($0.end.map { $0 >= input.today } ?? true) }
+    }
+
     static func treatmentDoses(_ input: FollowUpInput) -> [FollowUpPrompt] {
-        input.snapshot.treatments.compactMap { treatment in
-            guard treatment.reminderEnabled, isDue(treatment, on: input.today),
+        let pregnant = isPregnant(input)
+        return input.snapshot.treatments.compactMap { treatment in
+            guard treatment.reminderEnabled, let style = doseStyle(treatment), isDue(treatment, on: input.today),
                   input.minuteOfDay >= treatment.reminderHour * 60 + treatment.reminderMinute,
+                  // Contraception questions make no sense during a recorded pregnancy.
+                  !(pregnant && treatment.category == .contraception),
                   !input.snapshot.treatmentAdherence.contains(where: { $0.treatmentID == treatment.id && $0.day == input.today })
             else { return nil }
+            let title: String = switch style {
+            case .take: String(localized: "Did you take \(treatment.name) today?")
+            case .changePatch: String(localized: "Did you change your patch today?")
+            case .changeRing: String(localized: "Did you change your ring today?")
+            case .shot: String(localized: "Did you get your shot?")
+            case .use: String(localized: "Did you use \(treatment.name) today?")
+            }
+            let message: String = switch style {
+            case .take, .use: String(localized: "Its reminder time has passed and today isn't logged yet.")
+            case .changePatch, .changeRing: String(localized: "Today is a scheduled change day for \(treatment.name).")
+            case .shot: String(localized: "Your shot (\(treatment.name)) was scheduled for today.")
+            }
             return FollowUpPrompt(kind: .treatmentDose, subject: "treatmentDose:\(treatment.id.uuidString):\(input.today.key)",
-                title: String(localized: "Did you take \(treatment.name) today?"),
-                message: String(localized: "Its reminder time has passed and today isn't logged yet."),
+                title: title, message: message,
                 explainer: String(localized: "Saved only on this device. Days you don't log stay unknown; Cecy never assumes a missed dose."),
-                reason: String(localized: "You turned on reminders for \(treatment.name)."),
+                reason: String(localized: "You turned on reminders for \(treatment.name), and it's scheduled \(treatment.cadence.title.lowercased())."),
                 context: .treatmentDose(treatment, day: input.today))
         }
     }
@@ -348,13 +407,22 @@ nonisolated struct FollowUpInput: Sendable {
             guard treatment.end == nil, treatment.start <= input.today,
                   treatment.category == .contraception || treatment.cadence != .asNeeded else { return nil }
             let subject = "treatmentReview:\(treatment.id.uuidString)"
+            let interval = reviewInterval(for: treatment)
             let since = reviewBase(treatment.start, updatedAt: treatment.updatedAt, subject: subject, input: input)
-            guard since.days(until: input.today) >= 90 else { return nil }
-            return FollowUpPrompt(kind: .treatmentReview, subject: subject,
-                title: String(localized: "Still using \(treatment.name)?"),
+            guard since.days(until: input.today) >= interval else { return nil }
+            let title: String = switch reviewStyle(treatment) {
+            case .inPlace:
+                treatment.contraceptionType == .implant ? String(localized: "Is your implant still in place?")
+                                                         : String(localized: "Is your IUD still in place?")
+            case .taking: String(localized: "Still taking \(treatment.name)?")
+            case .using: String(localized: "Still using \(treatment.name)?")
+            }
+            return FollowUpPrompt(kind: .treatmentReview, subject: subject, title: title,
                 message: String(localized: "It's been a while since this record was reviewed."),
                 explainer: String(localized: "Keeping this current keeps your history and appointment reports accurate. Cecy doesn't give medication advice."),
-                reason: String(localized: "\(treatment.name) has no end date and hasn't been updated in over 90 days."),
+                reason: interval >= 365
+                    ? String(localized: "\(treatment.name) has no end date and hasn't been updated in over a year.")
+                    : String(localized: "\(treatment.name) has no end date and hasn't been updated in over 90 days."),
                 context: .treatmentReview(treatment))
         }
     }
@@ -380,16 +448,29 @@ nonisolated struct FollowUpInput: Sendable {
     }
 
     static func biomarkers(_ input: FollowUpInput) -> [FollowUpPrompt] {
-        guard let start = try? input.today.adding(days: -14) else { return [] }
+        guard let start = try? input.today.adding(days: -14),
+              let recentRun = try? input.today.adding(days: -2) else { return [] }
         return [BiomarkerKind.basalBodyTemperature, .lhTest, .cervicalMucus].compactMap { kind in
             let entries = input.snapshot.p2.biomarkers.filter { $0.kind == kind }
             let recentDays = Set(entries.filter { $0.day >= start && $0.day < input.today }.map(\.day))
             guard recentDays.count >= 3, !entries.contains(where: { $0.day == input.today }) else { return nil }
+            // LH tests are taken for a few days at a time, so only ask while a run of tests is ongoing.
+            if kind == .lhTest, !recentDays.contains(where: { $0 >= recentRun }) { return nil }
+            let title: String = switch kind {
+            case .basalBodyTemperature: String(localized: "Add today's temperature?")
+            case .lhTest: String(localized: "Did you take an LH test today?")
+            default: String(localized: "Add today's cervical mucus observation?")
+            }
+            let noun: String = switch kind {
+            case .basalBodyTemperature: String(localized: "your basal body temperature")
+            case .lhTest: String(localized: "LH test results")
+            default: String(localized: "cervical mucus")
+            }
             return FollowUpPrompt(kind: .biomarker, subject: "biomarker:\(kind.rawValue):\(input.today.key)",
-                title: String(localized: "Add today's \(kind.title.lowercased())?"),
-                message: String(localized: "You've recorded this on \(recentDays.count) of the last 14 days."),
+                title: title,
+                message: String(localized: "You've recorded \(noun) on \(recentDays.count) of the last 14 days."),
                 explainer: String(localized: "Readings are saved as records only. They never change your estimate."),
-                reason: String(localized: "You've been recording \(kind.title.lowercased()) regularly."),
+                reason: String(localized: "You've been recording \(noun) regularly, and today isn't logged yet."),
                 context: .biomarker(kind))
         }
     }

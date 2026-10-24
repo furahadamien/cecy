@@ -282,8 +282,8 @@ private struct TrackerTabs: View {
             let key = followUpKey
             guard key.active, key.onToday, key.viewingToday, key.available, !key.occupied,
                   !key.dailyPending, !key.blockedThisVisit else { return }
-            // Let Today settle first; never pop up the instant the app opens.
-            do { try await Task.sleep(for: .seconds(1)) } catch { return }
+            // Let Today settle and give the user a moment first; never pop up the instant the app opens.
+            do { try await Task.sleep(for: .seconds(3)) } catch { return }
             guard followUpKey == key, let prompt = session.nextFollowUp(), session.markFollowUpShown() else { return }
             presentedFollowUp = prompt
             followUp = prompt

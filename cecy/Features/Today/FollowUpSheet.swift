@@ -52,17 +52,48 @@ struct FollowUpSheet: View {
     private var today: LocalDay { session.today ?? endDay }
     private var palette: TrackerPalette { TrackerPalette(scheme: colorScheme) }
 
+    /// Each question type has its own color so the pop-up feels distinct but stays readable.
+    private var tint: Color {
+        switch prompt.kind {
+        case .periodToday, .windowPassed: palette.recorded
+        case .unusualCycle, .newCycle, .openFactor: .orange
+        case .treatmentDose, .treatmentReview: .indigo
+        case .lifeStageReview: .teal
+        case .biomarker: .blue
+        }
+    }
+
+    private var symbol: String {
+        switch prompt.kind {
+        case .periodToday: "drop.fill"
+        case .windowPassed: "calendar.badge.clock"
+        case .unusualCycle: "arrow.left.and.right.circle.fill"
+        case .newCycle: "sparkles"
+        case .openFactor: "hourglass"
+        case .treatmentDose: "pills.fill"
+        case .treatmentReview: "cross.case.fill"
+        case .lifeStageReview: "leaf.fill"
+        case .biomarker: "thermometer.medium"
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     header
                     if let saved {
-                        Label(saved, systemImage: "checkmark.circle.fill")
-                            .font(.headline).foregroundStyle(palette.accent)
-                            .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-                            .background(palette.sage, in: RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous))
-                            .accessibilityIdentifier("followUpSaved")
+                        HStack(spacing: 12) {
+                            Image(systemName: "checkmark.circle.fill").font(.title2).foregroundStyle(.white)
+                                .frame(width: 44, height: 44).background(palette.action, in: Circle())
+                                .accessibilityHidden(true)
+                            Text(saved).font(.headline).fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(palette.sage, in: RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous))
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("followUpSaved")
+                        .transition(.scale(scale: 0.95).combined(with: .opacity))
                     } else {
                         answers
                         if let error { InlineError(message: error) }
@@ -70,8 +101,15 @@ struct FollowUpSheet: View {
                         footer
                     }
                 }
-                .padding(20)
+                .padding(.horizontal, 20).padding(.bottom, 20)
+                .animation(.snappy, value: saved)
             }
+            .background(alignment: .top) {
+                LinearGradient(colors: [tint.opacity(colorScheme == .dark ? 0.30 : 0.18), tint.opacity(0)],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(height: 260).ignoresSafeArea().accessibilityHidden(true)
+            }
+            .background(palette.background)
             .disabled(saving)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -108,23 +146,36 @@ struct FollowUpSheet: View {
     // MARK: Layout
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Quick question", systemImage: "sparkles")
-                .font(.caption.weight(.semibold)).foregroundStyle(palette.accent)
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: symbol)
+                .font(.title2.weight(.semibold)).foregroundStyle(.white)
+                .frame(width: 52, height: 52)
+                .background(LinearGradient(colors: [tint, tint.opacity(0.75)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                            in: Circle())
+                .shadow(color: tint.opacity(0.35), radius: 8, y: 4)
                 .accessibilityHidden(true)
-            Text(prompt.title)
-                .font(.system(.title3, design: .rounded, weight: .bold))
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("followUpTitle")
-            Text(prompt.message).font(.subheadline).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Quick question")
+                    .font(.caption.weight(.bold)).textCase(.uppercase).tracking(0.6)
+                    .foregroundStyle(tint)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(tint.opacity(0.14), in: Capsule())
+                    .accessibilityHidden(true)
+                Text(prompt.title)
+                    .font(.system(.title3, design: .rounded, weight: .bold))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier("followUpTitle")
+                Text(prompt.message).font(.subheadline).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+        .padding(.top, 4)
     }
 
     private var explainer: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label { Text(prompt.explainer) } icon: { Image(systemName: "info.circle").foregroundStyle(palette.accent) }
+            Label { Text(prompt.explainer) } icon: { Image(systemName: "lightbulb.fill").foregroundStyle(tint) }
                 .font(.footnote)
                 .fixedSize(horizontal: false, vertical: true)
             DisclosureGroup("Why am I seeing this?") {
@@ -132,10 +183,12 @@ struct FollowUpSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 4)
             }
             .font(.footnote.weight(.semibold))
+            .tint(tint)
             .accessibilityIdentifier("followUpWhy")
         }
         .padding(14)
-        .background(palette.background, in: RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous))
+        .background(tint.opacity(colorScheme == .dark ? 0.16 : 0.08),
+                    in: RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous))
     }
 
     private var footer: some View {
@@ -187,19 +240,18 @@ struct FollowUpSheet: View {
                           } },
                           other: { CycleFactor(kind: .stress, start: start) })
         case .openFactor(let factor):
-            endChoices(stillLabel: "Still going", start: factor.start) {
+            endChoices(stillLabel: "Still going", endLabel: "It ended", start: factor.start) {
                 var value = factor
                 value.end = endDay
                 return await session.withPredictionUpdate { session.saveCycleFactor(value) }
             } more: { EmptyView() }
         case .treatmentDose(let treatment, let day):
-            answerStack {
-                answer("Taken", symbol: "checkmark.circle", id: "taken") { saveDose(treatment, day: day, state: .taken) }
-                answer("Taken late", symbol: "clock", id: "late") { saveDose(treatment, day: day, state: .late) }
-                answer("Skipped", symbol: "forward", id: "skipped") { saveDose(treatment, day: day, state: .skipped) }
-            }
+            answerStack { doseAnswers(treatment, day: day) }
         case .treatmentReview(let treatment):
-            endChoices(stillLabel: "Yes, still using it", start: treatment.start) {
+            let style = FollowUpEngine.reviewStyle(treatment)
+            endChoices(stillLabel: style == .inPlace ? "Yes, still in place" : style == .taking ? "Yes, still taking it" : "Yes, still using it",
+                       endLabel: style == .inPlace ? "It was removed" : "I stopped",
+                       start: treatment.start) {
                 var value = treatment
                 value.end = endDay
                 return await session.withPredictionUpdate { session.saveTreatment(value) }
@@ -207,7 +259,7 @@ struct FollowUpSheet: View {
                 answer("Something changed…", symbol: "pencil", id: "edit") { openEditor(.treatment(treatment)) }
             }
         case .lifeStage(let episode):
-            endChoices(stillLabel: "Yes", start: episode.start) {
+            endChoices(stillLabel: "Yes", endLabel: "It ended", start: episode.start) {
                 await session.withPredictionUpdate { session.endLifeStage(episode, on: endDay) }
             } more: {
                 answer("Edit details…", symbol: "pencil", id: "edit") { openEditor(.lifeStage(episode)) }
@@ -227,20 +279,23 @@ struct FollowUpSheet: View {
     private func answer(_ title: LocalizedStringKey, symbol: String, id: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                Image(systemName: symbol).foregroundStyle(palette.accent).frame(width: 24).accessibilityHidden(true)
+                Image(systemName: symbol).font(.body.weight(.semibold)).foregroundStyle(tint)
+                    .frame(width: 34, height: 34).background(tint.opacity(0.14), in: Circle())
+                    .accessibilityHidden(true)
                 Text(title).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(tint.opacity(0.6))
                     .accessibilityHidden(true)
             }
             .font(.body.weight(.medium))
-            .padding(.horizontal, 16).padding(.vertical, 12)
-            .frame(maxWidth: .infinity, minHeight: TrackerLayout.minimumTarget, alignment: .leading)
-            .background(palette.background, in: RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous))
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .frame(maxWidth: .infinity, minHeight: TrackerLayout.minimumTarget + 6, alignment: .leading)
+            .background(palette.surface, in: RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous)
-                    .strokeBorder(.secondary.opacity(0.3), lineWidth: 1)
+                    .strokeBorder(tint.opacity(0.28), lineWidth: 1)
             }
+            .shadow(color: tint.opacity(colorScheme == .dark ? 0 : 0.08), radius: 6, y: 2)
             .contentShape(RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -291,8 +346,30 @@ struct FollowUpSheet: View {
         }
     }
 
-    /// "Still going" confirms and waits before asking again; "It ended" asks for the end date.
-    private func endChoices<More: View>(stillLabel: LocalizedStringKey, start: LocalDay,
+    /// Answers worded for the method: you take a pill, change a patch or ring, get a shot.
+    @ViewBuilder private func doseAnswers(_ treatment: TreatmentRecord, day: LocalDay) -> some View {
+        switch FollowUpEngine.doseStyle(treatment) ?? .take {
+        case .take:
+            answer("Taken", symbol: "checkmark.circle", id: "taken") { saveDose(treatment, day: day, state: .taken) }
+            answer("Taken late", symbol: "clock", id: "late") { saveDose(treatment, day: day, state: .late) }
+            answer("Skipped", symbol: "forward", id: "skipped") { saveDose(treatment, day: day, state: .skipped) }
+        case .changePatch, .changeRing:
+            answer("Yes, changed it", symbol: "checkmark.circle", id: "taken") { saveDose(treatment, day: day, state: .taken) }
+            answer("Changed it late", symbol: "clock", id: "late") { saveDose(treatment, day: day, state: .late) }
+            answer("Not this time", symbol: "forward", id: "skipped") { saveDose(treatment, day: day, state: .skipped) }
+        case .shot:
+            answer("Yes, I got it", symbol: "checkmark.circle", id: "taken") { saveDose(treatment, day: day, state: .taken) }
+            // Leaves today unknown instead of recording a skip; Cecy never assumes a missed dose.
+            answer("Not yet", symbol: "clock", id: "notYet") { skip() }
+        case .use:
+            answer("Yes", symbol: "checkmark.circle", id: "taken") { saveDose(treatment, day: day, state: .taken) }
+            answer("Yes, but late", symbol: "clock", id: "late") { saveDose(treatment, day: day, state: .late) }
+            answer("Skipped", symbol: "forward", id: "skipped") { saveDose(treatment, day: day, state: .skipped) }
+        }
+    }
+
+    /// "Still going" confirms and waits before asking again; the end answer asks for the date.
+    private func endChoices<More: View>(stillLabel: LocalizedStringKey, endLabel: LocalizedStringKey, start: LocalDay,
                                         save: @escaping () async -> String?, @ViewBuilder more: () -> More) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             answer(stillLabel, symbol: "arrow.clockwise", id: "still") {
@@ -311,9 +388,10 @@ struct FollowUpSheet: View {
                     .accessibilityIdentifier("followUpSave")
                 }
                 .padding(14)
-                .background(palette.background, in: RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous))
+                .background(tint.opacity(colorScheme == .dark ? 0.16 : 0.08),
+                            in: RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous))
             } else {
-                answer("It ended", symbol: "flag.checkered", id: "ended") { showingEndDate = true }
+                answer(endLabel, symbol: "flag.checkered", id: "ended") { showingEndDate = true }
             }
             more()
         }

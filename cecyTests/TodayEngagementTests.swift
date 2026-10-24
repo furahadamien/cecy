@@ -161,6 +161,92 @@ import Testing
         #expect(!kinds(input(snapshot, today: today)).contains(.biomarker))
     }
 
+    // MARK: Questions make sense for the record
+
+    private func contraception(_ method: ContraceptionType, cadence: TreatmentCadence = .daily) -> TreatmentRecord {
+        TreatmentRecord(category: .contraception, name: "Synthetic \(method.rawValue)", contraceptionType: method,
+                        start: day(20261001), cadence: cadence, reminderEnabled: true, reminderHour: 9, createdAt: longAgo)
+    }
+
+    private func dosePrompt(_ treatment: TreatmentRecord, today: LocalDay = try! LocalDay(key: 20261008)) -> FollowUpPrompt? {
+        var snapshot = TrackerSnapshot(onboardingCompletedAt: longAgo)
+        snapshot.treatments = [treatment]
+        return FollowUpEngine.eligible(input(snapshot, today: today, minute: 10 * 60)).first { $0.kind == .treatmentDose }
+    }
+
+    @Test func longActingAndBarrierMethodsAreNeverAskedAsADailyDose() {
+        for method in [ContraceptionType.hormonalIUD, .copperIUD, .implant, .barrier] {
+            #expect(dosePrompt(contraception(method)) == nil, "\(method)")
+        }
+    }
+
+    @Test func doseQuestionsAreWordedForTheMethod() throws {
+        #expect(try #require(dosePrompt(contraception(.pill))).title == "Did you take Synthetic pill today?")
+        #expect(try #require(dosePrompt(contraception(.patch, cadence: .weekly))).title == "Did you change your patch today?")
+        #expect(try #require(dosePrompt(contraception(.ring, cadence: .weekly))).title == "Did you change your ring today?")
+        #expect(try #require(dosePrompt(contraception(.shot, cadence: .everyTwelveWeeks), today: day(20261001))).title
+                == "Did you get your shot?")
+        for prompt in [dosePrompt(contraception(.patch, cadence: .weekly)), dosePrompt(contraception(.ring, cadence: .weekly))] {
+            #expect(prompt?.title.contains("take") == false)
+        }
+        let medication = TreatmentRecord(category: .medication, name: "Synthetic med", start: day(20261001),
+                                         reminderEnabled: true, reminderHour: 9, createdAt: longAgo)
+        #expect(try #require(dosePrompt(medication)).title == "Did you take Synthetic med today?")
+    }
+
+    @Test func contraceptionDosesPauseDuringARecordedPregnancy() {
+        var snapshot = TrackerSnapshot(onboardingCompletedAt: longAgo)
+        let medication = TreatmentRecord(category: .medication, name: "Synthetic med", start: day(20261001),
+                                         reminderEnabled: true, reminderHour: 9, createdAt: longAgo)
+        snapshot.treatments = [contraception(.pill), medication]
+        snapshot.cycleFactors = [CycleFactor(kind: .pregnancy, start: day(20261005), createdAt: longAgo)]
+        let asked = FollowUpEngine.eligible(input(snapshot, today: day(20261010), minute: 10 * 60))
+        #expect(asked.count == 1)
+        #expect(asked.first?.title == "Did you take Synthetic med today?")
+    }
+
+    @Test func longActingMethodsAreReviewedYearlyAndAskedIfStillInPlace() throws {
+        var snapshot = TrackerSnapshot(onboardingCompletedAt: longAgo)
+        var iud = contraception(.hormonalIUD)
+        iud.start = day(20250601)
+        iud.updatedAt = ISO8601DateFormatter().date(from: "2025-06-01T12:00:00Z")!
+        snapshot.treatments = [iud]
+        #expect(!kinds(input(snapshot, today: day(20251010))).contains(.treatmentReview), "Not every 90 days.")
+        let prompt = try #require(FollowUpEngine.eligible(input(snapshot, today: day(20260610))).first { $0.kind == .treatmentReview })
+        #expect(prompt.title == "Is your IUD still in place?")
+        snapshot.treatments[0].contraceptionType = .implant
+        #expect(FollowUpEngine.eligible(input(snapshot, today: day(20260610))).first?.title == "Is your implant still in place?")
+        // Medicines are "taken", not "used".
+        snapshot.treatments = [TreatmentRecord(category: .medication, name: "Synthetic med", start: day(20260101), createdAt: longAgo)]
+        #expect(FollowUpEngine.eligible(input(snapshot, today: day(20260610))).first?.title == "Still taking Synthetic med?")
+    }
+
+    @Test func periodStartIsNotSuggestedDuringPostpartumOrFeeding() throws {
+        let periods = [20260601, 20260629, 20260727, 20260824, 20260921].map { Period(start: day($0), end: try! day($0).adding(days: 4), createdAt: longAgo) }
+        var snapshot = TrackerSnapshot(periods: periods, onboardingCompletedAt: longAgo)
+        let probe = input(snapshot, today: day(20261019))
+        let estimatedDay = try #require((0...10).compactMap { try? day(20261014).adding(days: $0) }
+            .first { probe.forecast.bleeding(on: $0) != nil })
+        #expect(kinds(input(snapshot, today: estimatedDay)).contains(.periodToday))
+        snapshot.p2.lifeStages = [LifeStageEpisode(kind: .breastfeeding, start: day(20261001), createdAt: longAgo)]
+        #expect(!kinds(input(snapshot, today: estimatedDay)).contains(.periodToday))
+    }
+
+    @Test func biomarkerQuestionsReadNaturallyAndLHOnlyDuringATestingRun() throws {
+        var snapshot = TrackerSnapshot(onboardingCompletedAt: longAgo)
+        let today = day(20261020)
+        snapshot.p2.biomarkers = [20261008, 20261010, 20261012].map { BiomarkerEntry(day: day($0), kind: .lhTest, result: .negative) }
+        #expect(!kinds(input(snapshot, today: today)).contains(.biomarker), "The testing run ended a week ago.")
+        snapshot.p2.biomarkers.append(BiomarkerEntry(day: day(20261019), kind: .lhTest, result: .negative))
+        #expect(FollowUpEngine.eligible(input(snapshot, today: today)).first?.title == "Did you take an LH test today?")
+        snapshot.p2.biomarkers = [20261008, 20261010, 20261012].map {
+            BiomarkerEntry(day: day($0), kind: .basalBodyTemperature, numericValue: 36.5)
+        }
+        let prompt = try #require(FollowUpEngine.eligible(input(snapshot, today: today)).first)
+        #expect(prompt.title == "Add today's temperature?")
+        #expect(!prompt.message.contains("/"))
+    }
+
     // MARK: Limits, quiet times and memory
 
     @Test func onlyOneQuestionADayAndThreeAWeek() {

@@ -1,19 +1,32 @@
 import SwiftUI
 
 struct DailyCheckInButton: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let session: TrackerSession
     let day: LocalDay
     @State private var showing = false
 
+    private var blocked: Bool { session.isSaving || session.today.map { day > $0 } != false }
+
     var body: some View {
+        // Exactly the 44-point minimum target, so Today's phase tiles stay on the first screen.
         Button { showing = true } label: {
             Label("Daily check-in", systemImage: "checkmark.circle.fill")
-                .font(.headline)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1).minimumScaleFactor(0.85)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 8 : 0)
                 .frame(maxWidth: .infinity, minHeight: TrackerLayout.minimumTarget)
+                .background(TrackerPalette(scheme: colorScheme).action, in: Capsule())
+                .contentShape(Capsule())
+                .opacity(isEnabled && !blocked ? 1 : 0.45)
         }
-        .buttonStyle(.borderedProminent)
-        .buttonBorderShape(.roundedRectangle)
-        .disabled(session.isSaving || session.today.map { day > $0 } != false)
+        .buttonStyle(.plain)
+        .disabled(blocked)
         .accessibilityHint("Record bleeding, symptoms, mood, and energy in one place.")
         .accessibilityIdentifier("dailyCheckIn")
         .sheet(isPresented: $showing) { DailyCheckInView(session: session, day: day) }

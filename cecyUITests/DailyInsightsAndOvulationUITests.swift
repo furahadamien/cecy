@@ -164,15 +164,23 @@ final class DailyInsightsAndOvulationUITests: XCTestCase {
         let enable = app.buttons["enableAI"]
         reveal(enable, app: app); enable.tap()
         XCTAssertTrue(app.navigationBars["Optional insights"].waitForNonExistence(timeout: 5))
+        // Insight setup isn't finished in this fixture, so Wellness preferences opens next; leave it for now.
+        if app.navigationBars["Wellness preferences"].waitForExistence(timeout: 3) {
+            app.buttons["cancelWellness"].tap()
+            XCTAssertTrue(app.navigationBars["Wellness preferences"].waitForNonExistence(timeout: 5))
+        }
         let toggle = app.switches["dailyInsightsToggle"]
         reveal(toggle, app: app)
-        XCTAssertEqual(toggle.value as? String, "0")
-        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
-        XCTAssertTrue(app.alerts.firstMatch.waitForExistence(timeout: 5))
-        app.alerts.buttons["enableDailyInsights"].firstMatch.tap()
+        // Enabling optional insights also turns on daily preparation; no second confirmation.
+        XCTAssertEqual(toggle.value as? String, "1")
+        XCTAssertFalse(app.alerts.firstMatch.exists)
         app.tabBars.buttons["Insights"].tap()
         app.navigationBars.buttons.firstMatch.tap() // Return from Ask to the root Insights page.
-        for _ in 0..<6 { app.swipeDown() }
-        XCTAssertTrue(app.staticTexts["Synthetic answer from selected facts"].waitForExistence(timeout: 10), app.debugDescription)
+        for _ in 0..<3 { app.swipeDown() }
+        // Daily preparation is on, but this fixture hasn't finished insight setup, so nothing is sent yet.
+        let paused = app.otherElements["forTodayCard"].staticTexts["dailyInsightsNeedsSetup"]
+        reveal(paused, app: app)
+        XCTAssertEqual(paused.label, "Preparation paused · Finish setup")
+        XCTAssertFalse(app.otherElements["aiOutput"].exists)
     }
 }
