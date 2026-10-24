@@ -60,6 +60,11 @@ struct TrackerSettingsView: View {
                     SettingsRow(title: "Reminders", systemImage: "bell", detail: reminderSummary)
                 }
                 .accessibilityIdentifier("reminderSettings")
+                NavigationLink { FollowUpSettingsView(session: session) } label: {
+                    SettingsRow(title: "Check-in questions", systemImage: "questionmark.bubble",
+                                detail: session.privacy.followUpsEnabled ? "On · Up to 3 a week" : "Off")
+                }
+                .accessibilityIdentifier("followUpSettings")
                 NavigationLink { HealthImportSettingsView(session: session) } label: {
                     SettingsRow(title: "Apple Health", systemImage: "heart.text.clipboard",
                                 detail: "Optional · Review and import")

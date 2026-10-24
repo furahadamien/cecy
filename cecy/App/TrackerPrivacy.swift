@@ -229,6 +229,41 @@ struct PreparedExport: Identifiable {
 
     func clearDailyInsight() { try? dailyInsightStore.clear() }
 
+    // MARK: Today follow-up questions
+
+    var followUpsEnabled: Bool { preferences.followUpsEnabled ?? true }
+    var followUpMemory: FollowUpMemory { preferences.followUpMemory ?? FollowUpMemory() }
+
+    /// Applies one change to the question memory and saves it. Returns false if it couldn't be saved.
+    @discardableResult
+    func updateFollowUps(today: LocalDay, _ change: (inout FollowUpMemory) -> Void) -> Bool {
+        guard canAccess else { return false }
+        var memory = followUpMemory
+        change(&memory)
+        memory.prune(today: today)
+        var candidate = preferences
+        candidate.followUpMemory = memory
+        do { try storage.save(candidate); preferences = candidate; return true } catch { return false }
+    }
+
+    func setFollowUpsEnabled(_ enabled: Bool) -> String? {
+        guard canAccess else { return "Unlock Cecy to change follow-up questions." }
+        var candidate = preferences
+        candidate.followUpsEnabled = enabled
+        do { try storage.save(candidate); preferences = candidate; return nil }
+        catch { return "This setting couldn’t be saved. Your previous choice is unchanged." }
+    }
+
+    /// Remembers the latest estimate center and, when it moved, why. Best effort: a failed save only hides the card.
+    func recordEstimate(centerKey: Int?, shift: EstimateShift?) {
+        guard canAccess else { return }
+        var candidate = preferences
+        if let centerKey { candidate.estimateCenterKey = centerKey }
+        if let shift { candidate.estimateShift = shift }
+        guard candidate != preferences else { return }
+        do { try storage.save(candidate); preferences = candidate } catch {}
+    }
+
     func trackingChanged(prediction: CyclePrediction?, now: Date, timeZone: TimeZone,
                          periods: [Period] = [], treatments: [TreatmentRecord] = []) {
         self.prediction = prediction
@@ -377,6 +412,10 @@ struct PreparedExport: Identifiable {
         candidate.missedLogReminder = nil
         candidate.remindersSnoozedUntilDay = nil
         candidate.reminderDetailsByKind = nil
+        candidate.followUpsEnabled = nil
+        candidate.followUpMemory = nil
+        candidate.estimateCenterKey = nil
+        candidate.estimateShift = nil
         candidate.reminderHour = 20
         candidate.reminderMinute = 0
         try storage.save(candidate)
@@ -416,6 +455,10 @@ struct PreparedExport: Identifiable {
         // Unrelated UI suites model an already-dismissed daily prompt. Dedicated popup tests opt in.
         if ProcessInfo.processInfo.environment["CECY_UI_DAILY_POPUP"] != "1", let day = try? LocalDay(key: 20260929) {
             _ = privacy.reserveDailyInsightPresentation(on: day)
+        }
+        // Unrelated UI suites must not be interrupted by follow-up questions. Dedicated tests opt in.
+        if ProcessInfo.processInfo.environment["CECY_UI_FOLLOW_UPS"] != "1", privacy.canAccess {
+            _ = privacy.setFollowUpsEnabled(false)
         }
         return privacy
     }

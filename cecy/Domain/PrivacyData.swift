@@ -31,9 +31,18 @@ nonisolated struct PrivacyPreferences: Codable, Equatable, Sendable {
     var missedLogReminder: Bool?
     var remindersSnoozedUntilDay: Int?
     var reminderDetailsByKind: [String: Bool]?
+    // Today follow-up questions. Nil means on. Local-only; never exported.
+    var followUpsEnabled: Bool?
+    var followUpMemory: FollowUpMemory?
+    // The last estimate center seen, so Today can explain when the estimate moves.
+    var estimateCenterKey: Int?
+    var estimateShift: EstimateShift?
 
     func validate() throws {
         guard version == 1, (0...23).contains(reminderHour), (0...59).contains(reminderMinute) else { throw TrackingError.invalidData }
+        if let followUpMemory { try followUpMemory.validate() }
+        if let estimateCenterKey { _ = try LocalDay(key: estimateCenterKey) }
+        if let estimateShift { try estimateShift.validate() }
         if let dailyInsightAttemptDay { _ = try LocalDay(key: dailyInsightAttemptDay) }
         if let dailyInsightPresentationDay { _ = try LocalDay(key: dailyInsightPresentationDay) }
         if let checkInPreferences {

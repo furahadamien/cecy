@@ -8,15 +8,20 @@ struct TodayView: View {
     let overview: CycleOverview
     let onLog: (LocalDay) -> Void
     let onHistory: () -> Void
+    /// Lets Today's container hold the follow-up pop-up while a past or future day is selected.
+    var onViewingTodayChange: ((Bool) -> Void)? = nil
     @State private var showExplanation = false
+    @State private var showPersonalization = false
     @State private var selection: LocalDay
 
-    init(session: TrackerSession, today: LocalDay, overview: CycleOverview, onLog: @escaping (LocalDay) -> Void, onHistory: @escaping () -> Void) {
+    init(session: TrackerSession, today: LocalDay, overview: CycleOverview, onLog: @escaping (LocalDay) -> Void,
+         onHistory: @escaping () -> Void, onViewingTodayChange: ((Bool) -> Void)? = nil) {
         self.session = session
         self.today = today
         self.overview = overview
         self.onLog = onLog
         self.onHistory = onHistory
+        self.onViewingTodayChange = onViewingTodayChange
         _selection = State(initialValue: today)
     }
 
@@ -27,19 +32,13 @@ struct TodayView: View {
             ActivityCalendarStrip(today: today, activityIndex: session.activityIndex,
                                   forecast: session.cycleForecast, selection: $selection, compact: true)
             hero
-            DailyCheckInButton(session: session, day: selection)
-                .disabled(selection > today)
-            if needsPersonalization {
-                TrackerCard {
-                    Label("Make Cecy yours", systemImage: "slider.horizontal.3")
-                        .font(.headline)
-                    Text("Optional answers can put common symptoms first and tailor your experience. Add them whenever you’re ready.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                    NavigationLink("Personalize profile") { ProfileSettingsView(session: session) }
-                    NavigationLink("Choose reminders") { ReminderSettingsView(privacy: session.privacy) }
-                    NavigationLink("Review Apple Health import") { HealthImportSettingsView(session: session) }
+            // Check-in and "Make Cecy yours" share one 44-point row so the phase tiles stay on the first screen.
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(spacing: 8) { checkInRow }
+                } else {
+                    HStack(spacing: 8) { checkInRow }
                 }
-                .accessibilityIdentifier("postOnboardingPersonalization")
             }
             Group {
                 if dynamicTypeSize.isAccessibilitySize {
@@ -58,6 +57,8 @@ struct TodayView: View {
                 TrackerCard { ProjectedCycleDetails(cycle: cycle, todayStyle: true) }
             }
             DailyInsightsCard(session: session)
+            // New dynamic cards live only in this slot, between insights and the forecast.
+            if selection == today { TodayHighlightsView(session: session) }
             if !session.cycleForecast.cycles.isEmpty {
                 TrackerCard { UpcomingCycleForecastView(forecast: session.cycleForecast, today: today, todayStyle: true) }
             }
@@ -74,6 +75,7 @@ struct TodayView: View {
             if let message = session.insightMessage { InlineError(message: message) }
         }
         .onChange(of: today) { old, new in if selection == old { selection = new } }
+        .onChange(of: selection == today, initial: true) { _, viewingToday in onViewingTodayChange?(viewingToday) }
         .sheet(isPresented: $showExplanation) {
             if let estimate = overview.estimate {
                 PredictionExplanation(estimate: estimate, sources: Array(overview.intervals.suffix(6)), replay: session.predictionReplay)
@@ -85,6 +87,31 @@ struct TodayView: View {
         guard let profile = session.snapshot.profile else { return false }
         return profile.commonSymptoms.isEmpty && profile.cycleContext.isEmpty && profile.goals.isEmpty
             && profile.heightCentimeters == nil && profile.weightKilograms == nil
+    }
+
+    @ViewBuilder private var checkInRow: some View {
+        DailyCheckInButton(session: session, day: selection)
+            .disabled(selection > today)
+        if needsPersonalization {
+            let palette = TrackerPalette(scheme: colorScheme)
+            Button { showPersonalization = true } label: {
+                Label("Make Cecy yours", systemImage: "slider.horizontal.3")
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1).minimumScaleFactor(0.85)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(palette.accent)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 8 : 0)
+                    .frame(maxWidth: .infinity, minHeight: TrackerLayout.minimumTarget)
+                    .background(palette.sage, in: Capsule())
+                    .overlay { Capsule().strokeBorder(palette.accent.opacity(0.25), lineWidth: 1) }
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Optional: personalize your profile, reminders and Apple Health import.")
+            .accessibilityIdentifier("postOnboardingPersonalization")
+            .sheet(isPresented: $showPersonalization) { PersonalizationSheet(session: session) }
+        }
     }
 
     private var hero: some View {
@@ -172,6 +199,38 @@ struct TodayView: View {
         DailyBleedingLogButton(session: session, day: selection)
     }
 
+}
+
+/// "Make Cecy yours": the same optional links that used to sit in a card on Today.
+private struct PersonalizationSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let session: TrackerSession
+
+    var body: some View {
+        NavigationStack {
+            SettingsForm(title: "Make Cecy yours") {
+                Section {
+                    Text("Optional answers can put common symptoms first and tailor your experience. Add them whenever you’re ready.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                Section {
+                    NavigationLink { ProfileSettingsView(session: session) } label: {
+                        Label("Personalize profile", systemImage: "person.crop.circle")
+                    }
+                    NavigationLink { ReminderSettingsView(privacy: session.privacy) } label: {
+                        Label("Choose reminders", systemImage: "bell")
+                    }
+                    NavigationLink { HealthImportSettingsView(session: session) } label: {
+                        Label("Review Apple Health import", systemImage: "heart.text.square")
+                    }
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
+        .accessibilityIdentifier("personalizationSheet")
+    }
 }
 
 /// Propose each column's actual width rather than testing unwrapped text widths.

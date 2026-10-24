@@ -74,7 +74,7 @@ struct CycleFactorsView: View {
     }
 }
 
-private struct CycleFactorEditorView: View {
+struct CycleFactorEditorView: View {
     @Environment(\.dismiss) private var dismiss
     let session: TrackerSession
     let original: CycleFactor?
@@ -84,11 +84,12 @@ private struct CycleFactorEditorView: View {
     @State private var error: String?
     @State private var confirmDelete = false
 
-    init(session: TrackerSession, factor: CycleFactor?) {
+    /// `draft` pre-fills a new, unsaved factor (for example from a Today follow-up question).
+    init(session: TrackerSession, factor: CycleFactor?, draft: CycleFactor? = nil) {
         self.session = session
         original = factor
         let day = session.today ?? (try! LocalDay(key: 20010101))
-        let initial = factor ?? CycleFactor(kind: .stress, start: day)
+        let initial = factor ?? draft ?? CycleFactor(kind: .stress, start: day)
         _value = State(initialValue: initial)
         _hasEnd = State(initialValue: initial.end != nil)
         _notes = State(initialValue: initial.notes ?? "")

@@ -192,12 +192,24 @@ final class TodayQuickActionsUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Optional insights"].waitForNonExistence(timeout: 5))
         let toggle = app.switches["dailyInsightsToggle"]
         UIViewport.reveal(toggle, in: app)
-        XCTAssertEqual(toggle.value as? String, "0")
-        // Manual consent alone must not start automatic processing.
-        XCTAssertFalse(app.otherElements["aiOutput"].exists)
-        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
-        XCTAssertTrue(app.alerts.firstMatch.waitForExistence(timeout: 5))
-        app.alerts.buttons["enableDailyInsights"].firstMatch.tap()
+        // Enabling optional insights also turns on daily preparation; no second confirmation.
+        XCTAssertEqual(toggle.value as? String, "1")
+        XCTAssertFalse(app.alerts.firstMatch.exists)
+    }
+
+    /// Today's insights show collapsed in the card; expand it if the answer isn't already visible.
+    @MainActor private func expandedAnswer(in card: XCUIElement, app: XCUIApplication) -> XCUIElement {
+        let answer = card.staticTexts["Synthetic self-care suggestion"]
+        if !answer.exists {
+            let header = card.descendants(matching: .any)["todayWellnessSuggestions"].firstMatch
+            XCTAssertTrue(header.waitForExistence(timeout: 10))
+            UIViewport.reveal(header, in: app, searchEarlierFirst: true)
+            let toggle = header.buttons.firstMatch
+            (toggle.exists ? toggle : header).tap()
+        }
+        XCTAssertTrue(answer.waitForExistence(timeout: 5))
+        UIViewport.reveal(answer, in: app, searchEarlierFirst: true)
+        return answer
     }
 
     @MainActor func testDailyInsightAppearsInInsightsAutomaticallyAndSurvivesTabChanges() {
@@ -208,13 +220,17 @@ final class TodayQuickActionsUITests: XCTestCase {
         XCTAssertTrue(generated.isHittable)
         app.navigationBars.buttons.firstMatch.tap()
         let card = app.otherElements["forTodayCard"]
-        let answer = card.staticTexts["Synthetic self-care suggestion"]
-        UIViewport.reveal(answer, in: app, searchEarlierFirst: true)
-        XCTAssertTrue(answer.isHittable)
+        XCTAssertTrue(expandedAnswer(in: card, app: app).isHittable)
         app.tabBars.buttons["Today"].tap()
-        XCTAssertTrue(app.otherElements["dailyInsightsCard"].staticTexts["Synthetic self-care suggestion"].exists)
+        // Today may open the day's insights once as a pop-up; it shows the same result.
+        let close = app.buttons["closeDailyInsights"]
+        if close.waitForExistence(timeout: 5) {
+            XCTAssertTrue(app.staticTexts["Synthetic self-care suggestion"].firstMatch.exists)
+            close.tap()
+        }
+        XCTAssertTrue(expandedAnswer(in: app.otherElements["dailyInsightsCard"], app: app).exists)
         app.tabBars.buttons["Insights"].tap()
-        XCTAssertTrue(answer.exists)
+        XCTAssertTrue(expandedAnswer(in: card, app: app).exists)
         // Today's result is restored from the device after relaunch without another request.
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["logPeriod"].waitForExistence(timeout: 10))
@@ -223,16 +239,15 @@ final class TodayQuickActionsUITests: XCTestCase {
             if card.waitForExistence(timeout: 5) { break }
         }
         XCTAssertTrue(card.exists)
-        let restored = card.staticTexts["Synthetic self-care suggestion"]
-        UIViewport.reveal(restored, in: app, searchEarlierFirst: true)
-        XCTAssertTrue(restored.exists)
+        XCTAssertTrue(expandedAnswer(in: card, app: app).exists)
         XCTAssertTrue(app.buttons["dailyWellnessAI"].exists)
     }
 
     @MainActor func testDailyFailureKeepsManualLoggingAvailable() {
         let app = launch(ai: "unavailable", fixture: "ai")
         enableDailyPreparation(in: app)
-        let error = app.descendants(matching: .any)["aiError"].firstMatch
+        // The message text, not its icon (both carry the same identifier).
+        let error = app.staticTexts["aiError"].firstMatch
         UIViewport.reveal(error, in: app)
         XCTAssertTrue(error.isHittable)
         app.tabBars.buttons["Today"].tap()

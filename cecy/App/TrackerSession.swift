@@ -372,6 +372,9 @@ final class TrackerSession {
     private func publish(_ snapshot: TrackerSnapshot, today: LocalDay) {
         ai.invalidate()
         if self.snapshot != snapshot || self.today != today { dailyAI.invalidate() }
+        let previousSnapshot = self.snapshot
+        let previousCenter = overview?.estimate?.center
+        let hadOverview = overview != nil
         // Expired (previous-day) results are deleted on read.
         storedDailyInsight = privacy.dailyInsight(for: today)
         self.snapshot = snapshot
@@ -390,6 +393,13 @@ final class TrackerSession {
         statistics = try? CycleStatistics.calculate(periods: snapshot.periods, today: today)
         privacy.trackingChanged(prediction: overview?.estimate, now: clock(), timeZone: zone(),
                                 periods: snapshot.periods, treatments: snapshot.treatments)
+        // Only edits in this session explain a move; a relaunch or new day just records the baseline.
+        let newCenter = overview?.estimate?.center
+        let shift = hadOverview && previousSnapshot != snapshot
+            ? EstimateShift.detect(previousCenter: previousCenter, newCenter: newCenter,
+                                   previous: previousSnapshot, current: snapshot, today: today)
+            : nil
+        privacy.recordEstimate(centerKey: newCenter?.key, shift: shift)
         do {
             insights = try CycleInsightEngine.generate(periods: snapshot.periods, symptoms: snapshot.symptoms, today: today)
             insightMessage = nil
@@ -502,6 +512,94 @@ final class TrackerSession {
         var data = snapshot.p2
         data.insightFeedback.removeAll { $0.insightID == insightID }
         return saveP2Data(data, confirmation: "Observation shown again.")
+    }
+
+    // MARK: Today follow-ups and cards
+
+    func followUpInput() -> FollowUpInput? {
+        guard let today, let overview else { return nil }
+        let now = clock()
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone()
+        let parts = calendar.dateComponents([.hour, .minute], from: now)
+        return FollowUpInput(today: today, snapshot: snapshot, overview: overview, forecast: cycleForecast,
+                             memory: privacy.followUpMemory,
+                             minuteOfDay: (parts.hour ?? 0) * 60 + (parts.minute ?? 0), timeZone: zone())
+    }
+
+    /// The one question to show today as a pop-up, or nil to stay quiet.
+    func nextFollowUp() -> FollowUpPrompt? {
+        guard privacy.canAccess, privacy.followUpsEnabled, !account.requiresSignIn, phase == .loaded,
+              snapshot.onboardingCompletedAt != nil, !isSaving, !isUpdatingPredictions,
+              let input = followUpInput() else { return nil }
+        return FollowUpEngine.next(input)
+    }
+
+    /// Records that a question was shown. Returns false (show nothing) if it can't be remembered,
+    /// so a storage problem never turns into a question repeating on every visit.
+    func markFollowUpShown() -> Bool {
+        guard let today else { return false }
+        return privacy.updateFollowUps(today: today) { $0.markShown(today) }
+    }
+
+    func snoozeFollowUp(_ prompt: FollowUpPrompt) {
+        guard let today else { return }
+        privacy.updateFollowUps(today: today) { $0.snooze(prompt.subject, today: today) }
+    }
+
+    func confirmFollowUp(_ prompt: FollowUpPrompt) {
+        guard let today else { return }
+        privacy.updateFollowUps(today: today) { $0.confirm(prompt.subject, today: today) }
+    }
+
+    func resolveFollowUp(_ prompt: FollowUpPrompt) {
+        guard let today else { return }
+        privacy.updateFollowUps(today: today) { $0.resolve(prompt.subject, today: today) }
+    }
+
+    func followUpAnswered(_ prompt: FollowUpPrompt) {
+        guard let today else { return }
+        privacy.updateFollowUps(today: today) { $0.answered(prompt.subject) }
+    }
+
+    func disableFollowUpKind(_ kind: FollowUpKind) {
+        guard let today else { return }
+        privacy.updateFollowUps(today: today) { $0.disabledKinds.insert(kind) }
+    }
+
+    func setFollowUpKind(_ kind: FollowUpKind, enabled: Bool) -> String? {
+        guard let today else { return "Your records aren’t ready yet." }
+        let saved = privacy.updateFollowUps(today: today) {
+            if enabled { $0.disabledKinds.remove(kind) } else { $0.disabledKinds.insert(kind) }
+        }
+        return saved ? nil : "This setting couldn’t be saved. Your previous choice is unchanged."
+    }
+
+    func resetSkippedFollowUps() -> String? {
+        guard let today else { return "Your records aren’t ready yet." }
+        return privacy.updateFollowUps(today: today) { $0.resetSkipped() } ? nil
+            : "Skipped questions couldn’t be reset. Try again."
+    }
+
+    /// Saves several factors from one answer. Each is validated; the first failure stops and is reported.
+    func saveCycleFactors(_ factors: [CycleFactor]) -> String? {
+        for factor in factors {
+            if let error = saveCycleFactor(factor) { return error }
+        }
+        return nil
+    }
+
+    func endLifeStage(_ episode: LifeStageEpisode, on day: LocalDay) -> String? {
+        var data = snapshot.p2
+        guard let index = data.lifeStages.firstIndex(where: { $0.id == episode.id }) else { return TrackingError.missingRecord.localizedDescription }
+        data.lifeStages[index].end = day
+        return saveP2Data(data, confirmation: "Life stage updated.")
+    }
+
+    var todayHighlights: [TodayHighlight] {
+        guard let today, let overview else { return [] }
+        return TodayHighlights.make(today: today, snapshot: snapshot, overview: overview,
+                                    shift: privacy.preferences.estimateShift)
     }
 
     func importRecords(_ imported: TrackerSnapshot) -> String? {
@@ -684,6 +782,13 @@ final class TrackerSession {
                             _ = try repository.saveSymptom(entry, editing: false, today: LocalDay(key: 20260929), now: fixed)
                         }
                     }
+                }
+                // Follow-up questions: setup finished a month ago, and the latest cycle (39 days)
+                // is much longer than the usual 28 with no cycle factor, so Today asks about it.
+                if fixture == "followUps", try repository.load().onboardingCompletedAt == nil {
+                    let periods = try [20260512, 20260609, 20260707, 20260804, 20260912].map { Period(start: try LocalDay(key: $0)) }
+                    _ = try repository.add(periods, completingOnboarding: true, today: LocalDay(key: 20260929),
+                                           now: fixed.addingTimeInterval(-30 * 86_400))
                 }
                 return repository
             }, clock: { fixed }, timeZone: { TimeZone(secondsFromGMT: 0)! }, privacy: .testing(id: id), account: .testing(id: id),
