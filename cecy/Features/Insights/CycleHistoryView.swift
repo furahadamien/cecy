@@ -106,8 +106,62 @@ struct CycleHistoryView: View {
         }
         .sheet(isPresented: $showExplanation) {
             if let estimate = overview.estimate {
-                PredictionExplanation(estimate: estimate, sources: Array(overview.intervals.suffix(6)), replay: session.predictionReplay)
+                PredictionDetailView(estimate: estimate, sources: Array(overview.intervals.suffix(6)), replay: session.predictionReplay)
             }
+        }
+    }
+}
+
+/// The detailed explanation of an estimate, kept in Insights for anyone who wants the full reasoning.
+/// Today's "?" shows only the short `PredictionExplanation`.
+private struct PredictionDetailView: View {
+    @Environment(\.dismiss) private var dismiss
+    let estimate: CyclePrediction
+    let sources: [CycleInterval]
+    let replay: PredictionReplay?
+
+    var body: some View {
+        NavigationStack {
+            TrackerPage(title: "About this estimate") {
+                TrackerCard(highlighted: true) {
+                    Text(DayText.range(estimate.earliest, estimate.latest)).font(TrackerTypography.sectionTitle)
+                    Text("Possible next start dates, not a predicted bleeding duration.")
+                    Text("\(estimate.confidence.rawValue) confidence · Provisional")
+                }
+                if let notice = estimate.starterNotice {
+                    TrackerCard {
+                        Text("A starting point, not measured history").font(.headline)
+                        Text(notice).accessibilityIdentifier("starterPrediction")
+                        Text("We count from your recorded start, with three days on either side of the estimated next start. This is a rough range, not a probability.")
+                        Text("New records replace assumptions. Estimated period days never become recorded days, and an overdue estimate does not start a new cycle.")
+                    }
+                } else {
+                    TrackerCard {
+                        Text("The recorded intervals behind it").font(.headline)
+                        Text(estimate.sourceLengths.map { "\($0)" }.joined(separator: ", ") + " days")
+                        Text("The same calculation works from the first recorded start onward. With measured intervals available, it uses up to six recent intervals: the median for the center and two days around the shortest and longest. One interval is limited evidence, not an established pattern.")
+                        Text(PredictionEvidence.policy).font(.caption)
+                        if let replay {
+                            Text(PredictionEvidence.assess(sourceLengths: estimate.sourceLengths, replay: replay).reason)
+                                .accessibilityIdentifier("confidenceReason")
+                        }
+                        Text("Confidence thresholds are provisional display rules, not measured probabilities. Historical coverage is not a future probability.")
+                        Text("There is no guaranteed start date. Records are never discarded merely because an interval is unusual.")
+                            .foregroundStyle(.secondary)
+                    }
+                    TrackerCard {
+                        Text("Source dates").font(.headline)
+                        ForEach(sources) { source in
+                            Text("\(DayText.range(source.start, source.nextStart)): \(source.length) days")
+                        }
+                        Text("Intervals older than the six most recent remain in your records but do not enter this window. No interval is excluded for being unusually long or short.")
+                    }
+                }
+                Text(OvulationNotice.explanation).font(.footnote)
+                Text("This is an uncalibrated estimate, not medical advice. Missing records affect it. Do not use it for contraception or diagnosis.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
     }
 }

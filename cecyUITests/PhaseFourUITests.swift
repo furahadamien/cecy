@@ -33,17 +33,19 @@ final class PhaseFourUITests: XCTestCase {
         XCTAssertFalse(empty.exists)
     }
 
-    @MainActor func testSourceDatesConfidenceAndReconstructedEvidence() {
+    @MainActor func testEstimateSheetIsShortAndReplayStaysInInsights() {
         let app = launch(fixture: "patterns")
         let explain = app.buttons["How this estimate works"]
         reveal(explain, in: app); explain.tap()
-        let reason = app.staticTexts["confidenceReason"]
-        reveal(reason, in: app)
-        XCTAssertTrue(reason.label.contains("Fewer than six"))
-        let dates = app.staticTexts["Source dates"]
-        reveal(dates, in: app)
-        XCTAssertTrue(dates.exists)
+        XCTAssertTrue(app.staticTexts["estimateWindow"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["estimateWindowExplanation"].label, "Your period is expected to start around these dates.")
+        XCTAssertFalse(app.staticTexts["Source dates"].exists)
+        XCTAssertFalse(app.buttons["predictionReplayLink"].exists)
+        app.buttons["Done"].tap()
+        // The detailed history check is still available from Insights.
+        app.tabBars.buttons["Insights"].tap()
         let history = app.buttons["predictionReplayLink"]
+        XCTAssertTrue(history.waitForExistence(timeout: 5))
         reveal(history, in: app); history.tap()
         XCTAssertTrue(app.staticTexts["replayDisclosure"].waitForExistence(timeout: 5))
         let coverage = app.staticTexts["replayCoverage"]

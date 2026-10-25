@@ -56,10 +56,11 @@ struct FollowUpSheet: View {
     private var tint: Color {
         switch prompt.kind {
         case .periodToday, .windowPassed: palette.recorded
-        case .unusualCycle, .newCycle, .openFactor: .orange
+        case .unusualCycle, .newCycle, .openFactor, .cycleContext: .orange
         case .treatmentDose, .treatmentReview: .indigo
         case .lifeStageReview: .teal
         case .biomarker: .blue
+        case .dailyCheckIn: .pink
         }
     }
 
@@ -74,6 +75,8 @@ struct FollowUpSheet: View {
         case .treatmentReview: "cross.case.fill"
         case .lifeStageReview: "leaf.fill"
         case .biomarker: "thermometer.medium"
+        case .cycleContext: "cloud.sun.fill"
+        case .dailyCheckIn: "heart.text.square.fill"
         }
     }
 
@@ -269,6 +272,20 @@ struct FollowUpSheet: View {
                 answer("Add a reading", symbol: "plus.circle", id: "add") { openEditor(.biomarker(kind)) }
                 answer("Not today", symbol: "clock", id: "notToday") { skip() }
             }
+        case .cycleContext(let day):
+            factorChoices([.illness, .stress, .travel], nothing: "Nothing right now", nothingIsWeekly: true,
+                          build: { selectedFactors.sorted { $0.rawValue < $1.rawValue }.map {
+                              CycleFactor(kind: $0, start: day, excludesFromForecast: excludeFromForecast)
+                          } },
+                          other: { CycleFactor(kind: .stress, start: day) })
+        case .dailyCheckIn:
+            answerStack {
+                answer("Log how I'm feeling", symbol: "square.and.pencil", id: "checkIn") { finish(.checkIn) }
+                answer("Nothing to log today", symbol: "checkmark", id: "nothing") {
+                    session.resolveFollowUp(prompt)
+                    show(String(localized: "Got it. Cecy won't ask again today."))
+                }
+            }
         }
     }
 
@@ -307,7 +324,8 @@ struct FollowUpSheet: View {
     }
 
     /// Multi-select factor chips with an explicit Save, so several things can be noted at once.
-    private func factorChoices(_ options: [CycleFactorKind], nothing: LocalizedStringKey,
+    /// `nothingIsWeekly`: "nothing" restarts a weekly check instead of never asking again.
+    private func factorChoices(_ options: [CycleFactorKind], nothing: LocalizedStringKey, nothingIsWeekly: Bool = false,
                                build: @escaping () -> [CycleFactor],
                                other: @escaping () -> CycleFactor) -> some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -340,8 +358,13 @@ struct FollowUpSheet: View {
             }
             answer("Something else…", symbol: "plus.circle", id: "other") { openEditor(.factor(other())) }
             answer(nothing, symbol: "checkmark", id: "nothing") {
-                session.resolveFollowUp(prompt)
-                show(String(localized: "Got it. Cecy won't ask about this again."))
+                if nothingIsWeekly {
+                    session.confirmFollowUp(prompt)
+                    show(String(localized: "Thanks. Cecy will check in again next week."))
+                } else {
+                    session.resolveFollowUp(prompt)
+                    show(String(localized: "Got it. Cecy won't ask about this again."))
+                }
             }
         }
     }

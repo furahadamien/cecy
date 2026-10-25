@@ -66,12 +66,12 @@ final class IrregularCycleSetupUITests: XCTestCase {
         let next = app.staticTexts["nextPeriodCenter"]
         UIViewport.reveal(next, in: app)
         XCTAssertTrue(next.exists)
-        // The starter note moved from the hero card into the "?" explanation sheet.
+        // The "?" sheet shows only the expected window and one sentence.
         XCTAssertFalse(app.staticTexts["starterPrediction"].exists)
         app.buttons["How this estimate works"].tap()
-        let starter = app.staticTexts["starterPrediction"]
-        XCTAssertTrue(starter.waitForExistence(timeout: 5))
-        XCTAssertTrue(starter.label.contains("default"))
+        XCTAssertTrue(app.staticTexts["estimateWindow"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["estimateWindowExplanation"].label, "Your period is expected to start around these dates.")
+        XCTAssertFalse(app.staticTexts["starterPrediction"].exists)
         app.buttons["Done"].tap()
         let ring = app.otherElements["phaseRingSummary"]
         UIViewport.reveal(ring, in: app)

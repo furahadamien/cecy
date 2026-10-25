@@ -527,7 +527,7 @@ final class TrackerSession {
                              minuteOfDay: (parts.hour ?? 0) * 60 + (parts.minute ?? 0), timeZone: zone())
     }
 
-    /// The one question to show today as a pop-up, or nil to stay quiet.
+    /// The question to show now as a pop-up, or nil to stay quiet.
     func nextFollowUp() -> FollowUpPrompt? {
         guard privacy.canAccess, privacy.followUpsEnabled, !account.requiresSignIn, phase == .loaded,
               snapshot.onboardingCompletedAt != nil, !isSaving, !isUpdatingPredictions,
@@ -535,11 +535,13 @@ final class TrackerSession {
         return FollowUpEngine.next(input)
     }
 
-    /// Records that a question was shown. Returns false (show nothing) if it can't be remembered,
-    /// so a storage problem never turns into a question repeating on every visit.
-    func markFollowUpShown() -> Bool {
-        guard let today else { return false }
-        return privacy.updateFollowUps(today: today) { $0.markShown(today) }
+    /// Records that a question was shown (and when). Returns false (show nothing) if it can't be
+    /// remembered, so a storage problem never turns into a question repeating on every visit.
+    func markFollowUpShown(_ prompt: FollowUpPrompt) -> Bool {
+        guard let today, let input = followUpInput() else { return false }
+        return privacy.updateFollowUps(today: today) {
+            $0.markShown(today, subject: prompt.subject, minute: input.minuteOfDay)
+        }
     }
 
     func snoozeFollowUp(_ prompt: FollowUpPrompt) {
