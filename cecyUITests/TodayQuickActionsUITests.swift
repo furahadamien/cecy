@@ -93,7 +93,9 @@ final class TodayQuickActionsUITests: XCTestCase {
         let nextPeriod = app.otherElements["nextPeriodCard"]
         let ring = app.descendants(matching: .any)["phaseRingSummary"].firstMatch
         XCTAssertTrue(ring.exists)
-        XCTAssertLessThanOrEqual(ring.frame.maxX, app.staticTexts["periodCountdown"].frame.minX)
+        // The ring is centred in the card with the countdown underneath it.
+        XCTAssertLessThanOrEqual(ring.frame.maxY, app.staticTexts["periodCountdown"].frame.minY)
+        XCTAssertEqual(ring.frame.midX, nextPeriod.frame.midX, accuracy: 2)
         XCTAssertGreaterThanOrEqual(nextPeriod.frame.minY, strip.frame.maxY)
         UIViewport.reveal(period, in: app)
         for button in [period, symptoms, sex, app.buttons["logDailyBleeding"]] {
@@ -125,6 +127,12 @@ final class TodayQuickActionsUITests: XCTestCase {
             XCTAssertLessThanOrEqual(card.frame.maxY, bottom, app.debugDescription)
             XCTAssertEqual(card.frame.height, cards[0].frame.height, accuracy: 1)
             XCTAssertEqual(card.frame.minY, cards[0].frame.minY, accuracy: 1)
+        }
+        // The hero fills the first screen: the phase tiles are the last thing visible above the tab bar.
+        XCTAssertGreaterThan(cards[0].frame.maxY, bottom - 40, "Gap above the tab bar: \(bottom - cards[0].frame.maxY)")
+        let insights = app.otherElements["dailyInsightsCard"]
+        if insights.exists {
+            XCTAssertGreaterThanOrEqual(insights.frame.minY, bottom, "Today's insights should start below the fold")
         }
     }
 

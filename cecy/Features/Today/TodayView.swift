@@ -13,6 +13,16 @@ struct TodayView: View {
     @State private var showExplanation = false
     @State private var showPersonalization = false
     @State private var selection: LocalDay
+    // First-screen fit: the hero fills the space left so the phase tiles end just above the tab bar.
+    @State private var viewportHeight: CGFloat = 0
+    @State private var stripHeight: CGFloat = 0
+    @State private var belowHeroHeight: CGFloat = 0
+    @State private var heroCardHeight: CGFloat = 0
+    @State private var heroColumnsHeight: CGFloat = 0
+    private static let topInset: CGFloat = 6
+    private static let sectionSpacing: CGFloat = 12
+    /// Breathing room between the phase tiles and the tab bar.
+    private static let foldGap: CGFloat = 8
 
     init(session: TrackerSession, today: LocalDay, overview: CycleOverview, onLog: @escaping (LocalDay) -> Void,
          onHistory: @escaping () -> Void, onViewingTodayChange: ((Bool) -> Void)? = nil) {
@@ -28,31 +38,36 @@ struct TodayView: View {
     var body: some View {
         TrackerPage(title: "Today", showsHeading: false,
                     backgroundColor: colorScheme == .dark ? TrackerPalette(scheme: colorScheme).background : Color(red: 0.965, green: 0.980, blue: 0.963),
-                    sectionSpacing: 12, topInset: 6) {
+                    sectionSpacing: Self.sectionSpacing, topInset: Self.topInset) {
             ActivityCalendarStrip(today: today, activityIndex: session.activityIndex,
                                   forecast: session.cycleForecast, selection: $selection, compact: true)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height.rounded() } action: { stripHeight = $0 }
             hero
-            // Check-in and "Make Cecy yours" share one 44-point row so the phase tiles stay on the first screen.
-            Group {
-                if dynamicTypeSize.isAccessibilitySize {
-                    VStack(spacing: 8) { checkInRow }
-                } else {
-                    HStack(spacing: 8) { checkInRow }
+            // Measured as one block so the hero can take exactly the space left above the tab bar.
+            VStack(alignment: .leading, spacing: Self.sectionSpacing) {
+                // Check-in and "Make Cecy yours" share one 44-point row so the phase tiles stay on the first screen.
+                Group {
+                    if dynamicTypeSize.isAccessibilitySize {
+                        VStack(spacing: 8) { checkInRow }
+                    } else {
+                        HStack(spacing: 8) { checkInRow }
+                    }
                 }
-            }
-            Group {
-                if dynamicTypeSize.isAccessibilitySize {
-                    VStack(spacing: 10) { loggingButtons }
-                } else {
-                    HStack(alignment: .top, spacing: 8) { loggingButtons }
+                Group {
+                    if dynamicTypeSize.isAccessibilitySize {
+                        VStack(spacing: 10) { loggingButtons }
+                    } else {
+                        HStack(alignment: .top, spacing: 8) { loggingButtons }
+                    }
                 }
+                .environment(\.todayLogCards, true)
+                .disabled(selection > today)
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Log for \(DayText.full(selection))")
+                .accessibilityIdentifier("todayLogActions")
+                CyclePhaseRingView(session: session, today: today, overview: overview)
             }
-            .environment(\.todayLogCards, true)
-            .disabled(selection > today)
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("Log for \(DayText.full(selection))")
-            .accessibilityIdentifier("todayLogActions")
-            CyclePhaseRingView(session: session, today: today, overview: overview)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height.rounded() } action: { belowHeroHeight = $0 }
             ForEach(session.cycleForecast.cycles.filter { selection != today && $0.contains(selection) }) { cycle in
                 TrackerCard { ProjectedCycleDetails(cycle: cycle, todayStyle: true) }
             }
@@ -74,6 +89,8 @@ struct TodayView: View {
             if let insight = session.insights.first { InsightCard(insight: insight) }
             if let message = session.insightMessage { InlineError(message: message) }
         }
+        // The page's own size already excludes the status bar and tab bar.
+        .onGeometryChange(for: CGFloat.self) { $0.size.height.rounded() } action: { viewportHeight = $0 }
         .onChange(of: today) { old, new in if selection == old { selection = new } }
         .onChange(of: selection == today, initial: true) { _, viewingToday in onViewingTodayChange?(viewingToday) }
         .sheet(isPresented: $showExplanation) {
@@ -114,23 +131,27 @@ struct TodayView: View {
         }
     }
 
+    /// Height the ring row should fill so the phase tiles are the last thing above the tab bar.
+    /// The card's padding and status row ("chrome") don't depend on the ring row, so this can't feed back on itself.
+    private var heroColumnsMinHeight: CGFloat {
+        guard viewportHeight > 0, stripHeight > 0, belowHeroHeight > 0, heroColumnsHeight > 0, heroCardHeight > heroColumnsHeight else { return 0 }
+        let chrome = heroCardHeight - heroColumnsHeight
+        let heroTarget = viewportHeight - Self.topInset - stripHeight - Self.sectionSpacing * 2 - belowHeroHeight - Self.foldGap
+        // Capped so tall screens (iPad) don't get an oversized empty card.
+        return min(max(0, heroTarget - chrome), 380)
+    }
+
     private var hero: some View {
         TrackerCard(padding: 12, spacing: 8) {
             if dynamicTypeSize > .large {
-                VStack(spacing: 20) { heroRing.frame(height: 250); countdown }
+                VStack(spacing: 16) { heroRing.frame(height: 280); countdown }
             } else {
-                TodayHeroColumns {
+                // The ring is centred and as large as the card allows; the countdown sits underneath it.
+                TodayHeroStack(minHeight: heroColumnsMinHeight) {
                     heroRing
                     countdown
                 }
-            }
-            if let estimate = overview.estimate {
-                Label("\(estimate.confidence.rawValue) confidence · Rough estimate", systemImage: "circle.dashed")
-                    .font(.caption).foregroundStyle(.secondary)
-                if let notice = estimate.starterNotice {
-                    Text(notice).font(.caption).foregroundStyle(.secondary)
-                        .accessibilityIdentifier("starterPrediction")
-                }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height.rounded() } action: { heroColumnsHeight = $0 }
             }
             if let status = TodayCurrentPeriodStatus(periods: session.snapshot.resolvedPeriods,
                                                      forecast: session.cycleForecast, today: today, dailyBleeding: session.snapshot.dailyBleeding) {
@@ -149,6 +170,7 @@ struct TodayView: View {
                 .padding(.vertical, 2)
             }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height.rounded() } action: { heroCardHeight = $0 }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("nextPeriodCard")
     }
@@ -158,32 +180,36 @@ struct TodayView: View {
     }
 
     private var countdown: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if overview.estimate != nil {
-                Button { showExplanation = true } label: {
-                    HStack(spacing: 6) {
-                        Text("Until your next period")
-                        Image(systemName: "questionmark.circle").accessibilityHidden(true)
+        let value = TodayPeriodCountdown(outcome: overview.prediction, today: today)
+        return VStack(spacing: 2) {
+            HStack(spacing: 6) {
+                Text("Next period").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                Text(value.title).font(.system(.headline, design: .rounded, weight: .bold)).monospacedDigit()
+                    .accessibilityIdentifier("periodCountdown")
+                if overview.estimate != nil {
+                    Button { showExplanation = true } label: {
+                        Image(systemName: "questionmark.circle").font(.subheadline).foregroundStyle(.secondary)
+                            .padding(.horizontal, 4)
+                            // Full 44-pt tap area without making the row taller (the height goes to the ring).
+                            .contentShape(Rectangle().inset(by: -14))
                     }
-                    .font(.caption.weight(.medium)).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("How this estimate works")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("How this estimate works")
-            } else {
-                Text("Until your next period").font(.caption.weight(.medium)).foregroundStyle(.secondary)
             }
-            let value = TodayPeriodCountdown(outcome: overview.prediction, today: today)
-            Text(value.title).font(.system(.title2, design: .rounded, weight: .bold)).monospacedDigit()
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("periodCountdown")
-            if overview.estimate != nil {
-                PredictionSummary(outcome: overview.prediction, today: today, compact: true)
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1).minimumScaleFactor(0.8)
+            if let estimate = overview.estimate {
+                Text("Around \(DayText.monthDay(estimate.center))")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .accessibilityLabel("Around \(DayText.monthDay(estimate.center)), estimated")
+                    .accessibilityIdentifier("nextPeriodCenter")
             } else {
                 Text(value.detail).font(.footnote).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder private var loggingButtons: some View {
@@ -233,28 +259,38 @@ private struct PersonalizationSheet: View {
     }
 }
 
-/// Propose each column's actual width rather than testing unwrapped text widths.
-private struct TodayHeroColumns: Layout {
-    private func columns(_ width: CGFloat) -> (ring: CGFloat, detail: CGFloat) {
-        let ring = min(250, width * 0.44)
-        return (ring, max(0, width - ring - 12))
+/// Ring centred on top, countdown underneath. The ring grows into whatever height the card is given
+/// (so the first screen ends at the phase tiles), bounded by the card width.
+private struct TodayHeroStack: Layout {
+    /// Height to fill so the first screen ends at the phase tiles; content is centred within it.
+    var minHeight: CGFloat = 0
+    private let spacing: CGFloat = 6
+    private let smallestRing: CGFloat = 160
+    private let largestRing: CGFloat = 320
+
+    private func measure(_ width: CGFloat, _ subviews: Subviews) -> (ring: CGFloat, detail: CGFloat) {
+        let detail = subviews[1].sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        // Before the first measurement arrives, use a width-based size so the card never starts tiny.
+        let byHeight = minHeight > 0 ? minHeight - detail - spacing : width * 0.68
+        let ring = min(width, largestRing, max(smallestRing, byHeight))
+        return (ring, detail)
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard subviews.count == 2 else { return .zero }
         let width = proposal.width ?? 330
-        let sizes = columns(width)
-        let detail = subviews[1].sizeThatFits(ProposedViewSize(width: sizes.detail, height: nil))
-        return CGSize(width: width, height: max(sizes.ring, detail.height))
+        let sizes = measure(width, subviews)
+        return CGSize(width: width, height: max(sizes.ring + spacing + sizes.detail, minHeight))
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         guard subviews.count == 2 else { return }
-        let sizes = columns(bounds.width)
-        subviews[0].place(at: CGPoint(x: bounds.minX, y: bounds.midY - sizes.ring / 2), anchor: .topLeading,
+        let sizes = measure(bounds.width, subviews)
+        let top = bounds.midY - (sizes.ring + spacing + sizes.detail) / 2
+        subviews[0].place(at: CGPoint(x: bounds.midX - sizes.ring / 2, y: top), anchor: .topLeading,
                           proposal: ProposedViewSize(width: sizes.ring, height: sizes.ring))
-        subviews[1].place(at: CGPoint(x: bounds.minX + sizes.ring + 12, y: bounds.minY), anchor: .topLeading,
-                          proposal: ProposedViewSize(width: sizes.detail, height: bounds.height))
+        subviews[1].place(at: CGPoint(x: bounds.minX, y: top + sizes.ring + spacing), anchor: .topLeading,
+                          proposal: ProposedViewSize(width: bounds.width, height: sizes.detail))
     }
 }
 
@@ -309,50 +345,6 @@ nonisolated enum TodayCurrentPeriodStatus: Equatable {
     }
 }
 
-struct PredictionSummary: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let outcome: PredictionOutcome
-    let today: LocalDay
-    var compact = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: compact ? 6 : 12) {
-            if case .available(let estimate) = outcome {
-                VStack(alignment: .leading, spacing: compact ? 4 : 8) {
-                Label("Estimated period start window", systemImage: "circle.dashed").font(compact ? .caption : .headline)
-                Text(DayText.range(estimate.earliest, estimate.latest))
-                    .font(compact ? .subheadline.weight(.semibold) : TrackerTypography.sectionTitle).accessibilityIdentifier("predictionWindow")
-                }
-                .frame(maxWidth: .infinity, alignment: .leading).padding(compact ? 8 : 12)
-                .background(TrackerPalette(scheme: colorScheme).recordedSurface, in: RoundedRectangle(cornerRadius: 16))
-                Text("Around \(DayText.short(estimate.center))").font(compact ? .caption : .subheadline)
-                    .accessibilityIdentifier("nextPeriodCenter")
-                if !compact {
-                Label("\(estimate.confidence.rawValue) confidence · Rough estimate", systemImage: "circle.dashed")
-                    .font(compact ? .caption : .subheadline)
-                if let notice = estimate.starterNotice {
-                    Text(notice)
-                        .font(compact ? .caption : .subheadline).foregroundStyle(.secondary).accessibilityIdentifier("starterPrediction")
-                }
-                    Text("Possible start dates, not confirmed bleeding days. Missing records can affect timing.").font(.footnote).foregroundStyle(.secondary)
-                }
-            } else {
-            switch outcome {
-            case .available:
-                Text("No upcoming date can be estimated. Review your recorded starts.")
-            case .insufficientHistory:
-                Text("More history is needed for an estimate.").font(.title3)
-            case .wideVariation:
-                Text("Your recorded intervals vary more than this simple estimate can support.")
-            case .unavailable(let reason):
-                Text(reason.localizedDescription)
-            }
-            }
-        }
-    }
-
-}
-
 struct PredictionExplanation: View {
     @Environment(\.dismiss) private var dismiss
     let estimate: CyclePrediction
@@ -370,7 +362,7 @@ struct PredictionExplanation: View {
                 if let notice = estimate.starterNotice {
                     TrackerCard {
                         Text("A starting point, not measured history").font(.headline)
-                        Text(notice)
+                        Text(notice).accessibilityIdentifier("starterPrediction")
                         Text("We count from your recorded start, with three days on either side of the estimated next start. This is a rough range, not a probability.")
                         Text("New records replace assumptions. Estimated period days never become recorded days, and an overdue estimate does not start a new cycle.")
                     }

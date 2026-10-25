@@ -43,9 +43,6 @@
     "%@ confidence · Provisional" : {
 
     },
-    "%@ confidence · Rough estimate" : {
-
-    },
     "%@ days %lld–%lld" : {
       "localizations" : {
         "en" : {
@@ -548,6 +545,9 @@
 
     },
     "Around %@" : {
+
+    },
+    "Around %@, estimated" : {
 
     },
     "Around day %lld last cycle, you logged %@." : {
@@ -1346,9 +1346,6 @@
     "Estimated from start: %@" : {
 
     },
-    "Estimated period start window" : {
-
-    },
     "Estimated range unavailable" : {
 
     },
@@ -1955,9 +1952,6 @@
     "Moderate confidence requires six intervals spanning at most seven days and at least three recent reconstructed checks, with none withheld, at least 80% inside their windows and average center error at most three days. Otherwise confidence is Low." : {
 
     },
-    "More history is needed for an estimate." : {
-
-    },
     "More logged days make your estimates and patterns more reliable. Days you skip stay unknown." : {
 
     },
@@ -1992,6 +1986,9 @@
 
     },
     "Next month" : {
+
+    },
+    "Next period" : {
 
     },
     "Next projected ovulation" : {
@@ -2086,9 +2083,6 @@
 
     },
     "No sexual activity recorded yet." : {
-
-    },
-    "No upcoming date can be estimated. Review your recorded starts." : {
 
     },
     "No wellness goals" : {
@@ -2396,9 +2390,6 @@
 
     },
     "Possible period start · Estimate" : {
-
-    },
-    "Possible start dates, not confirmed bleeding days. Missing records can affect timing." : {
 
     },
     "Possible start: %@. An estimate, not a deadline." : {
@@ -3291,9 +3282,6 @@
     "Unsaved changes" : {
 
     },
-    "Until your next period" : {
-
-    },
     "Up to 20 entries, 80 characters each. Add each item separately." : {
 
     },
@@ -3621,9 +3609,6 @@
 
     },
     "Your question and selected details are sent when you generate. Ready answers stay on-device. Generated results are not saved." : {
-
-    },
-    "Your recorded intervals vary more than this simple estimate can support." : {
 
     },
     "Your recorded patterns near period starts" : {
