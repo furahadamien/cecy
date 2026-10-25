@@ -40,13 +40,7 @@
     "%@ chart" : {
 
     },
-    "%@ confidence" : {
-
-    },
     "%@ confidence · Provisional" : {
-
-    },
-    "%@ confidence, rough estimate" : {
 
     },
     "%@ days %lld–%lld" : {
@@ -551,6 +545,9 @@
 
     },
     "Around %@" : {
+
+    },
+    "Around %@, estimated" : {
 
     },
     "Around day %lld last cycle, you logged %@." : {
