@@ -44,116 +44,262 @@ struct TodayEstimatesCard: View {
     }
 }
 
+
+/// One forecast row. Each row opens a short explanation sheet.
+struct ForecastItem: Identifiable {
+    let id: String
+    let caption: String
+    let value: String
+    let detail: String
+    let symbol: String
+    let tint: Color
+    let fill: Color
+    let explanation: String
+}
+
+extension TrackerPalette {
+    /// Ovulation rows use a soft purple so they read apart from bleeding and fertile rows.
+    var ovulation: Color {
+        scheme == .dark ? Color(red: 0.80, green: 0.72, blue: 0.96) : Color(red: 0.42, green: 0.30, blue: 0.62)
+    }
+    var ovulationSurface: Color {
+        scheme == .dark ? Color(red: 0.20, green: 0.17, blue: 0.27) : Color(red: 0.94, green: 0.92, blue: 0.98)
+    }
+}
+
+/// Small capsules for the forecast's reliability notes. They are labels, not buttons.
+struct ForecastBadges: View {
+    let cycle: ProjectedCycle?
+
+    var body: some View {
+        if let cycle, cycle.referenceNotice != nil || !cycle.ovulationWarnings.isEmpty {
+            SelectionFlowLayout {
+                if cycle.referenceNotice != nil {
+                    badge(Text("Reference estimate").accessibilityIdentifier("forecastReferenceNotice"), symbol: "info.circle")
+                }
+                if !cycle.ovulationWarnings.isEmpty {
+                    badge(Text("Timing uncertain").accessibilityIdentifier("forecastTimingUncertain"), symbol: "questionmark.circle")
+                }
+            }
+        }
+    }
+
+    private func badge(_ text: some View, symbol: String) -> some View {
+        Label { text } icon: { Image(systemName: symbol).accessibilityHidden(true) }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Color.primary.opacity(0.05), in: Capsule())
+    }
+}
+
+private struct ForecastRow: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .body) private var iconSize = 20.0
+    let item: ForecastItem
+    var prominent = false
+    var compact = false
+    let action: () -> Void
+
+    var body: some View {
+        let palette = TrackerPalette(scheme: colorScheme)
+        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+        let badgeSize: CGFloat = prominent ? (compact ? 48 : 56) : (compact ? 42 : 48)
+        let icon = Image(systemName: item.symbol)
+            .font(.system(size: min(prominent ? iconSize + 4 : iconSize, 30), weight: .medium))
+            .foregroundStyle(item.tint)
+            .frame(width: badgeSize, height: badgeSize)
+            .background(prominent ? item.tint.opacity(0.10) : item.fill, in: Circle())
+            .accessibilityHidden(true)
+        let chevron = Image(systemName: "chevron.forward")
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .accessibilityHidden(true)
+        let text = VStack(alignment: .leading, spacing: 4) {
+            Text(item.caption.uppercased())
+                .font(.caption.weight(.semibold))
+                .tracking(0.8)
+                .foregroundStyle(prominent ? item.tint : .secondary)
+            Text(item.value)
+                .font(prominent ? (compact ? .headline : .title3.weight(.bold)) : .body.weight(.semibold))
+                .foregroundStyle(.primary)
+            Text(item.detail)
+                .font(.subheadline)
+                .foregroundStyle(prominent ? item.tint : .secondary)
+        }
+        .multilineTextAlignment(.leading)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        Button(action: action) {
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    // Give the text the full width at the largest sizes.
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack { icon; Spacer(minLength: 8); chevron }
+                        text
+                    }
+                } else {
+                    HStack(spacing: compact ? 12 : 16) { icon; text; chevron }
+                }
+            }
+            .padding(.horizontal, compact ? 12 : 16)
+            .padding(.vertical, prominent ? (compact ? 14 : 20) : (compact ? 12 : 16))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(prominent ? palette.recordedSurface : palette.surface, in: shape)
+            .overlay(alignment: .bottomTrailing) {
+                if prominent {
+                    // A soft decorative curve, as in the period-window design.
+                    Circle().fill(item.tint.opacity(0.06))
+                        .frame(width: 150, height: 150)
+                        .offset(x: 60, y: 80)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
+            .clipShape(shape)
+            .overlay {
+                shape.strokeBorder(prominent ? item.tint.opacity(0.12) : Color.primary.opacity(contrast == .increased ? 0.45 : 0.07),
+                                   lineWidth: 1)
+            }
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(item.caption), estimate. \(item.value). \(item.detail)")
+        .accessibilityHint("Shows what this estimate means")
+        .accessibilityIdentifier(item.id)
+    }
+}
+
+private struct ForecastDetailSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let item: ForecastItem
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    HStack(spacing: 14) {
+                        Image(systemName: item.symbol)
+                            .font(.title2.weight(.medium))
+                            .foregroundStyle(item.tint)
+                            .frame(width: 52, height: 52)
+                            .background(item.fill, in: Circle())
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(item.value).font(.title3.weight(.bold))
+                            Text(item.detail).font(.subheadline).foregroundStyle(.secondary)
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text(item.explanation)
+                        .font(.body)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("forecastDetailExplanation")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(24)
+            }
+            .navigationTitle(item.caption)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .accessibilityIdentifier("forecastDetailSheet")
+    }
+}
+
 struct ProjectedCycleDetails: View {
     @Environment(\.colorScheme) private var colorScheme
     let cycle: ProjectedCycle
     var notBefore: LocalDay? = nil
     var todayStyle = false
     var calendarStyle = false
+    var showsBadges = true
+    @State private var selected: ForecastItem?
 
     var body: some View {
         let palette = TrackerPalette(scheme: colorScheme)
-        VStack(alignment: .leading, spacing: 20) {
-            if let notice = cycle.starterNotice {
-                Text(notice).font(.footnote).foregroundStyle(.secondary)
-                    .accessibilityIdentifier("forecastStarterNotice")
-            }
-            if cycle.referenceNotice != nil || !cycle.ovulationWarnings.isEmpty {
-                SelectionFlowLayout {
-                    if cycle.referenceNotice != nil {
-                        Text("Reference estimate").accessibilityIdentifier("forecastReferenceNotice")
-                    }
-                    if !cycle.ovulationWarnings.isEmpty {
-                        Label {
-                            Text("Timing uncertain").accessibilityIdentifier("forecastTimingUncertain")
-                        } icon: {
-                            Image(systemName: "questionmark.circle").accessibilityHidden(true)
-                        }
-                    }
-                }
-                .font(.caption).foregroundStyle(.secondary)
-            }
-            VStack(alignment: .leading, spacing: calendarStyle ? 12 : 20) {
-            VStack(alignment: .leading, spacing: calendarStyle ? 8 : 12) {
-                Label(cycle.isLaterProjection ? "Following period start · Projection" : "Possible period start · Estimate",
-                      systemImage: "circle.dashed")
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(palette.recorded)
-                    .accessibilityAddTraits(.isHeader)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(notBefore == nil ? "Start window" : "Remaining start window")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text(DayText.range(max(notBefore ?? cycle.period.earliest, cycle.period.earliest), cycle.period.latest))
-                        .font(calendarStyle ? .headline : TrackerTypography.sectionTitle)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("forecastPeriodWindow_\(cycle.index)")
-                    Text("Around \(DayText.short(cycle.period.center))")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(calendarStyle ? 12 : 16)
-            .background(palette.recordedSurface, in: RoundedRectangle(cornerRadius: TrackerLayout.controlRadius, style: .continuous))
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("forecastPeriodSection_\(cycle.index)")
-
-            if let bleeding = cycle.bleeding {
-                ForecastDateRow(title: "Expected bleeding dates", value: DayText.range(bleeding.start, bleeding.end),
-                                symbol: "drop", accent: palette.recorded, identifier: "forecastBleedingDates_\(cycle.index)")
+        VStack(alignment: .leading, spacing: calendarStyle ? 10 : 12) {
+            if showsBadges { ForecastBadges(cycle: cycle) }
+            let period = periodItem(palette)
+            ForecastRow(item: period, prominent: true, compact: calendarStyle) { selected = period }
+            if let bleeding = bleedingItem(palette) {
+                ForecastRow(item: bleeding, compact: calendarStyle) { selected = bleeding }
             } else {
                 Text("Bleeding duration unavailable")
                     .font(.footnote).foregroundStyle(.secondary)
             }
-
-            Divider()
-
-            if let ovulation = cycle.ovulation {
-                ForecastDateRow(title: cycle.isLaterProjection ? "Possible ovulation · Projection" : "Possible ovulation · Estimate",
-                                value: "Around \(DayText.short(ovulation.center))", symbol: "circle.dotted",
-                                accent: palette.accent, identifier: "forecastOvulation_\(cycle.index)")
-                if let fertile = cycle.fertileWindow {
-                    if todayStyle || calendarStyle { Divider() }
-                    ForecastDateRow(title: "Estimated fertile window", value: DayText.range(fertile.start, fertile.end),
-                                    symbol: "leaf", accent: palette.accent, identifier: "forecastFertileWindow_\(cycle.index)")
+            if let ovulation = ovulationItem(palette) {
+                ForecastRow(item: ovulation, compact: calendarStyle) { selected = ovulation }
+                if let fertile = fertileItem(palette) {
+                    ForecastRow(item: fertile, compact: calendarStyle) { selected = fertile }
                 }
             } else {
                 Text("Ovulation and fertile dates unavailable")
                     .font(.footnote).foregroundStyle(.secondary)
             }
+            if let notice = cycle.starterNotice {
+                Text(notice).font(.footnote).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("forecastStarterNotice")
             }
         }
+        .sheet(item: $selected) { ForecastDetailSheet(item: $0) }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("projectedCycle_\(cycle.index)")
     }
-}
 
-/// A quiet label and prominent date, aligned consistently without another nested card.
-private struct ForecastDateRow: View {
-    let title: String
-    let value: String
-    let symbol: String
-    let accent: Color
-    let identifier: String
-    @ScaledMetric(relativeTo: .body) private var iconSize = 18.0
+    private func periodItem(_ palette: TrackerPalette) -> ForecastItem {
+        let start = max(notBefore ?? cycle.period.earliest, cycle.period.earliest)
+        let center = cycle.period.center
+        let detail = center >= start ? "Most likely \(DayText.short(center))" : "Could start any day now"
+        var explanation = center >= start
+            ? "Your period will most likely start around \(DayText.short(center)). It could start on any day in this window."
+            : "Your period could start any day now. The window ends \(DayText.short(cycle.period.latest))."
+        if cycle.isLaterProjection { explanation = "This is a rough projection for a later cycle. " + explanation }
+        return ForecastItem(id: "forecastPeriodSection_\(cycle.index)",
+                            caption: cycle.isLaterProjection ? "Following period start" : "Period start window",
+                            value: DayText.range(start, cycle.period.latest), detail: detail,
+                            symbol: "drop", tint: palette.recorded, fill: palette.recordedSurface,
+                            explanation: explanation)
+    }
 
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: symbol)
-                .font(.system(size: iconSize, weight: .medium))
-                .foregroundStyle(accent)
-                .frame(width: iconSize + 18, height: iconSize + 18)
-                .background(accent.opacity(0.08), in: Circle())
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title).font(.subheadline).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier(identifier)
-                Text(value).font(.body.weight(.semibold))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("\(identifier)_value")
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .accessibilityElement(children: .contain)
+    private func bleedingItem(_ palette: TrackerPalette) -> ForecastItem? {
+        guard let bleeding = cycle.bleeding else { return nil }
+        let days = bleeding.start.days(until: bleeding.end) + 1
+        var explanation = "If your period starts around \(DayText.short(bleeding.start)) you may bleed until about \(DayText.short(bleeding.end))."
+        explanation += (cycle.bleedingDuration?.measuredCount ?? 0) > 0
+            ? " This comes from the periods you've logged."
+            : " This uses a typical length until you log when your periods end."
+        return ForecastItem(id: "forecastBleedingDates_\(cycle.index)", caption: "Expected bleeding dates",
+                            value: DayText.range(bleeding.start, bleeding.end),
+                            detail: days == 1 ? "About 1 day" : "About \(days) days",
+                            symbol: "drop", tint: palette.recorded, fill: palette.recordedSurface,
+                            explanation: explanation)
+    }
+
+    private func ovulationItem(_ palette: TrackerPalette) -> ForecastItem? {
+        guard let ovulation = cycle.ovulation else { return nil }
+        var explanation = "Ovulation may happen around \(DayText.short(ovulation.center)). Cecy estimates this from your cycle dates. It isn't confirmed."
+        if !cycle.ovulationWarnings.isEmpty { explanation += " Your cycles vary so this could be off by a few days." }
+        return ForecastItem(id: "forecastOvulation_\(cycle.index)", caption: "Possible ovulation",
+                            value: "Around \(DayText.short(ovulation.center))",
+                            detail: cycle.isLaterProjection ? "Projection · Timing may vary" : "Timing may vary",
+                            symbol: "circle.dotted", tint: palette.ovulation, fill: palette.ovulationSurface,
+                            explanation: explanation)
+    }
+
+    private func fertileItem(_ palette: TrackerPalette) -> ForecastItem? {
+        guard let fertile = cycle.fertileWindow else { return nil }
+        return ForecastItem(id: "forecastFertileWindow_\(cycle.index)", caption: "Estimated fertile window",
+                            value: DayText.range(fertile.start, fertile.end), detail: "Not for birth control",
+                            symbol: "leaf", tint: palette.accent, fill: palette.sage,
+                            explanation: "These are the days around your estimated ovulation. Don't rely on them to prevent pregnancy.")
     }
 }
 
@@ -164,16 +310,26 @@ struct UpcomingCycleForecastView: View {
     var calendarStyle = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("Upcoming cycle forecast")
-                .font(calendarStyle ? .system(.title3, design: .serif, weight: .semibold) : todayStyle ? TrackerTypography.sectionTitle : .headline)
-                .accessibilityAddTraits(.isHeader)
-            if let cycle = forecast.nextPeriod(onOrAfter: today) {
-                ProjectedCycleDetails(cycle: cycle, notBefore: today, todayStyle: todayStyle, calendarStyle: calendarStyle)
+        let cycle = forecast.nextPeriod(onOrAfter: today)
+        VStack(alignment: .leading, spacing: calendarStyle ? 14 : 18) {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 12) {
+                    heading
+                    Spacer(minLength: 0)
+                    ForecastBadges(cycle: cycle).fixedSize()
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    heading
+                    ForecastBadges(cycle: cycle)
+                }
+            }
+            if let cycle {
+                ProjectedCycleDetails(cycle: cycle, notBefore: today, todayStyle: todayStyle,
+                                      calendarStyle: calendarStyle, showsBadges: false)
                 if let next = forecast.nextOvulation(onOrAfter: today), next.index != cycle.index {
-                    Divider()
                     DisclosureGroup {
-                        ProjectedCycleDetails(cycle: next, notBefore: today, todayStyle: todayStyle, calendarStyle: calendarStyle).padding(.top, 16)
+                        ProjectedCycleDetails(cycle: next, notBefore: today, todayStyle: todayStyle, calendarStyle: calendarStyle)
+                            .padding(.top, 12)
                     } label: {
                         Text("Next projected ovulation")
                             .font(.subheadline.weight(.semibold)).frame(minHeight: 44)
@@ -187,5 +343,16 @@ struct UpcomingCycleForecastView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("upcomingCycleForecast")
+    }
+
+    private var heading: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Upcoming cycle forecast")
+                .font(calendarStyle ? .system(.title3, design: .serif, weight: .semibold) : todayStyle ? TrackerTypography.sectionTitle : .headline)
+                .accessibilityAddTraits(.isHeader)
+            Text("What to expect in your next cycle.")
+                .font(.subheadline).foregroundStyle(.secondary)
+        }
+        .fixedSize(horizontal: false, vertical: true)
     }
 }

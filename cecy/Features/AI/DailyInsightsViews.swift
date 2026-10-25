@@ -42,35 +42,35 @@ struct DailyInsightsPreference: View {
 struct DailyInsightsCard: View {
     @Environment(\.colorScheme) private var colorScheme
     let session: TrackerSession
-    @State private var expanded = false
+    /// nil until the user taps a row; until then only the first section is open.
+    @State private var openSections: Set<DailyInsightSectionKind>?
 
     var body: some View {
         TrackerCard {
+            InsightSectionHeader(title: "Today’s insights", symbol: "sparkles",
+                                 subtitle: "Personalized suggestions for today.")
             if let output = session.dailyInsightOutput, case .dailyInsights(let value) = output {
-                DisclosureGroup(isExpanded: $expanded) {
-                    VStack(alignment: .leading, spacing: 16) {
-                        WellnessSafetyNotice(symptoms: session.snapshot.symptoms, today: session.today)
-                        AISafetyNotice(message: value.safetyMessage)
-                        ForEach(value.sections, id: \.kind) { section in
-                            DailyInsightSectionView(section: section, compact: true)
-                        }
-                        DisclosureGroup("Why these?") { Text(verbatim: value.explanation).font(.subheadline) }
-                        Text("AI-generated · Not medical advice. Check ingredients against your allergies.")
-                            .font(.caption).foregroundStyle(.secondary)
-                        Button { session.regenerateTodayInsights() } label: {
-                            Label("Regenerate insights", systemImage: "arrow.clockwise").font(.subheadline)
-                                .foregroundStyle(TrackerPalette(scheme: colorScheme).accent)
-                        }
-                        .buttonStyle(.plain).frame(minHeight: 44)
-                        .disabled(session.dailyAI.isLoading)
-                        .accessibilityIdentifier("regenerateDailyInsights")
-                    }.padding(.top, 8)
-                } label: {
-                    InsightSectionHeader(title: "Today’s insights", symbol: "sparkles")
+                WellnessSafetyNotice(symptoms: session.snapshot.symptoms, today: session.today)
+                AISafetyNotice(message: value.safetyMessage)
+                VStack(spacing: 12) {
+                    ForEach(value.sections, id: \.kind) { section in
+                        DailyInsightAccordionRow(section: section,
+                                                 isExpanded: isOpen(section.kind, first: value.sections.first?.kind))
+                    }
                 }
                 .accessibilityElement(children: .contain).accessibilityIdentifier("todayWellnessSuggestions")
+                DisclosureGroup("Why these?") { Text(verbatim: value.explanation).font(.subheadline).padding(.top, 6) }
+                    .font(.subheadline)
+                Text("AI-generated · Not medical advice. Check ingredients against your allergies.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Button { session.regenerateTodayInsights() } label: {
+                    Label("Regenerate insights", systemImage: "arrow.clockwise").font(.subheadline)
+                        .foregroundStyle(TrackerPalette(scheme: colorScheme).accent)
+                }
+                .buttonStyle(.plain).frame(minHeight: 44)
+                .disabled(session.dailyAI.isLoading)
+                .accessibilityIdentifier("regenerateDailyInsights")
             } else {
-                InsightSectionHeader(title: "Today’s insights", symbol: "sparkles")
                 if session.dailyAI.isLoading {
                     AIRequestStatus(coordinator: session.dailyAI, label: "Preparing today’s insights")
                 } else if session.snapshot.profile?.wellnessPreferences?.isReadyForInsights != true {
@@ -97,6 +97,123 @@ struct DailyInsightsCard: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("dailyInsightsCard")
         .task(id: session.dailyInsightRequest) { session.preloadDailyInsights() }
+    }
+
+    private func isOpen(_ kind: DailyInsightSectionKind, first: DailyInsightSectionKind?) -> Binding<Bool> {
+        Binding(
+            get: { openSections?.contains(kind) ?? (kind == first) },
+            set: { open in
+                var sections = openSections ?? Set(first.map { [$0] } ?? [])
+                if open { sections.insert(kind) } else { sections.remove(kind) }
+                openSections = sections
+            })
+    }
+}
+
+/// Colour and icon for each daily insight category.
+struct DailyInsightSectionStyle {
+    let tint: Color
+    let tile: Color
+    let symbol: String
+
+    init(kind: DailyInsightSectionKind, scheme: ColorScheme) {
+        let palette = TrackerPalette(scheme: scheme)
+        let dark = scheme == .dark
+        switch kind {
+        case .selfCare:
+            tint = palette.recorded; tile = palette.recordedSurface; symbol = "heart"
+        case .food:
+            tint = dark ? Color(red: 0.95, green: 0.80, blue: 0.50) : Color(red: 0.55, green: 0.38, blue: 0.08)
+            tile = dark ? Color(red: 0.27, green: 0.22, blue: 0.12) : Color(red: 0.99, green: 0.95, blue: 0.86)
+            symbol = "fork.knife"
+        case .movement:
+            tint = palette.accent; tile = palette.sage; symbol = "figure.run"
+        case .hydration:
+            tint = dark ? Color(red: 0.62, green: 0.80, blue: 0.96) : Color(red: 0.16, green: 0.38, blue: 0.60)
+            tile = dark ? Color(red: 0.13, green: 0.20, blue: 0.28) : Color(red: 0.90, green: 0.95, blue: 0.99)
+            symbol = "drop"
+        case .recovery:
+            tint = palette.ovulation; tile = palette.ovulationSurface; symbol = "leaf"
+        case .skincare:
+            tint = dark ? Color(red: 0.98, green: 0.72, blue: 0.60) : Color(red: 0.66, green: 0.32, blue: 0.20)
+            tile = dark ? Color(red: 0.28, green: 0.17, blue: 0.14) : Color(red: 0.99, green: 0.92, blue: 0.88)
+            symbol = "sparkle"
+        }
+    }
+}
+
+/// One collapsible insight category. Generated text uses Text(verbatim:).
+private struct DailyInsightAccordionRow: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .body) private var tileSize = 44.0
+    let section: DailyInsightSection
+    @Binding var isExpanded: Bool
+
+    var body: some View {
+        let style = DailyInsightSectionStyle(kind: section.kind, scheme: colorScheme)
+        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { isExpanded.toggle() }
+            } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: style.symbol)
+                        .font(.title3.weight(.medium))
+                        .foregroundStyle(style.tint)
+                        .frame(width: min(tileSize, 60), height: min(tileSize, 60))
+                        .background(style.tile, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .accessibilityHidden(true)
+                    Text(section.kind.title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: "chevron.down")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                        .accessibilityHidden(true)
+                }
+                .padding(12)
+                .frame(minHeight: TrackerLayout.minimumTarget)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(section.kind.title)
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+            .accessibilityHint(isExpanded ? "Hides these suggestions" : "Shows these suggestions")
+            .accessibilityIdentifier("dailyInsightToggle_\(section.kind.rawValue)")
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 10) {
+                    if section.status == .available {
+                        ForEach(Array(section.suggestions.enumerated()), id: \.offset) { _, item in
+                            Text(verbatim: item)
+                                .font(.body)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    } else {
+                        Text(DailyInsightSectionView.message(for: section.unavailableReason))
+                            .font(.subheadline).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("dailyInsightUnavailable_\(section.kind.rawValue)")
+                    }
+                }
+                .lineSpacing(3)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+                .transition(.opacity)
+            }
+        }
+        .background(style.tile.opacity(isExpanded ? 0.55 : 0.35), in: shape)
+        .overlay {
+            shape.strokeBorder(style.tint.opacity(contrast == .increased ? 0.6 : (isExpanded ? 0.16 : 0.08)), lineWidth: 1)
+                .allowsHitTesting(false)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("dailyInsightSection_\(section.kind.rawValue)")
     }
 }
 
