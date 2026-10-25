@@ -33,10 +33,11 @@ final class DailyInsightsAndOvulationUITests: XCTestCase {
         expanded.tap()
         app.buttons["expandTodayCalendar"].tap()
         let selectedEstimate = app.otherElements["projectedCycle_0"].firstMatch
-        let estimateLabel = selectedEstimate.staticTexts["Possible ovulation · Estimate"]
+        let estimateLabel = selectedEstimate.buttons["forecastOvulation_0"]
         UIViewport.reveal(estimateLabel, in: app)
         XCTAssertTrue(estimateLabel.isHittable)
-        XCTAssertTrue(selectedEstimate.staticTexts["forecastFertileWindow_0"].exists)
+        XCTAssertTrue(estimateLabel.label.contains("Possible ovulation, estimate"))
+        XCTAssertTrue(selectedEstimate.buttons["forecastFertileWindow_0"].exists)
         XCTAssertFalse(selectedEstimate.buttons["ovulationUncertainty_0"].exists)
         XCTAssertFalse(selectedEstimate.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "not six days of ovulation")).firstMatch.exists)
         app.tabBars.buttons["Calendar"].tap()
@@ -46,9 +47,14 @@ final class DailyInsightsAndOvulationUITests: XCTestCase {
         XCTAssertTrue(app.buttons["calendarDay_20260929"].label.contains("estimate"))
         date.tap()
         let details = app.otherElements["upcomingCycleForecast"]
-        let detail = details.staticTexts["Possible ovulation · Estimate"].firstMatch
+        let detail = details.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "forecastOvulation_")).firstMatch
         UIViewport.reveal(detail, in: app)
         XCTAssertTrue(detail.isHittable)
+        // Each row opens a short explanation.
+        detail.tap()
+        XCTAssertTrue(app.staticTexts["forecastDetailExplanation"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["forecastDetailExplanation"].label.contains("isn't confirmed"))
+        app.buttons["Done"].tap()
         XCTAssertFalse(details.buttons["ovulationUncertainty_0"].exists)
         XCTAssertFalse(details.buttons["How this forecast works"].exists)
         XCTAssertFalse(details.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Calendar estimates only")).firstMatch.exists)
@@ -75,7 +81,7 @@ final class DailyInsightsAndOvulationUITests: XCTestCase {
         XCTAssertTrue(fertileDate.waitForExistence(timeout: 5))
         XCTAssertTrue(fertileDate.label.contains("Estimated fertile window"))
         fertileDate.tap()
-        let detail = app.staticTexts["forecastFertileWindow_0"].firstMatch
+        let detail = app.buttons["forecastFertileWindow_0"].firstMatch
         reveal(detail, app: app)
         XCTAssertTrue(detail.isHittable)
     }

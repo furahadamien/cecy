@@ -35,9 +35,10 @@ final class ConciseCycleCopyUITests: XCTestCase {
         for tab in ["Today", "Calendar"] {
             app.tabBars.buttons[tab].tap()
             let forecast = app.otherElements["upcomingCycleForecast"]
-            let label = forecast.staticTexts["Possible period start · Estimate"]
+            let label = forecast.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "forecastPeriodSection_")).firstMatch
             UIViewport.reveal(label, in: app)
             XCTAssertTrue(label.isHittable)
+            XCTAssertTrue(label.label.contains("Period start window, estimate"))
             XCTAssertFalse(forecast.buttons["How this forecast works"].exists)
             XCTAssertFalse(forecast.buttons["Bleeding timing uncertainty"].exists)
             XCTAssertFalse(forecast.buttons["ovulationUncertainty_0"].exists)
