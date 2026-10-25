@@ -9,6 +9,8 @@ import Foundation
 nonisolated enum FollowUpKind: String, Codable, CaseIterable, Sendable {
     case periodToday, windowPassed, unusualCycle, newCycle, openFactor
     case treatmentDose, treatmentReview, lifeStageReview, biomarker
+    /// Everyday questions, so there's something useful to ask on ordinary days too.
+    case cycleContext, dailyCheckIn
 
     /// Higher is asked first when several are due.
     var priority: Int {
@@ -22,6 +24,8 @@ nonisolated enum FollowUpKind: String, Codable, CaseIterable, Sendable {
         case .treatmentReview: 50
         case .lifeStageReview: 40
         case .biomarker: 30
+        case .cycleContext: 25
+        case .dailyCheckIn: 20
         }
     }
 
@@ -36,6 +40,8 @@ nonisolated enum FollowUpKind: String, Codable, CaseIterable, Sendable {
         case .treatmentReview: String(localized: "Whether contraception or medication is still current")
         case .lifeStageReview: String(localized: "Whether a life stage is still current")
         case .biomarker: String(localized: "Biomarkers you've been recording")
+        case .cycleContext: String(localized: "A weekly check for anything affecting your cycle")
+        case .dailyCheckIn: String(localized: "How you're feeling, when today isn't logged yet")
         }
     }
 }
@@ -55,8 +61,14 @@ nonisolated struct FollowUpMemory: Codable, Equatable, Sendable {
     var resolvedDays: [String: Int] = [:]
     /// "Don't ask about this": the whole question type stays off until re-enabled in Settings.
     var disabledKinds: Set<FollowUpKind> = []
-    /// Days a question was shown, for the daily and weekly limits.
+    /// Days a question was shown.
     var shownDays: [Int] = []
+    /// The day `todaySubjects` and `lastShownMinute` belong to. Optional so older preferences still load.
+    var todayKey: Int?
+    /// Questions already shown today: each is asked at most once a day, and they count toward the daily limit.
+    var todaySubjects: [String]?
+    /// Minutes since midnight when the last question was shown, to space pop-ups out across the day.
+    var lastShownMinute: Int?
 
     static let snoozeSchedule = [3, 7, 21]
 
@@ -65,13 +77,27 @@ nonisolated struct FollowUpMemory: Codable, Equatable, Sendable {
         for value in confirmedDays.values { _ = try LocalDay(key: value) }
         for value in resolvedDays.values { _ = try LocalDay(key: value) }
         for value in shownDays { _ = try LocalDay(key: value) }
-        guard snoozes.count + confirmedDays.count + resolvedDays.count <= 2_000, shownDays.count <= 60 else {
+        if let todayKey { _ = try LocalDay(key: todayKey) }
+        guard snoozes.count + confirmedDays.count + resolvedDays.count <= 2_000, shownDays.count <= 60,
+              (todaySubjects?.count ?? 0) <= 50, (0..<1_440).contains(lastShownMinute ?? 0) else {
             throw TrackingError.invalidData
         }
     }
 
-    mutating func markShown(_ today: LocalDay) {
+    /// Questions shown so far on `today`.
+    func subjectsShown(on today: LocalDay) -> [String] {
+        todayKey == today.key ? (todaySubjects ?? []) : []
+    }
+
+    func lastShownMinute(on today: LocalDay) -> Int? {
+        todayKey == today.key ? lastShownMinute : nil
+    }
+
+    mutating func markShown(_ today: LocalDay, subject: String? = nil, minute: Int? = nil) {
         if !shownDays.contains(today.key) { shownDays.append(today.key) }
+        if todayKey != today.key { todayKey = today.key; todaySubjects = []; lastShownMinute = nil }
+        if let subject, !(todaySubjects ?? []).contains(subject) { todaySubjects = (todaySubjects ?? []) + [subject] }
+        if let minute { lastShownMinute = minute }
     }
 
     mutating func snooze(_ subject: String, today: LocalDay) {
@@ -105,6 +131,7 @@ nonisolated struct FollowUpMemory: Codable, Equatable, Sendable {
         let weekAgo = ((try? today.adding(days: -14)) ?? today).key
         let yearAgo = ((try? today.adding(days: -365)) ?? today).key
         shownDays = shownDays.filter { $0 >= weekAgo && $0 <= today.key }.sorted()
+        if todayKey != today.key { todayKey = nil; todaySubjects = nil; lastShownMinute = nil }
         snoozes = snoozes.filter { $0.value.untilDay >= yearAgo }
         confirmedDays = confirmedDays.filter { $0.value >= yearAgo }
         resolvedDays = resolvedDays.filter { $0.value >= yearAgo }
@@ -129,6 +156,8 @@ nonisolated struct FollowUpPrompt: Identifiable, Equatable, Sendable {
         case treatmentReview(TreatmentRecord)
         case lifeStage(LifeStageEpisode)
         case biomarker(BiomarkerKind)
+        case cycleContext(day: LocalDay)
+        case dailyCheckIn(day: LocalDay)
     }
 
     let kind: FollowUpKind
@@ -166,35 +195,42 @@ nonisolated enum ReviewStyle: Equatable, Sendable {
 
 /// Main-actor because prompts use the app's localized date formatting (`DayText`).
 @MainActor enum FollowUpEngine {
-    static let weeklyLimit = 3
-    static let quietDaysAfterSetup = 3
+    /// Up to this many pop-ups a day, each a different question.
+    static let dailyLimit = 4
+    /// Minimum minutes between two pop-ups, so they're spread across separate visits.
+    static let minimumGapMinutes = 45
+    /// No questions on the day setup finishes.
+    static let quietDaysAfterSetup = 1
+    /// How often the everyday "anything affecting your cycle?" question can come back.
+    static let cycleContextInterval = 7
     static let unusualCycleDifference = 7
     static let factorExplainer = String(localized: "Cycle factors are things that might affect the length or regularity of your cycle, such as illness, stress or travel. Your period records never change.")
 
-    /// The single question to show today, after limits and quiet times. `nil` means stay quiet.
+    /// The question to show now, after limits and quiet times. `nil` means stay quiet.
     static func next(_ input: FollowUpInput) -> FollowUpPrompt? {
         guard canAsk(input) else { return nil }
         return eligible(input).first
     }
 
-    /// Daily, weekly and quiet-time limits, independent of which questions are due.
+    /// Daily limit, spacing and quiet-time rules, independent of which questions are due.
     static func canAsk(_ input: FollowUpInput) -> Bool {
         let today = input.today
-        if input.memory.shownDays.contains(today.key) { return false }
-        let weekStart = ((try? today.adding(days: -6)) ?? today).key
-        if input.memory.shownDays.filter({ $0 >= weekStart && $0 <= today.key }).count >= weeklyLimit { return false }
+        if input.memory.subjectsShown(on: today).count >= dailyLimit { return false }
+        if let last = input.memory.lastShownMinute(on: today), input.minuteOfDay - last < minimumGapMinutes { return false }
         if let completed = input.snapshot.onboardingCompletedAt,
            let completedDay = try? LocalDay(date: completed, timeZone: input.timeZone),
            completedDay.days(until: today) < quietDaysAfterSetup { return false }
         return true
     }
 
-    /// Every due question that isn't skipped or turned off, highest priority first.
+    /// Every due question that isn't skipped, turned off or already shown today, highest priority first.
     static func eligible(_ input: FollowUpInput) -> [FollowUpPrompt] {
         let sensitive = isSensitivePeriod(input)
+        let shownToday = Set(input.memory.subjectsShown(on: input.today))
         return candidates(input)
             .filter { !input.memory.disabledKinds.contains($0.kind) }
             .filter { !input.memory.isWaiting($0.subject, today: input.today) }
+            .filter { !shownToday.contains($0.subject) }
             // Pregnancy or loss: no casual questions. Only explicit treatment reminders remain.
             .filter { !sensitive || $0.kind == .treatmentDose }
             .sorted { ($0.kind.priority, $1.subject) > ($1.kind.priority, $0.subject) }
@@ -221,7 +257,46 @@ nonisolated enum ReviewStyle: Equatable, Sendable {
         result += treatmentReviews(input)
         result += lifeStageReviews(input)
         result += biomarkers(input)
+        // The weekly "anything affecting your cycle?" question would repeat the cycle-start questions.
+        if !result.contains(where: { [.unusualCycle, .newCycle, .openFactor].contains($0.kind) }),
+           let value = cycleContext(input) { result.append(value) }
+        if let value = dailyCheckIn(input) { result.append(value) }
         return result
+    }
+
+    // MARK: Everyday questions
+
+    /// "How's today going?" while nothing is logged for today. Answering opens the daily check-in.
+    static func dailyCheckIn(_ input: FollowUpInput) -> FollowUpPrompt? {
+        let today = input.today
+        guard !input.snapshot.dailyBleeding.contains(where: { $0.day == today }),
+              !input.snapshot.symptoms.contains(where: { $0.day == today }) else { return nil }
+        return FollowUpPrompt(kind: .dailyCheckIn, subject: "dailyCheckIn:\(today.key)",
+            title: String(localized: "How are you feeling today?"),
+            message: String(localized: "Nothing is logged for today yet. It only takes a few seconds."),
+            explainer: String(localized: "Daily answers build your history, so patterns and estimates get more useful over time. Days you don't log stay unknown."),
+            reason: String(localized: "Today has no bleeding answer or symptoms logged yet."),
+            context: .dailyCheckIn(day: today))
+    }
+
+    /// A weekly check for anything that might affect the cycle, when nothing has been noted recently.
+    static func cycleContext(_ input: FollowUpInput) -> FollowUpPrompt? {
+        let today = input.today
+        guard let weekAgo = try? today.adding(days: -cycleContextInterval) else { return nil }
+        // Something noted or still going recently already answers this.
+        guard !input.snapshot.cycleFactors.contains(where: { factor in
+            factor.start >= weekAgo || (factor.end.map { $0 >= weekAgo } ?? true)
+                || ((try? LocalDay(date: factor.updatedAt, timeZone: input.timeZone)).map { $0 >= weekAgo } ?? false)
+        }) else { return nil }
+        let subject = "cycleContext"
+        if let key = input.memory.confirmedDays[subject], let confirmed = try? LocalDay(key: key),
+           confirmed.days(until: today) < cycleContextInterval { return nil }
+        return FollowUpPrompt(kind: .cycleContext, subject: subject,
+            title: String(localized: "Anything affecting your cycle lately?"),
+            message: String(localized: "Illness, stress or travel can all shift when a period comes."),
+            explainer: factorExplainer,
+            reason: String(localized: "No cycle factor has been noted in the last week. Cecy checks in about once a week."),
+            context: .cycleContext(day: today))
     }
 
     // MARK: Rules

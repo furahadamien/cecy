@@ -14,7 +14,7 @@ struct FollowUpSettingsView: View {
                 }))
                 .accessibilityIdentifier("followUpsEnabled")
             } footer: {
-                Text("Now and then, Cecy asks one short question on Today to keep your records current, like whether a trip has ended or a cycle was affected by illness. At most one a day and three a week. Answers save to the same records you see in Settings.")
+                Text("When you open the app, Cecy sometimes asks a short question on Today to keep your records current, like how you're feeling or whether a trip has ended. Up to a few a day, spaced out, and never the same question twice in a day. Answers save to the same records you see in Settings.")
             }
             if session.privacy.followUpsEnabled {
                 Section {

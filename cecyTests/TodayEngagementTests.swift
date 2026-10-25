@@ -249,25 +249,62 @@ import Testing
 
     // MARK: Limits, quiet times and memory
 
-    @Test func onlyOneQuestionADayAndThreeAWeek() {
+    @Test func severalADaySpacedOutAndNeverTheSameQuestionTwice() throws {
         var snapshot = TrackerSnapshot(onboardingCompletedAt: longAgo)
         snapshot.cycleFactors = [CycleFactor(kind: .travel, start: day(20261001), createdAt: longAgo)]
         let today = day(20261010)
-        #expect(FollowUpEngine.next(input(snapshot, today: today)) != nil)
+        let first = try #require(FollowUpEngine.next(input(snapshot, today: today, minute: 9 * 60)))
+        #expect(first.kind == .openFactor)
         var memory = FollowUpMemory()
-        memory.markShown(today)
-        #expect(FollowUpEngine.next(input(snapshot, today: today, memory: memory)) == nil, "One a day.")
-        memory = FollowUpMemory(shownDays: [20261004, 20261006, 20261008])
-        #expect(FollowUpEngine.next(input(snapshot, today: today, memory: memory)) == nil, "Three a week.")
-        memory = FollowUpMemory(shownDays: [20261002, 20261006, 20261008])
-        #expect(FollowUpEngine.next(input(snapshot, today: today, memory: memory)) != nil, "Older days fall out of the week.")
+        memory.markShown(today, subject: first.subject, minute: 9 * 60)
+        #expect(FollowUpEngine.next(input(snapshot, today: today, memory: memory, minute: 9 * 60 + 30)) == nil,
+                "Pop-ups are spaced out.")
+        let second = try #require(FollowUpEngine.next(input(snapshot, today: today, memory: memory, minute: 10 * 60)),
+                                  "A later visit the same day can ask again.")
+        #expect(second.subject != first.subject, "Never the same question twice in a day.")
+
+        memory.todaySubjects = ["a", "b", "c", "d"]
+        memory.lastShownMinute = 8 * 60
+        #expect(FollowUpEngine.next(input(snapshot, today: today, memory: memory, minute: 20 * 60)) == nil, "Daily limit.")
+        #expect(FollowUpEngine.next(input(snapshot, today: day(20261011), memory: memory, minute: 9 * 60)) != nil,
+                "A new day starts fresh.")
     }
 
-    @Test func quietAfterSetupAndDuringPregnancyOrLoss() {
-        var snapshot = TrackerSnapshot(onboardingCompletedAt: ISO8601DateFormatter().date(from: "2026-10-09T12:00:00Z")!)
+    @Test func everydayQuestionsFillOrdinaryDays() throws {
+        var snapshot = TrackerSnapshot(onboardingCompletedAt: longAgo)
+        let today = day(20261010)
+        #expect(kinds(input(snapshot, today: today)) == [.cycleContext, .dailyCheckIn])
+
+        // Logging today answers the daily question.
+        snapshot.dailyBleeding = [DailyBleedingObservation(day: today, state: .noBleeding)]
+        #expect(!kinds(input(snapshot, today: today)).contains(.dailyCheckIn))
+
+        // A recent cycle factor answers the weekly question; it returns a week after it's over.
+        snapshot.cycleFactors = [CycleFactor(kind: .stress, start: day(20261001), end: day(20261005), createdAt: longAgo, updatedAt: longAgo)]
+        #expect(!kinds(input(snapshot, today: today)).contains(.cycleContext))
+        #expect(kinds(input(snapshot, today: day(20261013))).contains(.cycleContext))
+
+        // "Nothing right now" waits a week, not forever.
+        snapshot.cycleFactors = []
+        var memory = FollowUpMemory()
+        memory.confirm("cycleContext", today: today)
+        #expect(!kinds(input(snapshot, today: day(20261016), memory: memory)).contains(.cycleContext))
+        #expect(kinds(input(snapshot, today: day(20261017), memory: memory)).contains(.cycleContext))
+    }
+
+    @Test func shownTodayMemoryDecodesFromOlderPreferences() throws {
+        let old = #"{"snoozes":{},"confirmedDays":{},"resolvedDays":{},"disabledKinds":[],"shownDays":[20261009]}"#
+        let memory = try JSONDecoder().decode(FollowUpMemory.self, from: Data(old.utf8))
+        #expect(memory.subjectsShown(on: day(20261009)).isEmpty && memory.todayKey == nil)
+        #expect(throws: (any Error).self) { try FollowUpMemory(lastShownMinute: 1_500).validate() }
+    }
+
+    @Test func quietOnSetupDayAndDuringPregnancyOrLoss() {
+        var snapshot = TrackerSnapshot(onboardingCompletedAt: ISO8601DateFormatter().date(from: "2026-10-10T12:00:00Z")!)
         snapshot.cycleFactors = [CycleFactor(kind: .travel, start: day(20261001), createdAt: longAgo)]
         let today = day(20261010)
-        #expect(FollowUpEngine.next(input(snapshot, today: today)) == nil, "Quiet in the first days after setup.")
+        #expect(FollowUpEngine.next(input(snapshot, today: today)) == nil, "Quiet on the day setup finishes.")
+        #expect(FollowUpEngine.next(input(snapshot, today: day(20261011))) != nil)
         snapshot.onboardingCompletedAt = longAgo
         snapshot.cycleFactors.append(CycleFactor(kind: .pregnancyLoss, start: day(20260920), end: day(20260925)))
         snapshot.treatments = [TreatmentRecord(category: .medication, name: "Synthetic", start: day(20261001),
@@ -293,10 +330,10 @@ import Testing
         var snapshot = TrackerSnapshot(onboardingCompletedAt: longAgo)
         snapshot.cycleFactors = [CycleFactor(kind: .travel, start: day(20261001), createdAt: longAgo)]
         memory.disabledKinds = [.openFactor]
-        #expect(FollowUpEngine.next(input(snapshot, today: today, memory: memory)) == nil)
+        #expect(!kinds(input(snapshot, today: today, memory: memory)).contains(.openFactor))
         memory.resetSkipped()
         #expect(memory.snoozes.isEmpty && memory.resolvedDays.isEmpty && memory.disabledKinds.isEmpty)
-        #expect(FollowUpEngine.next(input(snapshot, today: today, memory: memory)) != nil)
+        #expect(FollowUpEngine.next(input(snapshot, today: today, memory: memory))?.kind == .openFactor)
     }
 
     @Test func memoryIsPrunedAndValidatedAndOlderPreferencesStillLoad() throws {
@@ -436,12 +473,13 @@ import Testing
         #expect(!FollowUpEngine.eligible(after).contains { $0.kind == .openFactor })
     }
 
-    @Test func shownQuestionsCountTowardTheDailyLimitAndDeleteAllClearsMemory() async throws {
+    @Test func shownQuestionsAreSpacedOutAndDeleteAllClearsMemory() async throws {
         let session = try session([CycleFactor(kind: .travel, start: try LocalDay(key: 20261001), createdAt: setup)])
-        #expect(session.nextFollowUp() != nil)
-        #expect(session.markFollowUpShown())
-        #expect(session.nextFollowUp() == nil)
+        let shown = try #require(session.nextFollowUp())
+        #expect(session.markFollowUpShown(shown))
+        #expect(session.nextFollowUp() == nil, "A second pop-up waits for a later visit.")
         let input = try #require(session.followUpInput())
+        #expect(!FollowUpEngine.eligible(input).contains { $0.subject == shown.subject }, "Not asked twice in a day.")
         let prompt = try #require(FollowUpEngine.eligible(input).first)
         session.disableFollowUpKind(prompt.kind)
         #expect(session.privacy.followUpMemory.disabledKinds == [prompt.kind])

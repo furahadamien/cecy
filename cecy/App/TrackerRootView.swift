@@ -162,10 +162,8 @@ private struct TrackerTabs: View {
     /// Set when the sheet itself answered, skipped or turned off the question.
     @State private var followUpHandled = false
     @State private var viewingToday = true
-    /// Per foreground visit: a visit that opened from a reminder/Shortcut, or already showed the
-    /// daily insights pop-up, never also shows a follow-up question.
+    /// Per foreground visit: a visit that opened from a reminder/Shortcut never also shows a question.
     @State private var openedByRoute = false
-    @State private var dailyShownThisVisit = false
 
     private struct FollowUpPresentationKey: Equatable {
         let day: LocalDay
@@ -178,8 +176,8 @@ private struct TrackerTabs: View {
         let blockedThisVisit: Bool
     }
 
-    /// Today's insights pop-up still has to show, or is still being prepared. Questions wait for it
-    /// so the two never compete for the same moment.
+    /// Today's insights pop-up still has to show, or is still being prepared. Questions wait until it
+    /// has been shown (and closed), so the two never come up at the same time.
     private var dailyInsightsPending: Bool {
         guard session.privacy.preferences.dailyInsightPresentationDay != today.key else { return false }
         return !session.privacy.dailyInsightsEnabled || session.dailyInsightOutput != nil || session.dailyAI.isLoading
@@ -191,7 +189,7 @@ private struct TrackerTabs: View {
                                 available: session.privacy.canAccess && !session.isUpdatingPredictions && !session.isSaving,
                                 occupied: loggingDay != nil || showHistory || showDailyInsights || showReminderCheckIn || followUp != nil,
                                 dailyPending: dailyInsightsPending,
-                                blockedThisVisit: openedByRoute || dailyShownThisVisit)
+                                blockedThisVisit: openedByRoute)
     }
 
     private struct InsightPresentationKey: Equatable {
@@ -274,17 +272,17 @@ private struct TrackerTabs: View {
         .onAppear {
             if CecyLaunchRoute.consume() == CecyLaunchRoute.checkIn { openedByRoute = true; selectedTab = 0; showReminderCheckIn = true }
         }
-        .onChange(of: showDailyInsights) { _, shown in if shown { dailyShownThisVisit = true } }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background { openedByRoute = false; dailyShownThisVisit = false }
+            if phase == .background { openedByRoute = false }
         }
         .task(id: followUpKey) {
             let key = followUpKey
             guard key.active, key.onToday, key.viewingToday, key.available, !key.occupied,
                   !key.dailyPending, !key.blockedThisVisit else { return }
-            // Let Today settle and give the user a moment first; never pop up the instant the app opens.
-            do { try await Task.sleep(for: .seconds(3)) } catch { return }
-            guard followUpKey == key, let prompt = session.nextFollowUp(), session.markFollowUpShown() else { return }
+            // A short random pause: never the instant the app opens or the insights pop-up closes,
+            // and not at the same moment every visit. Spacing between pop-ups is enforced by the engine.
+            do { try await Task.sleep(for: .seconds(Double.random(in: 3...7))) } catch { return }
+            guard followUpKey == key, let prompt = session.nextFollowUp(), session.markFollowUpShown(prompt) else { return }
             presentedFollowUp = prompt
             followUp = prompt
         }
