@@ -126,6 +126,12 @@ final class TodayQuickActionsUITests: XCTestCase {
             XCTAssertEqual(card.frame.height, cards[0].frame.height, accuracy: 1)
             XCTAssertEqual(card.frame.minY, cards[0].frame.minY, accuracy: 1)
         }
+        // The hero fills the first screen: the phase tiles are the last thing visible above the tab bar.
+        XCTAssertGreaterThan(cards[0].frame.maxY, bottom - 40, "Gap above the tab bar: \(bottom - cards[0].frame.maxY)")
+        let insights = app.otherElements["dailyInsightsCard"]
+        if insights.exists {
+            XCTAssertGreaterThanOrEqual(insights.frame.minY, bottom, "Today's insights should start below the fold")
+        }
     }
 
     @MainActor func testPhasesFitInitialViewportDuringRecordedPeriod() {

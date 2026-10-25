@@ -149,23 +149,24 @@ private struct PhaseRingGraphic: View {
             let size = min(geometry.size.width, geometry.size.height)
             let center = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
             ZStack {
-                Circle().stroke(Color.secondary.opacity(0.1), lineWidth: size * 0.065).padding(size * 0.1)
+                // Insets keep the ring close to its frame so it reads large; the dashed fertile arc sits just outside it.
+                Circle().stroke(Color.secondary.opacity(0.1), lineWidth: size * 0.065).padding(size * 0.07)
                 if let fertile = timeline.fertileDays {
-                    arc(fertile, inset: size * 0.035)
+                    arc(fertile, inset: size * 0.02)
                         .stroke(TrackerPalette(scheme: colorScheme).accent.opacity(0.3), style: StrokeStyle(lineWidth: size * 0.025, dash: [2, 2]))
                 }
                 ForEach(timeline.segments) { segment in
-                    arc(segment.days, inset: size * 0.1)
+                    arc(segment.days, inset: size * 0.07)
                         .stroke(color(segment.phase), style: StrokeStyle(lineWidth: size * (timeline.currentPhase == segment.phase ? 0.085 : 0.065),
                                                                          dash: segment.phase == .ovulation ? [2, 2] : [6, 2]))
                 }
-                arc(timeline.recordedBleeding, inset: size * 0.17)
+                arc(timeline.recordedBleeding, inset: size * 0.14)
                     .stroke(color(.menstrual), lineWidth: size * 0.018)
                 if let day = timeline.markerDay {
                     let angle = (Double(day) - 0.5) / Double(timeline.length) * 2 * Double.pi - Double.pi / 2
                     Circle().fill(Color.primary).frame(width: 12, height: 12)
                         .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
-                        .position(x: center.x + cos(angle) * size * 0.4, y: center.y + sin(angle) * size * 0.4)
+                        .position(x: center.x + cos(angle) * size * 0.43, y: center.y + sin(angle) * size * 0.43)
                 }
                 VStack(spacing: 2) {
                     Text("Day \(timeline.cycleDay)").font(.system(.largeTitle, design: .rounded, weight: .bold)).monospacedDigit()
@@ -185,7 +186,7 @@ private struct PhaseRingGraphic: View {
             .onTapGesture { location in
                 let dx = location.x - center.x, dy = location.y - center.y
                 let radius = sqrt(dx * dx + dy * dy)
-                guard radius >= size * 0.28, radius <= size / 2 else { return }
+                guard radius >= size * 0.31, radius <= size / 2 else { return }
                 let angle = (atan2(dy, dx) + .pi / 2 + 2 * .pi).truncatingRemainder(dividingBy: 2 * .pi)
                 let day = min(timeline.length, Int(angle / (2 * .pi) * Double(timeline.length)) + 1)
                 if let segment = timeline.segments.first(where: { $0.days.contains(day) }) { select(segment.phase) }
