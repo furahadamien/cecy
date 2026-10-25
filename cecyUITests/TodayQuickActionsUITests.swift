@@ -93,7 +93,9 @@ final class TodayQuickActionsUITests: XCTestCase {
         let nextPeriod = app.otherElements["nextPeriodCard"]
         let ring = app.descendants(matching: .any)["phaseRingSummary"].firstMatch
         XCTAssertTrue(ring.exists)
-        XCTAssertLessThanOrEqual(ring.frame.maxX, app.staticTexts["periodCountdown"].frame.minX)
+        // The ring is centred in the card with the countdown underneath it.
+        XCTAssertLessThanOrEqual(ring.frame.maxY, app.staticTexts["periodCountdown"].frame.minY)
+        XCTAssertEqual(ring.frame.midX, nextPeriod.frame.midX, accuracy: 2)
         XCTAssertGreaterThanOrEqual(nextPeriod.frame.minY, strip.frame.maxY)
         UIViewport.reveal(period, in: app)
         for button in [period, symptoms, sex, app.buttons["logDailyBleeding"]] {

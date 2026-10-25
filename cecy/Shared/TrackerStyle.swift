@@ -295,6 +295,8 @@ enum DayText {
     private static var formatters: [String: DateFormatter] = [:]
     static func full(_ day: LocalDay) -> String { format(day, template: "yMMMMd") }
     static func short(_ day: LocalDay) -> String { format(day, template: "yMMMd") }
+    /// Month and day only, e.g. "Nov 3", for places where the year is obvious.
+    static func monthDay(_ day: LocalDay) -> String { format(day, template: "MMMd") }
     static func month(_ day: LocalDay) -> String { format(day, template: "yMMMM") }
     static func range(_ first: LocalDay, _ last: LocalDay) -> String { "\(short(first)) – \(short(last))" }
 

@@ -183,7 +183,6 @@ final class OnboardingUITests: XCTestCase {
         OnboardingUITestSupport.complete(in: app)
         XCTAssertEqual(app.staticTexts["cycleDay"].label, "Day 28")
         XCTAssertTrue(app.staticTexts["nextPeriodCenter"].exists)
-        XCTAssertTrue(app.staticTexts["predictionConfidence"].exists)
         app.terminate(); app.launch()
         XCTAssertTrue(app.tabBars.buttons["Settings"].waitForExistence(timeout: 10))
         app.tabBars.buttons["Settings"].tap()

@@ -146,8 +146,8 @@ struct TodayView: View {
             if dynamicTypeSize > .large {
                 VStack(spacing: 16) { heroRing.frame(height: 280); countdown }
             } else {
-                // The ring takes most of the width; the window and starter notes live in the forecast card and "?" sheet.
-                TodayHeroColumns(minHeight: heroColumnsMinHeight) {
+                // The ring is centred and as large as the card allows; the countdown sits underneath it.
+                TodayHeroStack(minHeight: heroColumnsMinHeight) {
                     heroRing
                     countdown
                 }
@@ -180,48 +180,36 @@ struct TodayView: View {
     }
 
     private var countdown: some View {
-        let palette = TrackerPalette(scheme: colorScheme)
         let value = TodayPeriodCountdown(outcome: overview.prediction, today: today)
-        return VStack(alignment: .leading, spacing: 4) {
-            if overview.estimate != nil {
-                Button { showExplanation = true } label: {
-                    HStack(spacing: 4) {
-                        Text("Next period")
-                        Image(systemName: "questionmark.circle").accessibilityHidden(true)
+        return VStack(spacing: 2) {
+            HStack(spacing: 6) {
+                Text("Next period").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                Text(value.title).font(.system(.headline, design: .rounded, weight: .bold)).monospacedDigit()
+                    .accessibilityIdentifier("periodCountdown")
+                if overview.estimate != nil {
+                    Button { showExplanation = true } label: {
+                        Image(systemName: "questionmark.circle").font(.subheadline).foregroundStyle(.secondary)
+                            .padding(.horizontal, 4)
+                            // Full 44-pt tap area without making the row taller (the height goes to the ring).
+                            .contentShape(Rectangle().inset(by: -14))
                     }
-                    .font(.caption.weight(.medium)).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: TrackerLayout.minimumTarget, alignment: .leading)
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("How this estimate works")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("How this estimate works")
-            } else {
-                Text("Next period").font(.caption.weight(.medium)).foregroundStyle(.secondary)
             }
-            Text(value.title).font(.system(.title3, design: .rounded, weight: .bold)).monospacedDigit()
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2).minimumScaleFactor(0.8)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("periodCountdown")
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1).minimumScaleFactor(0.8)
             if let estimate = overview.estimate {
-                HStack(spacing: 4) {
-                    Image(systemName: "calendar").foregroundStyle(palette.recorded).accessibilityHidden(true)
-                    Text("Around \(DayText.short(estimate.center))")
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("nextPeriodCenter")
-                }
-                .font(.subheadline.weight(.medium))
-                Text("\(estimate.confidence.rawValue) confidence")
-                    .font(.caption2.weight(.semibold)).foregroundStyle(palette.accent)
-                    .padding(.horizontal, 8).padding(.vertical, 3)
-                    .background(palette.sage, in: Capsule())
-                    .padding(.top, 4)
-                    .accessibilityLabel("\(estimate.confidence.rawValue) confidence, rough estimate")
-                    .accessibilityIdentifier("predictionConfidence")
+                Text("Around \(DayText.monthDay(estimate.center))")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .accessibilityLabel("Around \(DayText.monthDay(estimate.center)), estimated")
+                    .accessibilityIdentifier("nextPeriodCenter")
             } else {
                 Text(value.detail).font(.footnote).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder private var loggingButtons: some View {
@@ -271,35 +259,38 @@ private struct PersonalizationSheet: View {
     }
 }
 
-/// Propose each column's actual width rather than testing unwrapped text widths.
-private struct TodayHeroColumns: Layout {
-    /// Extra height to fill so the first screen ends at the phase tiles; content is centred within it.
+/// Ring centred on top, countdown underneath. The ring grows into whatever height the card is given
+/// (so the first screen ends at the phase tiles), bounded by the card width.
+private struct TodayHeroStack: Layout {
+    /// Height to fill so the first screen ends at the phase tiles; content is centred within it.
     var minHeight: CGFloat = 0
-    private let spacing: CGFloat = 12
+    private let spacing: CGFloat = 6
+    private let smallestRing: CGFloat = 160
+    private let largestRing: CGFloat = 320
 
-    private func columns(_ width: CGFloat) -> (ring: CGFloat, detail: CGFloat) {
-        // Leaves ~100 pt for the countdown on an iPhone; the countdown wraps rather than truncates.
-        let ring = min(300, width * 0.68)
-        return (ring, max(0, width - ring - spacing))
+    private func measure(_ width: CGFloat, _ subviews: Subviews) -> (ring: CGFloat, detail: CGFloat) {
+        let detail = subviews[1].sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        // Before the first measurement arrives, use a width-based size so the card never starts tiny.
+        let byHeight = minHeight > 0 ? minHeight - detail - spacing : width * 0.68
+        let ring = min(width, largestRing, max(smallestRing, byHeight))
+        return (ring, detail)
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard subviews.count == 2 else { return .zero }
         let width = proposal.width ?? 330
-        let sizes = columns(width)
-        let detail = subviews[1].sizeThatFits(ProposedViewSize(width: sizes.detail, height: nil))
-        return CGSize(width: width, height: max(sizes.ring, detail.height, minHeight))
+        let sizes = measure(width, subviews)
+        return CGSize(width: width, height: max(sizes.ring + spacing + sizes.detail, minHeight))
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         guard subviews.count == 2 else { return }
-        let sizes = columns(bounds.width)
-        subviews[0].place(at: CGPoint(x: bounds.minX, y: bounds.midY - sizes.ring / 2), anchor: .topLeading,
+        let sizes = measure(bounds.width, subviews)
+        let top = bounds.midY - (sizes.ring + spacing + sizes.detail) / 2
+        subviews[0].place(at: CGPoint(x: bounds.midX - sizes.ring / 2, y: top), anchor: .topLeading,
                           proposal: ProposedViewSize(width: sizes.ring, height: sizes.ring))
-        // Centre the countdown beside the ring.
-        let detail = subviews[1].sizeThatFits(ProposedViewSize(width: sizes.detail, height: nil))
-        subviews[1].place(at: CGPoint(x: bounds.minX + sizes.ring + spacing, y: bounds.midY - detail.height / 2), anchor: .topLeading,
-                          proposal: ProposedViewSize(width: sizes.detail, height: detail.height))
+        subviews[1].place(at: CGPoint(x: bounds.minX, y: top + sizes.ring + spacing), anchor: .topLeading,
+                          proposal: ProposedViewSize(width: bounds.width, height: sizes.detail))
     }
 }
 
