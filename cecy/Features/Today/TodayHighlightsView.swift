@@ -20,16 +20,16 @@ struct TodayHighlightsView: View {
         switch highlight {
         case .estimateMoved(let days, let earlier, let reason, let center):
             heading("Your estimate moved", symbol: "arrow.left.arrow.right")
-            Text(earlier ? (days == 1 ? "1 day earlier, now around \(DayText.short(center))." : "\(days) days earlier, now around \(DayText.short(center)).")
-                         : (days == 1 ? "1 day later, now around \(DayText.short(center))." : "\(days) days later, now around \(DayText.short(center))."))
-                .font(.subheadline.weight(.semibold))
-            Text(reasonText(reason)).font(.footnote).foregroundStyle(.secondary)
+            Text("Now around \(DayText.monthDay(center)).").font(.subheadline.weight(.semibold))
+            Text(earlier ? (days == 1 ? "That's 1 day earlier. \(reasonText(reason))" : "That's \(days) days earlier. \(reasonText(reason))")
+                         : (days == 1 ? "That's 1 day later. \(reasonText(reason))" : "That's \(days) days later. \(reasonText(reason))"))
+                .font(.footnote).foregroundStyle(.secondary)
 
         case .windowApproaching(let days, let earliest, let latest):
-            heading("Your estimated window is close", symbol: "calendar.badge.clock")
-            Text(days == 1 ? "It starts tomorrow." : "It starts in \(days) days.")
+            heading("Your period may start soon", symbol: "calendar.badge.clock")
+            Text(days == 1 ? "It could start tomorrow." : "It could start in \(days) days.")
                 .font(.subheadline.weight(.semibold))
-            Text("Possible start: \(DayText.range(earliest, latest)). An estimate, not a deadline.")
+            Text("Expected \(DayText.range(earliest, latest)).")
                 .font(.footnote).foregroundStyle(.secondary)
 
         case .cycleRecap(let length, let periodDays, let symptoms, let factors):
@@ -39,21 +39,19 @@ struct TodayHighlightsView: View {
                 if let periodDays { stat("\(periodDays)", label: periodDays == 1 ? "period day" : "period days") }
             }
             if !symptoms.isEmpty {
-                Text("Most logged: \(symptoms.map(\.title).formatted(.list(type: .and)))")
+                Text("You logged \(symptoms.map { $0.title.lowercased() }.formatted(.list(type: .and))) the most.")
                     .font(.footnote)
             }
             if !factors.isEmpty {
-                Text("Noted: \(factors.map(\.title).formatted(.list(type: .and)))")
+                Text("You noted \(factors.map { $0.title.lowercased() }.formatted(.list(type: .and))).")
                     .font(.footnote).foregroundStyle(.secondary)
             }
 
         case .lastCycleEcho(let cycleDay, let symptoms):
             heading("This time last cycle", symbol: "clock.arrow.circlepath")
-            Text("Around day \(cycleDay) last cycle, you logged \(symptoms.map { $0.title.lowercased() }.formatted(.list(type: .and))).")
+            Text("Around day \(cycleDay) you logged \(symptoms.map { $0.title.lowercased() }.formatted(.list(type: .and))).")
                 .font(.subheadline)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("Patterns can repeat or change. This only reflects what you logged.")
-                .font(.footnote).foregroundStyle(.secondary)
 
         case .activeContext(let cycleDay, let factors, let stages):
             localizedHeading(cycleDay.map { String(localized: "Cycle day \($0)") } ?? String(localized: "Right now"), symbol: "sun.max")
@@ -61,11 +59,11 @@ struct TodayHighlightsView: View {
                 ForEach(stages, id: \.self) { tag($0.title, symbol: $0.symbol) }
                 ForEach(factors, id: \.self) { tag($0.title, symbol: "timeline.selection") }
             }
-            Text("Noted in your records. You can update them in Settings.")
+            Text("You can change these in Settings.")
                 .font(.footnote).foregroundStyle(.secondary)
 
         case .coverage(let logged, let days):
-            heading("Your logging this week", symbol: "checklist")
+            heading("This week", symbol: "checklist")
             HStack(spacing: 4) {
                 ForEach(0..<days, id: \.self) { index in
                     Capsule().fill(index < logged ? palette.accent : palette.accent.opacity(0.15))
@@ -74,9 +72,9 @@ struct TodayHighlightsView: View {
             }
             .accessibilityHidden(true)
             Text(logged == days ? "You logged every day this week."
-                 : logged == 1 ? "1 of the last \(days) days logged." : "\(logged) of the last \(days) days logged.")
+                 : "You logged \(logged) of the last \(days) days.")
                 .font(.subheadline.weight(.semibold))
-            Text("More logged days make your estimates and patterns more reliable. Days you skip stay unknown.")
+            Text("The more you log the better your estimates get.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
     }
@@ -112,11 +110,11 @@ struct TodayHighlightsView: View {
             .background(palette.sage, in: Capsule())
     }
 
-    private func reasonText(_ reason: EstimateShift.Reason) -> LocalizedStringKey {
+    private func reasonText(_ reason: EstimateShift.Reason) -> String {
         switch reason {
-        case .period: "This happened after you updated a period record."
-        case .factor: "This happened after you changed a cycle factor or life stage."
-        case .records: "This happened after your latest records."
+        case .period: String(localized: "You updated a period.")
+        case .factor: String(localized: "You changed a cycle factor or life stage.")
+        case .records: String(localized: "It follows your latest logs.")
         }
     }
 }

@@ -164,6 +164,8 @@ private struct TrackerTabs: View {
     @State private var viewingToday = true
     /// Per foreground visit: a visit that opened from a reminder/Shortcut never also shows a question.
     @State private var openedByRoute = false
+    /// After today's insights pop-up closes, a question waits a while so the two don't feel back to back.
+    @State private var questionNotBefore: Date?
 
     private struct FollowUpPresentationKey: Equatable {
         let day: LocalDay
@@ -272,16 +274,21 @@ private struct TrackerTabs: View {
         .onAppear {
             if CecyLaunchRoute.consume() == CecyLaunchRoute.checkIn { openedByRoute = true; selectedTab = 0; showReminderCheckIn = true }
         }
+        .onChange(of: showDailyInsights) { _, shown in
+            if !shown { questionNotBefore = Date().addingTimeInterval(Double.random(in: 15...25)) }
+        }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background { openedByRoute = false }
+            if phase == .background { openedByRoute = false; questionNotBefore = nil }
         }
         .task(id: followUpKey) {
             let key = followUpKey
             guard key.active, key.onToday, key.viewingToday, key.available, !key.occupied,
                   !key.dailyPending, !key.blockedThisVisit else { return }
-            // A short random pause: never the instant the app opens or the insights pop-up closes,
-            // and not at the same moment every visit. Spacing between pop-ups is enforced by the engine.
-            do { try await Task.sleep(for: .seconds(Double.random(in: 3...7))) } catch { return }
+            // A short random pause: never the instant the app opens, and not at the same moment every
+            // visit. Right after the insights pop-up, it waits longer. Spacing is enforced by the engine.
+            var delay = Double.random(in: 3...7)
+            if let notBefore = questionNotBefore { delay = max(delay, notBefore.timeIntervalSinceNow) }
+            do { try await Task.sleep(for: .seconds(delay)) } catch { return }
             guard followUpKey == key, let prompt = session.nextFollowUp(), session.markFollowUpShown(prompt) else { return }
             presentedFollowUp = prompt
             followUp = prompt

@@ -113,7 +113,7 @@ final class TodayQuickActionsUITests: XCTestCase {
         XCTAssertLessThan(sex.frame.maxX, app.buttons["logDailyBleeding"].frame.minX)
         let countdown = app.staticTexts["periodCountdown"]
         UIViewport.reveal(countdown, in: app)
-        XCTAssertEqual(countdown.label, "About 1 day")
+        XCTAssertEqual(countdown.label, "Next period in about 1 day")
         XCTAssertTrue((ring.value as? String ?? "").contains("day 28"))
     }
 
