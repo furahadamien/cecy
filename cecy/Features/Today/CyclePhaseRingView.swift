@@ -167,17 +167,17 @@ private struct PhaseRingGraphic: View {
                         .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
                         .position(x: center.x + cos(angle) * size * 0.4, y: center.y + sin(angle) * size * 0.4)
                 }
-                VStack(spacing: 4) {
-                    Text("Day \(timeline.cycleDay)").font(.title2.weight(.bold)).monospacedDigit()
-                        .lineLimit(1).minimumScaleFactor(0.7)
+                VStack(spacing: 2) {
+                    Text("Day \(timeline.cycleDay)").font(.system(.largeTitle, design: .rounded, weight: .bold)).monospacedDigit()
+                        .lineLimit(1).minimumScaleFactor(0.6)
                         .accessibilityIdentifier("cycleDay")
-                    Text("of ~\(timeline.length)").font(.caption)
+                    Text("of ~\(timeline.length)").font(.subheadline).foregroundStyle(.secondary)
                     if timeline.currentPhase == nil {
-                        Text("Phase uncertain").font(.caption2)
+                        Text("Phase uncertain").font(.caption)
                             .accessibilityIdentifier("uncertainCyclePhase")
                     }
                 }
-                .frame(maxWidth: size * 0.6)
+                .frame(maxWidth: size * 0.55)
                 .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)

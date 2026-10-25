@@ -22,11 +22,11 @@ final class CycleExperienceUITests: XCTestCase {
 
     @MainActor func testPeriodSummaryIsCombinedAndPhaseRangesAreInteractive() {
         let app = launch()
-        let window = app.staticTexts["predictionWindow"]
-        UIViewport.reveal(window, in: app)
-        XCTAssertEqual(app.staticTexts.matching(identifier: "predictionWindow").count, 1)
+        // The hero shows the countdown and "Around" date; the start window lives only in the forecast card.
+        XCTAssertTrue(app.otherElements["nextPeriodCard"].descendants(matching: .any)["nextPeriodCenter"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["predictionWindow"].exists)
+        XCTAssertFalse(app.staticTexts["starterPrediction"].exists)
         XCTAssertFalse(app.staticTexts["Estimated next period start"].exists)
-        XCTAssertTrue(app.otherElements["nextPeriodCard"].descendants(matching: .any)["predictionWindow"].exists)
         tap("cyclePhase_follicular", in: app)
         XCTAssertTrue(app.staticTexts["phaseDayRange"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["phaseDayRange"].label, "Estimated days 6–14")

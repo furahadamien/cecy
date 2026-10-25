@@ -107,7 +107,7 @@ final class PhaseTwoUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.staticTexts["cycleDay"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.staticTexts["cycleDay"].label, "Day 57")
-        XCTAssertTrue(app.staticTexts["predictionWindow"].exists)
+        XCTAssertTrue(app.staticTexts["nextPeriodCenter"].exists)
         app.tabBars.buttons["Insights"].tap()
         XCTAssertEqual(app.staticTexts["intervalCount"].label, "2 completed intervals")
     }

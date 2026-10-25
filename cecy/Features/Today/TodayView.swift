@@ -117,19 +117,12 @@ struct TodayView: View {
     private var hero: some View {
         TrackerCard(padding: 12, spacing: 8) {
             if dynamicTypeSize > .large {
-                VStack(spacing: 20) { heroRing.frame(height: 250); countdown }
+                VStack(spacing: 16) { heroRing.frame(height: 280); countdown }
             } else {
+                // The ring takes most of the width; the window and starter notes live in the forecast card and "?" sheet.
                 TodayHeroColumns {
                     heroRing
                     countdown
-                }
-            }
-            if let estimate = overview.estimate {
-                Label("\(estimate.confidence.rawValue) confidence · Rough estimate", systemImage: "circle.dashed")
-                    .font(.caption).foregroundStyle(.secondary)
-                if let notice = estimate.starterNotice {
-                    Text(notice).font(.caption).foregroundStyle(.secondary)
-                        .accessibilityIdentifier("starterPrediction")
                 }
             }
             if let status = TodayCurrentPeriodStatus(periods: session.snapshot.resolvedPeriods,
@@ -158,30 +151,46 @@ struct TodayView: View {
     }
 
     private var countdown: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let palette = TrackerPalette(scheme: colorScheme)
+        let value = TodayPeriodCountdown(outcome: overview.prediction, today: today)
+        return VStack(alignment: .leading, spacing: 4) {
             if overview.estimate != nil {
                 Button { showExplanation = true } label: {
-                    HStack(spacing: 6) {
-                        Text("Until your next period")
+                    HStack(spacing: 4) {
+                        Text("Next period")
                         Image(systemName: "questionmark.circle").accessibilityHidden(true)
                     }
                     .font(.caption.weight(.medium)).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .frame(maxWidth: .infinity, minHeight: TrackerLayout.minimumTarget, alignment: .leading)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("How this estimate works")
             } else {
-                Text("Until your next period").font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                Text("Next period").font(.caption.weight(.medium)).foregroundStyle(.secondary)
             }
-            let value = TodayPeriodCountdown(outcome: overview.prediction, today: today)
-            Text(value.title).font(.system(.title2, design: .rounded, weight: .bold)).monospacedDigit()
+            Text(value.title).font(.system(.title3, design: .rounded, weight: .bold)).monospacedDigit()
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2).minimumScaleFactor(0.8)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("periodCountdown")
-            if overview.estimate != nil {
-                PredictionSummary(outcome: overview.prediction, today: today, compact: true)
+            if let estimate = overview.estimate {
+                HStack(spacing: 4) {
+                    Image(systemName: "calendar").foregroundStyle(palette.recorded).accessibilityHidden(true)
+                    Text("Around \(DayText.short(estimate.center))")
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("nextPeriodCenter")
+                }
+                .font(.subheadline.weight(.medium))
+                Text("\(estimate.confidence.rawValue) confidence")
+                    .font(.caption2.weight(.semibold)).foregroundStyle(palette.accent)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(palette.sage, in: Capsule())
+                    .padding(.top, 4)
+                    .accessibilityLabel("\(estimate.confidence.rawValue) confidence, rough estimate")
+                    .accessibilityIdentifier("predictionConfidence")
             } else {
                 Text(value.detail).font(.footnote).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -235,9 +244,11 @@ private struct PersonalizationSheet: View {
 
 /// Propose each column's actual width rather than testing unwrapped text widths.
 private struct TodayHeroColumns: Layout {
+    private let spacing: CGFloat = 12
+
     private func columns(_ width: CGFloat) -> (ring: CGFloat, detail: CGFloat) {
-        let ring = min(250, width * 0.44)
-        return (ring, max(0, width - ring - 12))
+        let ring = min(280, width * 0.58)
+        return (ring, max(0, width - ring - spacing))
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
@@ -253,8 +264,10 @@ private struct TodayHeroColumns: Layout {
         let sizes = columns(bounds.width)
         subviews[0].place(at: CGPoint(x: bounds.minX, y: bounds.midY - sizes.ring / 2), anchor: .topLeading,
                           proposal: ProposedViewSize(width: sizes.ring, height: sizes.ring))
-        subviews[1].place(at: CGPoint(x: bounds.minX + sizes.ring + 12, y: bounds.minY), anchor: .topLeading,
-                          proposal: ProposedViewSize(width: sizes.detail, height: bounds.height))
+        // Centre the countdown beside the ring.
+        let detail = subviews[1].sizeThatFits(ProposedViewSize(width: sizes.detail, height: nil))
+        subviews[1].place(at: CGPoint(x: bounds.minX + sizes.ring + spacing, y: bounds.midY - detail.height / 2), anchor: .topLeading,
+                          proposal: ProposedViewSize(width: sizes.detail, height: detail.height))
     }
 }
 
@@ -309,50 +322,6 @@ nonisolated enum TodayCurrentPeriodStatus: Equatable {
     }
 }
 
-struct PredictionSummary: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let outcome: PredictionOutcome
-    let today: LocalDay
-    var compact = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: compact ? 6 : 12) {
-            if case .available(let estimate) = outcome {
-                VStack(alignment: .leading, spacing: compact ? 4 : 8) {
-                Label("Estimated period start window", systemImage: "circle.dashed").font(compact ? .caption : .headline)
-                Text(DayText.range(estimate.earliest, estimate.latest))
-                    .font(compact ? .subheadline.weight(.semibold) : TrackerTypography.sectionTitle).accessibilityIdentifier("predictionWindow")
-                }
-                .frame(maxWidth: .infinity, alignment: .leading).padding(compact ? 8 : 12)
-                .background(TrackerPalette(scheme: colorScheme).recordedSurface, in: RoundedRectangle(cornerRadius: 16))
-                Text("Around \(DayText.short(estimate.center))").font(compact ? .caption : .subheadline)
-                    .accessibilityIdentifier("nextPeriodCenter")
-                if !compact {
-                Label("\(estimate.confidence.rawValue) confidence · Rough estimate", systemImage: "circle.dashed")
-                    .font(compact ? .caption : .subheadline)
-                if let notice = estimate.starterNotice {
-                    Text(notice)
-                        .font(compact ? .caption : .subheadline).foregroundStyle(.secondary).accessibilityIdentifier("starterPrediction")
-                }
-                    Text("Possible start dates, not confirmed bleeding days. Missing records can affect timing.").font(.footnote).foregroundStyle(.secondary)
-                }
-            } else {
-            switch outcome {
-            case .available:
-                Text("No upcoming date can be estimated. Review your recorded starts.")
-            case .insufficientHistory:
-                Text("More history is needed for an estimate.").font(.title3)
-            case .wideVariation:
-                Text("Your recorded intervals vary more than this simple estimate can support.")
-            case .unavailable(let reason):
-                Text(reason.localizedDescription)
-            }
-            }
-        }
-    }
-
-}
-
 struct PredictionExplanation: View {
     @Environment(\.dismiss) private var dismiss
     let estimate: CyclePrediction
@@ -370,7 +339,7 @@ struct PredictionExplanation: View {
                 if let notice = estimate.starterNotice {
                     TrackerCard {
                         Text("A starting point, not measured history").font(.headline)
-                        Text(notice)
+                        Text(notice).accessibilityIdentifier("starterPrediction")
                         Text("We count from your recorded start, with three days on either side of the estimated next start. This is a rough range, not a probability.")
                         Text("New records replace assumptions. Estimated period days never become recorded days, and an overdue estimate does not start a new cycle.")
                     }
