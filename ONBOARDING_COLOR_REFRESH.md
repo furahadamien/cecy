@@ -1,7 +1,7 @@
 # Onboarding Color & Engagement Refresh — Study
 
 Branch: `feat/onboarding-color-refresh`
-Status: Study / proposal (no code changes yet)
+Status: Implemented (see §8)
 
 ## 1. Current state
 
@@ -128,3 +128,28 @@ No domain or persistence changes, and `OnboardingDraft` / `OnboardingProgress` a
 - Is introducing apricot, lavender, and sun accents acceptable given the "no pink default" guidance? They're accents only, and the base stays sage/neutral.
 - Should the per-step themes carry into the main app (phase tiles currently use rose/orange/sage), so the onboarding colors match what users later see on Today?
 - Is the welcome illustration limited to SF Symbols and the app icon (no new illustration assets), per the "no branded illustration dependency" guidance?
+
+**Decisions taken**
+1. Apricot, lavender and sun are approved **as accents only**. Welcome, review and Apple stay sage; there is no pink default.
+2. Themes stay **scoped to onboarding** for now. `\.onboardingTheme` is nil outside onboarding, so `SelectionChip` and `CycleLengthWheel` look unchanged in Settings and Today. Aligning Today's phase tiles is a separate follow-up.
+3. Welcome uses only SF Symbols, the existing `LaunchIcon`, and gradients. No new illustration assets.
+
+## 8. Results
+
+**Built**
+- `TrackerPalette`: `apricot`, `lavender`, `sun` (+ surfaces) with light/dark and Increase Contrast variants (`TrackerPalette(scheme:contrast:)`). `DayText.weekday`.
+- `OnboardingTheme.swift`: `OnboardingAccent`, `OnboardingTheme`, `Step.accent` / `Step.theme(_:)`, `EnvironmentValues.onboardingTheme`.
+- `OnboardingHero.swift`: `OnboardingBackdrop` (radial glow; welcome uses `MeshGradient` on iOS 18+ with a radial fallback on iOS 17) and `OnboardingSymbolBadge` (bounce once / pulse, both off with Reduce Motion).
+- `OnboardingProgressBar.swift`: gradient capsule through visited step colors; `accessibilityRepresentation` keeps a native progress indicator with the same label/value.
+- `OnboardingFeatureCard.swift`: colored feature cards plus a Reduce-Motion-aware stagger.
+- `OnboardingSummaryViews.swift`: history date tile, mini Today preview, review stat tiles, icon rows.
+- `OnboardingPage`: hero header, step backdrop, themed tint/environment. `OnboardingApplePage` was removed; the Apple step uses the same shell with the Sign in with Apple button pinned at the bottom.
+- `OnboardingFlowView`: directional slide transitions (fade only with Reduce Motion), selection haptic, colored welcome, date card, preview, review tiles (tap to edit), and a "creating your account" backdrop.
+- Copy fix: `onboardingLocalProfileNote` no longer repeats "are not restored by Apple sign-in" (code and string catalog).
+
+**Tests**
+- Unit: all `cecyTests` pass, including the new `OnboardingThemeTests` (AA contrast for every accent on background/surface/own surface in light, dark and high contrast; every step has a valid theme and SF Symbol; base stays sage; theme does not leak).
+- UI: new `OnboardingColorRefreshUITests` (full 8-step flow, review tile editing, Apple page contracts, AX XXXL back navigation) pass.
+- Pre-existing: `OnboardingUITests` and `IrregularCycleSetupUITests` fail identically on the pre-change code, because they drive an older flow (`onboardingSkip`, identity/symptom/goal/reminder steps) that no longer exists. They need a separate rewrite.
+
+**Manual checks still needed**: light/dark on device, Increase Contrast, Reduce Motion/Transparency, AX5 text, iPhone SE and iPad, VoiceOver order across transitions.
