@@ -2,11 +2,15 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>UILaunchStoryboardName</key>
-	<string>LaunchScreen</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Use Face ID to unlock your private Cecy records and confirm app-lock changes.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Cecy reads menstrual-flow samples when you choose Apple Health review. Confirm period starts before saving them locally. Cecy does not write to Apple Health.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Cecy never writes, changes or deletes your Apple Health data. Health access is used only to read menstrual-flow samples you choose to review and save locally in Cecy.</string>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
 </dict>
 </plist>
