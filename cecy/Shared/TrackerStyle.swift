@@ -41,6 +41,47 @@ struct TrackerPalette {
     }
     // A dark fill keeps white primary-action labels legible in either appearance.
     var action: Color { Color(red: 0.15, green: 0.35, blue: 0.29) }
+
+    // Onboarding accents borrowed from the cycle phases. They sit on top of the warm-neutral/sage base,
+    // never replace it, and each passes WCAG AA text contrast on background, surface and its own surface.
+    var highContrast = false
+
+    /// Follicular warmth.
+    var apricot: Color {
+        switch (scheme == .dark, highContrast) {
+        case (false, false): Color(red: 0.627, green: 0.290, blue: 0.071)
+        case (false, true): Color(red: 0.47, green: 0.20, blue: 0.03)
+        case (true, false): Color(red: 0.96, green: 0.68, blue: 0.45)
+        case (true, true): Color(red: 1, green: 0.82, blue: 0.66)
+        }
+    }
+    var apricotSurface: Color {
+        scheme == .dark ? Color(red: 0.29, green: 0.17, blue: 0.10) : Color(red: 0.99, green: 0.92, blue: 0.86)
+    }
+    /// Luteal calm.
+    var lavender: Color {
+        switch (scheme == .dark, highContrast) {
+        case (false, false): Color(red: 0.357, green: 0.290, blue: 0.620)
+        case (false, true): Color(red: 0.26, green: 0.19, blue: 0.50)
+        case (true, false): Color(red: 0.76, green: 0.72, blue: 0.98)
+        case (true, true): Color(red: 0.88, green: 0.86, blue: 1)
+        }
+    }
+    var lavenderSurface: Color {
+        scheme == .dark ? Color(red: 0.17, green: 0.15, blue: 0.27) : Color(red: 0.93, green: 0.91, blue: 0.98)
+    }
+    /// Ovulation sunshine.
+    var sun: Color {
+        switch (scheme == .dark, highContrast) {
+        case (false, false): Color(red: 0.494, green: 0.353, blue: 0)
+        case (false, true): Color(red: 0.36, green: 0.25, blue: 0)
+        case (true, false): Color(red: 0.97, green: 0.82, blue: 0.45)
+        case (true, true): Color(red: 1, green: 0.91, blue: 0.64)
+        }
+    }
+    var sunSurface: Color {
+        scheme == .dark ? Color(red: 0.25, green: 0.20, blue: 0.08) : Color(red: 0.99, green: 0.95, blue: 0.83)
+    }
 }
 
 /// Keep forms native (including pickers, focus and row accessibility).
@@ -298,6 +339,7 @@ enum DayText {
     /// Month and day only, e.g. "Nov 3", for places where the year is obvious.
     static func monthDay(_ day: LocalDay) -> String { format(day, template: "MMMd") }
     static func month(_ day: LocalDay) -> String { format(day, template: "yMMMM") }
+    static func weekday(_ day: LocalDay) -> String { format(day, template: "EEEE") }
     static func range(_ first: LocalDay, _ last: LocalDay) -> String { "\(short(first)) – \(short(last))" }
 
     private static func format(_ day: LocalDay, template: String) -> String {
