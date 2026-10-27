@@ -456,6 +456,11 @@ struct PreparedExport: Identifiable {
         if ProcessInfo.processInfo.environment["CECY_UI_DAILY_POPUP"] != "1", let day = try? LocalDay(key: 20260929) {
             _ = privacy.reserveDailyInsightPresentation(on: day)
         }
+        // App Store screenshots show AI insights as a consenting user would see them.
+        if ProcessInfo.processInfo.environment["CECY_UI_FIXTURE"] == "showcase", privacy.canAccess {
+            _ = privacy.setAIEnabled(true, now: ISO8601DateFormatter().date(from: "2026-09-29T12:00:00Z")!)
+            _ = privacy.setDailyInsightsEnabled(true)
+        }
         // Unrelated UI suites must not be interrupted by follow-up questions. Dedicated tests opt in.
         if ProcessInfo.processInfo.environment["CECY_UI_FOLLOW_UPS"] != "1", privacy.canAccess {
             _ = privacy.setFollowUpsEnabled(false)
