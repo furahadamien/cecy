@@ -36,3 +36,4 @@ xcuserdata/
 
 # Keep source files, assets, project/workspace configuration, shared schemes,
 # Package.resolved, and project documentation under version control.
+AppStoreScreenshots/**/*.txt
