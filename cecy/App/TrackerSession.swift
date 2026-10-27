@@ -750,7 +750,10 @@ final class TrackerSession {
             let fixed = ISO8601DateFormatter().date(from: "2026-09-29T12:00:00Z")!
             return TrackerSession(repository: {
                 let repository = try SwiftDataPeriodRepository.local(url: url)
-                let fixture = ProcessInfo.processInfo.environment["CECY_UI_FIXTURE"]
+                let requested = ProcessInfo.processInfo.environment["CECY_UI_FIXTURE"]
+                // "showcase" is the App Store screenshot data set: the "ai" history plus a richer symptom log.
+                let showcase = requested == "showcase"
+                let fixture = showcase ? "ai" : requested
                 if fixture == "history" || fixture == "patterns" || fixture == "wellness" || fixture == "ai" || fixture == "sparse" || fixture == "oldStart",
                    try repository.load().onboardingCompletedAt == nil {
                     let keys = fixture == "oldStart" ? [20260101] : fixture == "sparse" ? [20260902] : fixture == "patterns" || fixture == "ai" ? [20260410, 20260509, 20260607, 20260705, 20260804, 20260902]
@@ -762,7 +765,7 @@ final class TrackerSession {
                     _ = try repository.add(periods, completingOnboarding: true, today: LocalDay(key: 20260929), now: fixed)
                     if fixture == "wellness" || fixture == "ai" || fixture == "sparse" || fixture == "oldStart" {
                         var profile = LocalProfile()
-                        profile.preferredName = "Synthetic Alex"
+                        profile.preferredName = showcase ? "Maya" : "Synthetic Alex"
                         profile.birthDayKey = 19950512
                         profile.typicalPeriodDays = 5
                         if fixture == "sparse" || fixture == "oldStart" {
@@ -783,6 +786,20 @@ final class TrackerSession {
                             let entry = try SymptomEntry(day: period.start.adding(days: -1), kind: .headache)
                             _ = try repository.saveSymptom(entry, editing: false, today: LocalDay(key: 20260929), now: fixed)
                         }
+                    }
+                    if showcase {
+                        let today = try LocalDay(key: 20260929)
+                        var entries: [SymptomEntry] = []
+                        for period in periods {
+                            entries += [try SymptomEntry(day: period.start, kind: .cramps, value: 3),
+                                        try SymptomEntry(day: period.start.adding(days: 1), kind: .fatigue, value: 2),
+                                        try SymptomEntry(day: period.start.adding(days: -3), kind: .bloating, value: 2),
+                                        try SymptomEntry(day: period.start.adding(days: -2), kind: .moodChanges, value: 2),
+                                        try SymptomEntry(day: period.start.adding(days: 14), kind: .energyLevel, value: 3)]
+                        }
+                        entries += [try SymptomEntry(day: today, kind: .bloating, value: 2),
+                                    try SymptomEntry(day: today, kind: .cravings, value: 2)]
+                        _ = try repository.addSymptoms(entries.filter { $0.day <= today }, today: today, now: fixed)
                     }
                 }
                 // Follow-up questions: setup finished a month ago, and the latest cycle (39 days)
