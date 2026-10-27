@@ -6,11 +6,17 @@ struct CycleLengthWheel: View {
     @Binding var days: Int
     let identifier: String
     @ScaledMetric(relativeTo: .body) private var height = 210.0
+    @Environment(\.onboardingTheme) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 4) {
             Text(days == 1 ? "1 day" : "\(days) days").font(TrackerTypography.metric).monospacedDigit()
+                .foregroundStyle(theme?.tint ?? .primary)
+                .contentTransition(reduceMotion ? .identity : .numericText(value: Double(days)))
+                .animation(reduceMotion ? nil : .snappy, value: days)
                 .accessibilityHidden(true)
+            if let theme { LengthVisual(days: days, range: range, theme: theme) }
             Picker(title, selection: $days) {
                 ForEach(range, id: \.self) { day in Text(day == 1 ? "1 day" : "\(day) days").tag(day) }
             }
@@ -21,6 +27,33 @@ struct CycleLengthWheel: View {
             .accessibilityIdentifier(identifier)
         }
         .padding(.vertical, 8)
+    }
+}
+
+/// A decorative picture of the chosen length: one drop-shaped capsule per bleeding day for short ranges,
+/// or one segment per week for cycle lengths. VoiceOver already hears the wheel's value.
+private struct LengthVisual: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let days: Int
+    let range: ClosedRange<Int>
+    let theme: OnboardingTheme
+
+    var body: some View {
+        let perDay = range.upperBound <= 31
+        let units = perDay ? min(days, 15) : min(Int((Double(days) / 7).rounded(.up)), 18)
+        HStack(spacing: perDay ? 6 : 4) {
+            ForEach(0..<units, id: \.self) { index in
+                let partial = !perDay && index == units - 1 && days % 7 != 0
+                Capsule()
+                    .fill(theme.tint.opacity(perDay ? 0.85 : (partial ? 0.35 : 0.75)))
+                    .frame(width: perDay ? 10 : nil, height: perDay ? 18 : 10)
+                    .frame(maxWidth: perDay ? nil : 28)
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(theme.surface, in: Capsule())
+        .animation(reduceMotion ? nil : .snappy, value: days)
+        .accessibilityHidden(true)
     }
 }
 
