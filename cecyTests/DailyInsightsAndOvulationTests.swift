@@ -27,7 +27,7 @@ nonisolated struct OvulationAndPreparedAnswerTests {
 
     @Test func unavailableAndImpossibleOvulationDatesAreWithheld() throws {
         #expect(CycleCalculator.overview(periods: [], today: today).possibleOvulation == nil)
-        let periods = try [20260601, 20260701, 20260901].map { Period(start: try LocalDay(key: $0)) }
+        let periods = try [20260601, 20260701, 20260820].map { Period(start: try LocalDay(key: $0)) }
         #expect(CycleCalculator.overview(periods: periods, today: today).possibleOvulation == nil)
         var profile = LocalProfile(); profile.typicalCycleDays = 10
         #expect(CycleCalculator.overview(periods: [Period(start: today)], today: today, profile: profile).possibleOvulation == nil)

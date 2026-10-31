@@ -101,8 +101,12 @@ nonisolated struct CycleForecastTests {
     @Test func missingWideAndVeryShortCyclesDoNotInventOvulation() throws {
         let missing = CycleForecast.calculate(overview: CycleCalculator.overview(periods: [], today: today), profile: nil)
         #expect(missing.cycles.isEmpty)
-        let periods = try [20260601, 20260701, 20260901].map { Period(start: try LocalDay(key: $0)) }
+        // Genuinely wide variation (30 then 50 days) still withholds the forecast.
+        let periods = try [20260601, 20260701, 20260820].map { Period(start: try LocalDay(key: $0)) }
         #expect(CycleForecast.calculate(overview: CycleCalculator.overview(periods: periods, today: today), profile: nil).cycles.isEmpty)
+        // A forgotten August (30 then 62 days) is interpolated instead of blocking the forecast.
+        let missedMonth = try [20260601, 20260701, 20260901].map { Period(start: try LocalDay(key: $0)) }
+        #expect(!CycleForecast.calculate(overview: CycleCalculator.overview(periods: missedMonth, today: today), profile: nil).cycles.isEmpty)
         let short = CycleForecast.calculate(overview: CycleCalculator.overview(periods: [Period(start: today)], today: today, profile: profile(10)), profile: profile(10))
         #expect(short.cycles.count == 3 && short.cycles.allSatisfy { $0.ovulation == nil })
     }

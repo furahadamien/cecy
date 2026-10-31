@@ -54,6 +54,8 @@ nonisolated struct ProjectedCycle: Identifiable, Equatable, Sendable {
     var ovulationBasis: String = "Calendar estimate only; ovulation is not confirmed."
     var referenceNotice: String?
     var starterNotice: String?
+    /// Starts assumed for forgotten months when building this forecast (never saved).
+    var inferredStarts: [LocalDay] = []
     var id: Int { index }
     var isLaterProjection: Bool { index > 0 }
     var assumption: String {
@@ -183,6 +185,7 @@ nonisolated struct CycleForecast: Equatable, Sendable {
             var cycle = ProjectedCycle(index: index, period: period, ovulation: ovulation,
                                        ovulationWarnings: warnings, ovulationBasis: basis)
             cycle.starterNotice = estimate.starterNotice
+            cycle.inferredStarts = eligible.inferredStarts
             if duration?.usesDefault == true {
                 cycle.starterNotice = [cycle.starterNotice, "Period duration uses Cecy’s \(CycleSetupPolicy.defaultPeriodDays)-day default."].compactMap { $0 }.joined(separator: " ")
             }

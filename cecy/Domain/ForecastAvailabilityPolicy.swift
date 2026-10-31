@@ -10,7 +10,7 @@ nonisolated enum ForecastAvailabilityPolicy {
               CycleSetupPolicy.cycleDays.contains(start.days(until: estimate.center)) else {
             return CycleOverview(latestStart: overview.latestStart, currentDay: overview.currentDay,
                                  intervals: overview.intervals, excludedIntervals: overview.excludedIntervals,
-                                 prediction: .unavailable(.unsupportedEstimate))
+                                 prediction: .unavailable(.unsupportedEstimate), inferredStarts: overview.inferredStarts)
         }
         return overview
     }
