@@ -158,14 +158,17 @@ nonisolated struct CycleOverview: Equatable, Sendable {
     let intervals: [CycleInterval]
     let excludedIntervals: [CycleInterval]
     let prediction: PredictionOutcome
+    /// Starts the forecast assumed for months that look forgotten. Never saved as records.
+    let inferredStarts: [LocalDay]
 
     init(latestStart: LocalDay?, currentDay: Int?, intervals: [CycleInterval],
-         excludedIntervals: [CycleInterval] = [], prediction: PredictionOutcome) {
+         excludedIntervals: [CycleInterval] = [], prediction: PredictionOutcome, inferredStarts: [LocalDay] = []) {
         self.latestStart = latestStart
         self.currentDay = currentDay
         self.intervals = intervals
         self.excludedIntervals = excludedIntervals
         self.prediction = prediction
+        self.inferredStarts = inferredStarts
     }
 
     var estimate: CyclePrediction? {
@@ -192,10 +195,17 @@ nonisolated enum CycleCalculator {
             }
             let excludedIDs = Set(excluded.map(\.id))
             let intervals = allIntervals.filter { !excludedIDs.contains($0.id) }
-            let chain = excluded.isEmpty ? intervals : try forecastChain(intervals, latestStart: last.start)
-            let prediction = try engine.predict(intervals: chain, latestStart: last.start, profile: profile)
+            // A forgotten month looks like one double-length cycle. Interpolate the missing start(s)
+            // for forecasting only, so one gap neither blocks the forecast nor skews it.
+            let filled = try MissedPeriodInference.fill(intervals, usualCycleDays: profile?.typicalCycleDays)
+            let chain = excluded.isEmpty ? filled.chain : try forecastChain(filled.chain, latestStart: last.start)
+            var prediction = try engine.predict(intervals: chain, latestStart: last.start, profile: profile)
+            if !filled.inferred.isEmpty, case .available(let estimate) = prediction, estimate.confidence != .low {
+                prediction = .available(estimate.withConfidence(.low))
+            }
             return CycleOverview(latestStart: last.start, currentDay: last.start.days(until: today) + 1,
-                                 intervals: intervals, excludedIntervals: excluded, prediction: prediction)
+                                 intervals: intervals, excludedIntervals: excluded, prediction: prediction,
+                                 inferredStarts: filled.inferred)
         } catch {
             return CycleOverview(latestStart: nil, currentDay: nil, intervals: [], prediction: .unavailable(error as? TrackingError ?? .invalidData))
         }
@@ -213,6 +223,83 @@ nonisolated enum CycleCalculator {
             end = start
         }
         return chained.reversed()
+    }
+}
+
+/// Detects start-to-start gaps that are about two or three times the usual cycle (one or two periods
+/// not logged) and splits them evenly. Forecast input only: recorded periods and displayed intervals
+/// are never changed, and genuinely long or irregular cycles are left alone.
+nonisolated enum MissedPeriodInference {
+    static let maximumMissedPerGap = 2
+    /// Plausible usual cycle lengths for inference; outside this range nothing is inferred.
+    static let referenceRange = 20...45
+
+    static func fill(_ intervals: [CycleInterval], usualCycleDays: Int?) throws -> (chain: [CycleInterval], inferred: [LocalDay]) {
+        guard let reference = reference(for: intervals.map(\.length), usualCycleDays: usualCycleDays) else { return (intervals, []) }
+        var chain: [CycleInterval] = []
+        var inferred: [LocalDay] = []
+        for interval in intervals {
+            let parts = missedParts(interval.length, reference: reference)
+            guard parts > 1 else { chain.append(interval); continue }
+            // Linear interpolation: spread the gap evenly, giving any leftover days to the earliest parts.
+            let base = interval.length / parts
+            let remainder = interval.length % parts
+            var start = interval.start
+            for part in 0..<parts {
+                let length = base + (part < remainder ? 1 : 0)
+                let next = part == parts - 1 ? interval.nextStart : try start.adding(days: length)
+                chain.append(CycleInterval(id: part == 0 ? interval.id : derivedID(interval.id, part: part), start: start, nextStart: next))
+                if part < parts - 1 { inferred.append(next) }
+                start = next
+            }
+        }
+        return (chain, inferred)
+    }
+
+    /// The usual cycle length: from measured intervals that are not themselves gaps, or the
+    /// entered usual length when fewer than two measured intervals exist.
+    static func reference(for lengths: [Int], usualCycleDays: Int?) -> Int? {
+        guard let shortest = lengths.min() else { return nil }
+        let regular = lengths.filter { Double($0) <= Double(shortest) * 1.5 }.sorted()
+        let value: Int
+        if regular.count < 2, let usual = usualCycleDays {
+            value = usual
+        } else {
+            value = regular[regular.count / 2]
+            // Gaps must be the exception; mostly long intervals are the person's real rhythm.
+            let gaps = lengths.filter { missedParts($0, reference: value) > 1 }.count
+            guard gaps <= regular.count else { return nil }
+        }
+        return referenceRange.contains(value) ? value : nil
+    }
+
+    /// How many cycles an interval most likely spans (1 when it is not a clean multiple).
+    static func missedParts(_ length: Int, reference: Int) -> Int {
+        guard reference > 0 else { return 1 }
+        let parts = Int((Double(length) / Double(reference)).rounded())
+        guard parts >= 2, parts <= maximumMissedPerGap + 1 else { return 1 }
+        let tolerance = max(4, reference / 7) * (parts - 1)
+        guard abs(length - parts * reference) <= tolerance else { return 1 }
+        let base = length / parts
+        guard CycleSetupPolicy.cycleDays.contains(base), CycleSetupPolicy.cycleDays.contains(base + 1) else { return 1 }
+        return parts
+    }
+
+    /// Stable, unique identifiers for interpolated intervals so overviews stay equatable across loads.
+    private static func derivedID(_ id: UUID, part: Int) -> UUID {
+        var bytes = id.uuid
+        bytes.15 = bytes.15 &+ UInt8(truncatingIfNeeded: part)
+        bytes.14 = bytes.14 ^ 0xA5
+        bytes.6 = (bytes.6 & 0x0F) | 0x80
+        return UUID(uuid: bytes)
+    }
+}
+
+nonisolated extension CyclePrediction {
+    func withConfidence(_ confidence: PredictionConfidence) -> CyclePrediction {
+        CyclePrediction(center: center, earliest: earliest, latest: latest, confidence: confidence,
+                        sourceLengths: sourceLengths, basis: basis,
+                        reportedCycleDays: reportedCycleDays, reportedPeriodDays: reportedPeriodDays)
     }
 }
 

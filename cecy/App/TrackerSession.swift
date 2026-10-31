@@ -752,6 +752,11 @@ final class TrackerSession {
                 let repository = try SwiftDataPeriodRepository.local(url: url)
                 let fixture = ProcessInfo.processInfo.environment["CECY_UI_FIXTURE"]
                 if fixture == "showcase" { try ShowcaseFixture.seed(repository, now: fixed) }
+                // June, July and early August logged; the start around Sep 1 forgotten (a 57-day gap before Sep 29).
+                if fixture == "missedMonth", try repository.load().onboardingCompletedAt == nil {
+                    let periods = try [20260608, 20260706, 20260803, 20260929].map { Period(start: try LocalDay(key: $0)) }
+                    _ = try repository.add(periods, completingOnboarding: true, today: LocalDay(key: 20260929), now: fixed)
+                }
                 if fixture == "history" || fixture == "patterns" || fixture == "wellness" || fixture == "ai" || fixture == "sparse" || fixture == "oldStart",
                    try repository.load().onboardingCompletedAt == nil {
                     let keys = fixture == "oldStart" ? [20260101] : fixture == "sparse" ? [20260902] : fixture == "patterns" || fixture == "ai" ? [20260410, 20260509, 20260607, 20260705, 20260804, 20260902]

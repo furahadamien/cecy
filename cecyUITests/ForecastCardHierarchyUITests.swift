@@ -20,14 +20,15 @@ final class ForecastCardHierarchyUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(window.frame.minX, 0)
         XCTAssertLessThanOrEqual(window.frame.maxX, app.frame.maxX)
         let period = details.otherElements["forecastPeriodSection_0"]
-        let bleeding = details.staticTexts["forecastBleedingDates_0"]
         let ovulation = details.staticTexts["forecastOvulation_0"]
         let fertile = details.staticTexts["forecastFertileWindow_0"]
-        XCTAssertTrue(bleeding.exists && ovulation.exists && fertile.exists)
-        XCTAssertLessThan(period.frame.maxY, bleeding.frame.minY)
-        XCTAssertLessThan(bleeding.frame.minY, ovulation.frame.minY)
+        // The period start window replaces the separate expected-bleeding-dates row.
+        XCTAssertFalse(details.staticTexts["forecastBleedingDates_0"].exists)
+        XCTAssertFalse(details.staticTexts["Expected bleeding dates"].exists)
+        XCTAssertTrue(ovulation.exists && fertile.exists)
+        XCTAssertLessThan(period.frame.maxY, ovulation.frame.minY)
         XCTAssertLessThan(ovulation.frame.minY, fertile.frame.minY)
-        for id in ["forecastBleedingDates_0_value", "forecastOvulation_0_value", "forecastFertileWindow_0_value"] {
+        for id in ["forecastOvulation_0_value", "forecastFertileWindow_0_value"] {
             let value = details.staticTexts[id]
             UIViewport.reveal(value, in: app)
             XCTAssertTrue(value.isHittable)
