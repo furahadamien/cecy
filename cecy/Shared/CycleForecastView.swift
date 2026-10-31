@@ -227,13 +227,8 @@ struct ProjectedCycleDetails: View {
         VStack(alignment: .leading, spacing: calendarStyle ? 10 : 12) {
             if showsBadges { ForecastBadges(cycle: cycle) }
             let period = periodItem(palette)
+            // The period start window is the forecast; separate expected bleeding dates were removed as redundant.
             ForecastRow(item: period, prominent: true, compact: calendarStyle) { selected = period }
-            if let bleeding = bleedingItem(palette) {
-                ForecastRow(item: bleeding, compact: calendarStyle) { selected = bleeding }
-            } else {
-                Text("Bleeding duration unavailable")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
             if let ovulation = ovulationItem(palette) {
                 ForecastRow(item: ovulation, compact: calendarStyle) { selected = ovulation }
                 if let fertile = fertileItem(palette) {
@@ -248,10 +243,25 @@ struct ProjectedCycleDetails: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("forecastStarterNotice")
             }
+            if !cycle.isLaterProjection, !cycle.inferredStarts.isEmpty {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: "calendar.badge.exclamationmark").accessibilityHidden(true)
+                    Text(inferredNotice)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("forecastInferredNotice")
+                }
+                .font(.footnote).foregroundStyle(.secondary)
+            }
         }
         .sheet(item: $selected) { ForecastDetailSheet(item: $0) }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("projectedCycle_\(cycle.index)")
+    }
+
+    private var inferredNotice: String {
+        let dates = cycle.inferredStarts.map(DayText.monthDay).joined(separator: " and ")
+        let subject = cycle.inferredStarts.count == 1 ? "a period that wasn’t logged" : "periods that weren’t logged"
+        return "This estimate assumes \(subject), around \(dates). Log it if you remember the date."
     }
 
     private func periodItem(_ palette: TrackerPalette) -> ForecastItem {
@@ -265,20 +275,6 @@ struct ProjectedCycleDetails: View {
         return ForecastItem(id: "forecastPeriodSection_\(cycle.index)",
                             caption: cycle.isLaterProjection ? "Following period start" : "Period start window",
                             value: DayText.range(start, cycle.period.latest), detail: detail,
-                            symbol: "drop", tint: palette.recorded, fill: palette.recordedSurface,
-                            explanation: explanation)
-    }
-
-    private func bleedingItem(_ palette: TrackerPalette) -> ForecastItem? {
-        guard let bleeding = cycle.bleeding else { return nil }
-        let days = bleeding.start.days(until: bleeding.end) + 1
-        var explanation = "If your period starts around \(DayText.short(bleeding.start)) you may bleed until about \(DayText.short(bleeding.end))."
-        explanation += (cycle.bleedingDuration?.measuredCount ?? 0) > 0
-            ? " This comes from the periods you've logged."
-            : " This uses a typical length until you log when your periods end."
-        return ForecastItem(id: "forecastBleedingDates_\(cycle.index)", caption: "Expected bleeding dates",
-                            value: DayText.range(bleeding.start, bleeding.end),
-                            detail: days == 1 ? "About 1 day" : "About \(days) days",
                             symbol: "drop", tint: palette.recorded, fill: palette.recordedSurface,
                             explanation: explanation)
     }
